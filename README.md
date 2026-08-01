@@ -20,5 +20,16 @@ Isabelle/TLA+ as the reference and mathlib/CSLib as leverage.
   (papers, web pages, vendored sources: coq-tla, Lentil, Leslie; mathlib ZFC
   and CSLib LTS source files) with provenance in
   [`docs/research/README.md`](docs/research/README.md).
+- [`docs/ux-notes.md`](docs/ux-notes.md) — notes from the first working
+  prototype (the "feel the water" slice): what the notation and proof UX
+  actually felt like, what broke, and what to prototype next.
+
+## Prototype status
+
+A minimal, mathlib-free vertical slice lives in [`TlaDsl/`](TlaDsl/) and
+builds with `lake build` on Lean 4.32: TLA-flavored semantics (behaviors,
+`□`/`◇`/`↝`, `[A]_v`, `WF`/`SF`), pseudocode notation (`[p| ...]`,
+`[a| x' = x + 1 ∧ ...]`, `[t| ...]`, implicit lifting), an invariant
+tactic, and a counter example with a machine-checked invariant proof.
 
 The repository is currently design-documentation only; no Lean code yet.
