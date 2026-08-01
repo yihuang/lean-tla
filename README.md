@@ -11,6 +11,11 @@ Isabelle/TLA+ as the reference and mathlib/CSLib as leverage.
   deep-embed TLA+, or design a native TLA-flavored DSL in Lean? Includes a
   cost/benefit comparison, goal profiles, a decision framework, and the
   recommended "DSL + conformance oracle" synthesis.
+- [`docs/implementation-strategies.md`](docs/implementation-strategies.md) —
+  how to actually build it: gap analysis of Leslie/Lentil/coq-tla, the key
+  design decisions (prime notation, lifting, tactics, model checking,
+  composition), a priority-ordered improvement list, and a phased roadmap
+  with UX acceptance criteria.
 - [`docs/research/`](docs/research/) — downloaded reference artifacts
   (papers, web pages, vendored sources: coq-tla, Lentil, Leslie; mathlib ZFC
   and CSLib LTS source files) with provenance in

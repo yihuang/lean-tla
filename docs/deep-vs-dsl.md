@@ -210,6 +210,11 @@ need for existing specs arises, add an unverified `.tla` → DSL front-end with
 heavy cross-checking; if a claim of exact conformance ever becomes the
 product, upgrade the oracle from a fragment to the full language.
 
+> **Where to go next:** [`implementation-strategies.md`](implementation-strategies.md)
+> turns this recommendation into a build plan — gap analysis of the existing
+> Lean projects, the key notation/semantics decisions, a priority-ordered
+> improvement list, and a phased roadmap with UX acceptance criteria.
+
 Keep the deep-embedding blueprint ([`design-space.md`](design-space.md)) in
 the drawer: its `TLA.Core`/`TLA.Action`/`TLA.Syntax`/`TLA.Elab` layers are
 exactly the oracle architecture, and its mathlib/CSLib leverage analysis
