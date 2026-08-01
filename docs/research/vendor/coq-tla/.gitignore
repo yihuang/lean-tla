@@ -1,0 +1,14 @@
+# Coq
+*.aux
+*.glob
+*.vo
+*.vok
+*.vos
+/.coqdeps.d
+.lia.cache
+.coq-native/
+# Alectryon
+/docs
+/.alectryon.cache/
+# dependency graph
+*.svg

@@ -1,0 +1,193 @@
+German Cache Coherence — Proof Strategy
+========================================
+
+This document describes the recommended proof structure for
+Leslie/Examples/CacheCoherence/GermanMessages/, the message-level
+German cache coherence protocol.
+
+See also: docs/proof-strategy-help.md for general patterns.
+
+---
+
+TARGET INVARIANT
+----------------
+
+The safety property to prove is:
+
+  invariant n s  =  ctrlProp n s ∧ dataProp n s
+
+where:
+  ctrlProp: at most one exclusive holder; shared and exclusive are disjoint
+  dataProp: memory matches auxData when no exclusive grant outstanding;
+            all valid cache copies match auxData
+
+The strengthened inductive invariant needed is strongInvariant (10 conjuncts)
+plus several auxiliary channel/bookkeeping predicates.
+
+
+RECOMMENDED FILE STRUCTURE
+---------------------------
+
+Leslie/Examples/CacheCoherence/GermanMessages/
+  Model.lean           -- MState, MAction as named predicates, next, init, spec
+  FrameLemmas.lean     -- Per-action frame theorems (what each action does NOT change)
+  Invariant.lean       -- Invariant definitions grouped by read-footprint
+  InitProof.lean       -- fullStrongInvariant holds for init states
+  StepProof.lean       -- fullStrongInvariant preserved by each action
+  Theorem.lean         -- Reachable, germanMessages_invariant main theorem
+
+
+ACTION MODIFICATION FOOTPRINTS
+-------------------------------
+
+Use these to determine which invariant groups are trivially preserved.
+
+  sendReqS(i)    : writes chan1[i].cmd only
+  sendReqE(i)    : writes chan1[i].cmd only
+  recvReqS(i)    : writes chan1[i].cmd, curCmd, curPtr, invSet (= shrSet)
+  recvReqE(i)    : writes chan1[i].cmd, curCmd, curPtr, invSet (= shrSet)
+  sendInv(i)     : writes chan2[i].cmd, invSet[i]
+  sendInvAck(i)  : writes chan2[i].cmd, chan3[i].{cmd,data}, cache[i].state
+  recvInvAck(i)  : writes chan3[i].cmd, shrSet[i], exGntd, memData (if exGntd)
+  sendGntS(i)    : writes chan2[i].{cmd,data}, shrSet[i], curCmd
+  sendGntE(i)    : writes chan2[i].{cmd,data}, shrSet[i], exGntd, curCmd
+  recvGntS(i)    : writes cache[i].{state,data}, chan2[i].cmd
+  recvGntE(i)    : writes cache[i].{state,data}, chan2[i].cmd
+  store(i,d)     : writes cache[i].data, auxData
+
+
+INVARIANT GROUPING BY READ-FOOTPRINT
+--------------------------------------
+
+Group A — reads only chan2, chan3:
+  grantExcludesInvAck : chan2[i]=gntE → chan3[i]≠invAck
+  gntSExcludesInvAck  : chan2[i]=gntS → chan3[i]≠invAck
+  invAckClearsGrant   : chan3[i]=invAck → chan2[i]=empty
+  chan3IsInvAck        : chan3[i] ∈ {empty, invAck}
+  Preserved trivially by: sendReqS, sendReqE, recvReqS, recvReqE, store
+  Non-trivial for: sendInv, sendInvAck, recvInvAck, sendGntS, sendGntE, recvGntS, recvGntE
+
+Group B — reads cache, shrSet, exGntd:
+  exclusiveSelfClean       : cache[i]=E → chan2[i]∉{gntS,gntE} ∧ chan3[i]≠invAck
+  cacheInShrSet            : cache[i]≠I → shrSet[i]=true
+  noExclusiveWhenFalse     : exGntd=false → ∀i, cache[i]≠E ∧ chan2[i]≠gntE
+  exclusiveImpliesExGntd   : cache[i]=E ∨ chan2[i]=gntE → exGntd=true
+  noSharedWhenExGntd       : exGntd=true → ∀i, cache[i]≠S ∧ chan2[i]≠gntS
+  Preserved trivially by: sendReqS, sendReqE, sendInv (mostly)
+
+Group C — reads curCmd, invSet, exGntd:
+  invRequiresNonEmpty : chan2[i]=inv → curCmd≠empty
+  invClearsInvSet     : chan2[i]=inv → invSet[i]=false
+  invSetImpliesClean  : invSet[i]=true → chan3[i]=empty
+  invSetSubsetShrSet  : invSet[i]=true → shrSet[i]=true
+  Preserved trivially by: sendReqS, sendReqE, recvGntS, recvGntE, store
+
+Group D — core safety invariant:
+  ctrlProp  : E→others are I; S→others are I or S
+  dataProp  : memData=auxData when !exGntd; cache[i].data=auxData when cache[i]≠I
+  grantDataProp      : chan2[i]∈{gntS,gntE} → chan2[i].data=auxData
+  invAckDataProp     : exGntd=true ∧ chan3[i]=invAck → chan3[i].data=auxData
+  uniqueShrSetWhenExGntd: exGntd=true → shrSet has at most one true entry
+  chanImpliesShrSet  : any non-empty msg in chan2[i] or chan3[i] → shrSet[i]=true
+  exGntdWitness      : exGntd=true → ∃j, cache[j]=E ∨ chan2[j]=gntE ∨ chan3[j]=invAck
+
+
+FRAME LEMMA TEMPLATES (FrameLemmas.lean)
+-----------------------------------------
+
+For each action, prove one lemma of this form and mark @[simp]:
+
+  @[simp] lemma sendReqS_frame (h : s' = { s with chan1 := ... }) :
+      s'.cache = s.cache ∧ s'.chan2 = s.chan2 ∧ s'.chan3 = s.chan3 ∧
+      s'.invSet = s.invSet ∧ s'.shrSet = s.shrSet ∧
+      s'.exGntd = s.exGntd ∧ s'.curCmd = s.curCmd ∧
+      s'.memData = s.memData ∧ s'.auxData = s.auxData := by
+    subst h; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+
+For actions that modify multiple fields, use field-specific equalities:
+
+  @[simp] lemma sendInv_frame_cache (h : sendInv_step s s' i) : s'.cache = s.cache
+  @[simp] lemma sendInv_frame_chan3 (h : sendInv_step s s' i) : s'.chan3 = s.chan3
+  -- etc.
+
+Then group-level preservation becomes:
+
+  lemma groupA_preserved_sendReqS (h : sendReqS_step s s' i) (hg : groupA n s) :
+      groupA n s' := by simp_all [groupA, sendReqS_frame h]
+
+
+NON-TRIVIAL CASES (the actual interesting proofs)
+--------------------------------------------------
+
+These are the ~15 sub-goals that require real reasoning:
+
+1. sendInvAck preserves dataProp.invAckDataProp
+   (case: cache[i]=E vs cache[i]≠E, uses exGntdWitness)
+
+2. sendInvAck preserves grantDataProp
+   (data conditional on cache state)
+
+3. recvInvAck preserves ctrlProp (exGntd=true branch: all caches become I)
+
+4. recvInvAck preserves dataProp (memData updated from chan3[i].data)
+
+5. sendGntE preserves uniqueShrSetWhenExGntd
+   (only i in shrSet: uses ∀j, shrSet j = false precondition)
+
+6. sendGntE preserves exGntdWitness
+   (witnessed by i via chan2[i]=gntE)
+
+7. recvGntE preserves noSharedWhenExGntd
+   (cache[i] was I before grant, others unchanged)
+
+8. recvGntE preserves exGntdWitness
+   (cache[i] now E, was previously gntE)
+
+9. store preserves dataProp
+   (auxData updated, cache[i].data updated, all other valid caches must
+    have been I or must still match — requires exclusiveSelfClean)
+
+10. recvGntS preserves ctrlProp
+    (exGntd=false, so no exclusive holder; shared is fine)
+
+11. sendGntS preserves grantDataProp
+    (data = memData = auxData, since exGntd=false implies memData=auxData)
+
+12. recvInvAck (exGntd=false branch) preserves all group-B predicates
+    (shrSet[i] cleared, exGntd unchanged)
+
+
+PROOF TEMPLATE FOR StepProof.lean
+-----------------------------------
+
+  private theorem fullInvariant_preserved
+      {n : Nat} {s s' : MState n}
+      (hs : fullInvariant n s)
+      (hstep : Next n s s') :
+      fullInvariant n s' := by
+    obtain ⟨hcore, hchannel, hcache, hcontrol⟩ := hs
+    rcases hstep with
+      | ⟨i, h⟩ =>  -- sendReqS
+        exact ⟨by simpa [sendReqS_frame h] using hcore,
+               by simp [sendReqS_frame h, hchannel],
+               by simp [sendReqS_frame h, hcache],
+               by simp [sendReqS_frame h, hcontrol]⟩
+      | ...      -- sendInvAck: use explicit case analysis
+        ...
+
+Each trivial case is 4 lines; each non-trivial case is 10-30 lines.
+Total expected length: ~400 lines for StepProof.lean.
+
+
+NOTES ON EXISTING CODE
+-----------------------
+
+The file Leslie/Examples/CacheCoherence/GermanMessages.lean contains:
+- A working model (MState, MAction, next, init)
+- Proved init cases (germanMessages_init_* theorems)
+- Proved strongInvariant preservation for all 12 actions (strongInvariant_preserved_*)
+- The fullStrongInvariant definition (which this strategy calls fullInvariant)
+- Missing: frame lemmas, group-level preservation, main inductive theorem
+
+When building GermanMessages/, extract the model from GermanMessages.lean into
+Model.lean unchanged, then build the proof infrastructure on top.

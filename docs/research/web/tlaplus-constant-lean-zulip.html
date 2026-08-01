@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <link rel="shortcut icon" href="https://leanprover-community.github.io/archive/assets/img/lean.ico">
+
+  <title>Zulip Chat Archive</title>
+  <meta name="description" content="The homepage for the mathlib library for the Lean theorem prover. Contains an archive of the Zulip chat for discussions about Lean and mathlib.
+">
+
+  <!-- todo: include this into main.css -->
+
+  <link rel="stylesheet" href="https://leanprover-community.github.io/archive/css/main.css">
+  <link rel="canonical" href="https://leanprover-community.github.io/archive/stream/236449-Program-verification/topic/Lean's.20equivalence.20of.20TLA.2B's.20CONSTANT.html">
+  <link rel="alternate" type="application/rss+xml" title="leanprover-community / mathlib" href="https://leanprover-community.github.io/archive/feed.xml">
+  <script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        extensions: ["tex2jax.js","mml2jax.js","MathMenu.js","MathZoom.js","AssistiveMML.js", "a11y/accessibility-menu.js"],
+      jax: ["input/TeX","input/MathML","input/AsciiMath","output/CommonHTML"],
+      tex2jax: {
+        inlineMath: [ ['$$','$$'] ],
+        processEscapes: true
+      },
+      TeX: {
+        extensions: ["AMSmath.js","AMSsymbols.js","noErrors.js","noUndefined.js"]
+      }
+    });
+  </script>
+  <script type="text/javascript" async
+    src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js">
+  </script>
+</head>
+
+  <body>
+    <div class="page-content">
+      <div class="container">
+        <div class="three columns">
+          <header class="site-header">
+
+  <h2 class="logo"><a href="https://leanprover-community.github.io/">leanprover-community / mathlib</a></h2>
+
+  <div class="nav">
+
+    <label for="menu-toggle" class="menu-icon">
+        <!--div data-icon="ei-navicon"></div-->
+        <svg viewBox="0 0 18 15">
+          <path fill="#424242" d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.031C17.335,0,18,0.665,18,1.484L18,1.484z"/>
+          <path fill="#424242" d="M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0c0-0.82,0.665-1.484,1.484-1.484 h15.031C17.335,6.031,18,6.696,18,7.516L18,7.516z"/>
+          <path fill="#424242" d="M18,13.516C18,14.335,17.335,15,16.516,15H1.484C0.665,15,0,14.335,0,13.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.031C17.335,12.031,18,12.696,18,13.516L18,13.516z"/>
+        </svg>
+    </label>
+    <input type="checkbox" id="menu-toggle">
+
+    <div class="site-nav">
+      <nav>
+        <ul class="page-link">
+          <li><a href="https://leanprover-community.github.io/">Home</a></li>
+          <li><a href="https://leanprover-community.github.io/archive">Zulip archive</a></li>
+          <li><a href="https://leanprover-community.github.io/mathlib_docs">API documentation</a></li>
+          <li><a href="https://leanprover-community.github.io/lean-web-editor">Lean web editor</a></li>
+          <li><a href="https://leanprover-community.github.io/links">Links</a></li>
+        </ul>
+      </nav>
+    </div>
+
+  </div>
+</header>
+
+        </div>
+
+        <div class="nine columns" style="z-index:100;">
+          <div class="wrapper">
+            <article class="post">
+
+  <header class="post-header">
+    <a href="https://leanprover-community.github.io/archive"><h1 class="post-title">Zulip Chat Archive</h1></a>
+  </header>
+
+  <div class="article-content">
+    <h2>Stream: <a href="https://leanprover-community.github.io/archive/stream/236449-Program-verification/index.html">Program verification</a></h2>
+<h3>Topic: <a href="https://leanprover-community.github.io/archive/stream/236449-Program-verification/topic/Lean's.20equivalence.20of.20TLA.2B's.20CONSTANT.html">Lean's equivalence of TLA+'s CONSTANT</a></h3>
+
+<hr>
+
+<base href="https://leanprover.zulipchat.com">
+
+<head><link href="/style.css" rel="stylesheet"></head>
+
+
+
+<a name="561036483"></a>
+<h4><a href="https://leanprover.zulipchat.com#narrow/stream/236449-Program%20verification/topic/Lean%27s%20equivalence%20of%20TLA%2B%27s%20CONSTANT/near/561036483" class="zl"></a> Ethan Hong <a href="https://leanprover-community.github.io/archive/stream/236449-Program-verification/topic/Lean's.20equivalence.20of.20TLA.2B's.20CONSTANT.html#561036483">(Nov 30 2025 at 22:02)</a>:</h4>
+<p>What is the best way to express TLA+'s <code>CONSTANTS</code> in Lean 4?</p>
+<p>The definition of <code>CONSTANTS</code> from <a href="https://lamport.azurewebsites.net/tla/summary-standalone.pdf">Summary of TLA+</a>:</p>
+<blockquote>
+<p>CONSTANTS C1, . . . , Cn (1) Declares the Cj to be constant parameters (rigid variables). Each Cj is either an identifier or has the form C (_, . . . , _), the latter form indicating that C is an operator with the indicated number of arguments.</p>
+</blockquote>
+<p>I found that there's a <code>constant</code> keyword in Lean 3, but seems like in Lean 4 it's just <code>def</code> (or <code>axiom</code>?) Specifically I was writing the proof for basic paxos and don't know how to best translate <a href="https://github.com/DistAlgo/proofs/blob/master/basic-paxos/PaxosHistVarNFM18.tla#L14">this line</a> (e.g. Acceptors) from TLA+ to Lean.  </p>
+<p>From the TLA+ semantics, I think it might correspond more closely to 2 in the following:</p>
+<div class="codehilite" data-code-language="Lean4"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="n">Mathlib</span>
+<span class="kn">open</span><span class="w"> </span><span class="n">Set</span>
+
+<span class="c1">-- 1</span>
+<span class="kn">variable</span><span class="w"> </span><span class="o">(</span><span class="n">Acceptor</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="kt">Type</span><span class="o">)</span>
+<span class="kn">variable</span><span class="w"> </span><span class="o">(</span><span class="n">Acceptors</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">Set</span><span class="w"> </span><span class="n">Acceptor</span><span class="o">)</span>
+
+<span class="c1">-- 2</span>
+<span class="kn">variable</span><span class="w"> </span><span class="o">(</span><span class="n">Acceptor1</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="kt">Type</span><span class="o">)</span>
+<span class="kn">def</span><span class="w"> </span><span class="n">Acceptors1</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">Set</span><span class="w"> </span><span class="n">Acceptor1</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="o">{</span><span class="n">a</span><span class="o">:</span><span class="w"> </span><span class="n">Acceptor1</span><span class="w"> </span><span class="bp">|</span><span class="w"> </span><span class="n">true</span><span class="o">}</span>
+</code></pre></div>
+<p>However, I feel declaring it as a type variable would suffice, like the first code block in sec 2.1 of <a href="https://protocols-made-fun.com/lean/2025/04/25/lean-two-phase.html">https://protocols-made-fun.com/lean/2025/04/25/lean-two-phase.html</a>.</p>
+<p>Thanks!</p>
+
+
+
+<a name="561112443"></a>
+<h4><a href="https://leanprover.zulipchat.com#narrow/stream/236449-Program%20verification/topic/Lean%27s%20equivalence%20of%20TLA%2B%27s%20CONSTANT/near/561112443" class="zl"></a> Shreyas Srinivas <a href="https://leanprover-community.github.io/archive/stream/236449-Program-verification/topic/Lean's.20equivalence.20of.20TLA.2B's.20CONSTANT.html#561112443">(Dec 01 2025 at 09:56)</a>:</h4>
+<p>You want to start with a DSL inside lean that supports this style of specification</p>
+
+
+
+<a name="561112474"></a>
+<h4><a href="https://leanprover.zulipchat.com#narrow/stream/236449-Program%20verification/topic/Lean%27s%20equivalence%20of%20TLA%2B%27s%20CONSTANT/near/561112474" class="zl"></a> Shreyas Srinivas <a href="https://leanprover-community.github.io/archive/stream/236449-Program-verification/topic/Lean's.20equivalence.20of.20TLA.2B's.20CONSTANT.html#561112474">(Dec 01 2025 at 09:56)</a>:</h4>
+<p>I suggest checking out Veil</p>
+
+
+
+<a name="561185264"></a>
+<h4><a href="https://leanprover.zulipchat.com#narrow/stream/236449-Program%20verification/topic/Lean%27s%20equivalence%20of%20TLA%2B%27s%20CONSTANT/near/561185264" class="zl"></a> Ethan Hong <a href="https://leanprover-community.github.io/archive/stream/236449-Program-verification/topic/Lean's.20equivalence.20of.20TLA.2B's.20CONSTANT.html#561185264">(Dec 01 2025 at 15:01)</a>:</h4>
+<p>Thanks, I saw Veil a while ago actually. I am more asking about if one was to write this in Lean, what would be the best way to do it?</p>
+<p>I translated the proof for basic paxos from TLAPS to Lean, but wasn't so sure how to correctly write TLA+'s  <code>CONSTANT</code>.<br>
+<a href="https://github.com/xinhong3/PaxosProofLean/blob/main/Paxos/Spec.lean#L14">https://github.com/xinhong3/PaxosProofLean/blob/main/Paxos/Spec.lean#L14</a></p>
+
+
+
+<a name="562447464"></a>
+<h4><a href="https://leanprover.zulipchat.com#narrow/stream/236449-Program%20verification/topic/Lean%27s%20equivalence%20of%20TLA%2B%27s%20CONSTANT/near/562447464" class="zl"></a> George Pîrlea <a href="https://leanprover-community.github.io/archive/stream/236449-Program-verification/topic/Lean's.20equivalence.20of.20TLA.2B's.20CONSTANT.html#562447464">(Dec 08 2025 at 11:52)</a>:</h4>
+<p><span class="user-mention" data-user-id="910774">@Ethan Hong</span> The issue is that TLA+ is untyped, whereas Lean is typed, so it's non-trivial to encode the former into the latter.</p>
+<p>If you want to be faithful, you can check how TLAPS encodes TLA+ into many-sorted first-order logic, as explained in <a href="https://doi.org/10.1016/j.scico.2017.09.004">Encoding TLA+ into unsorted and many-sorted first-order logic</a>.</p>
+<p>An alternative encoding is provided by the Apalache model checker. See <a href="https://doi.org/10.1145/3360549">TLA+ model checking made symbolic</a> and follow-up papers for details on that.</p>
+
+
+
+<a name="562447831"></a>
+<h4><a href="https://leanprover.zulipchat.com#narrow/stream/236449-Program%20verification/topic/Lean%27s%20equivalence%20of%20TLA%2B%27s%20CONSTANT/near/562447831" class="zl"></a> George Pîrlea <a href="https://leanprover-community.github.io/archive/stream/236449-Program-verification/topic/Lean's.20equivalence.20of.20TLA.2B's.20CONSTANT.html#562447831">(Dec 08 2025 at 11:54)</a>:</h4>
+<p>This is quite a bit of effort that you'd only want to do if your goal is to embed TLA+ in Lean.</p>
+<p>If you only care about verifying a specific protocol, it will definitely be easier to use a typed encoding specific for that protocol, or use a tool like <a href="https://veil.dev">Veil</a>.</p>
+
+
+
+<a name="562563441"></a>
+<h4><a href="https://leanprover.zulipchat.com#narrow/stream/236449-Program%20verification/topic/Lean%27s%20equivalence%20of%20TLA%2B%27s%20CONSTANT/near/562563441" class="zl"></a> Mario Carneiro <a href="https://leanprover-community.github.io/archive/stream/236449-Program-verification/topic/Lean's.20equivalence.20of.20TLA.2B's.20CONSTANT.html#562563441">(Dec 08 2025 at 21:43)</a>:</h4>
+<p>embedding untyped into typed is easy, you just have everything in one type</p>
+
+
+
+<a name="562563503"></a>
+<h4><a href="https://leanprover.zulipchat.com#narrow/stream/236449-Program%20verification/topic/Lean%27s%20equivalence%20of%20TLA%2B%27s%20CONSTANT/near/562563503" class="zl"></a> Mario Carneiro <a href="https://leanprover-community.github.io/archive/stream/236449-Program-verification/topic/Lean's.20equivalence.20of.20TLA.2B's.20CONSTANT.html#562563503">(Dec 08 2025 at 21:43)</a>:</h4>
+<p>from what I know of TLA+'s axiomatics it should embed faithfully in lean</p>
+
+
+
+<a name="562726516"></a>
+<h4><a href="https://leanprover.zulipchat.com#narrow/stream/236449-Program%20verification/topic/Lean%27s%20equivalence%20of%20TLA%2B%27s%20CONSTANT/near/562726516" class="zl"></a> Ethan Hong <a href="https://leanprover-community.github.io/archive/stream/236449-Program-verification/topic/Lean's.20equivalence.20of.20TLA.2B's.20CONSTANT.html#562726516">(Dec 09 2025 at 16:02)</a>:</h4>
+<p>Appreciate all the help! I should clarify my question since the title is too generic.</p>
+<p>Currently, the problem is protocol-specific. I am only looking at Basic Paxos.<br>
+I want to know (since there could be many ways) how to encode things such as (CONSTANT Acceptors) in Lean that's faithful to the TLA+ semantics. The TLA+ spec I am referring to is <a href="https://github.com/DistAlgo/proofs/blob/master/basic-paxos/PaxosHistVarNFM18.tla">this</a>.<br>
+So given the following in TLA+:</p>
+<div class="codehilite" data-code-language="tla+"><pre><span></span><code>CONSTANT Acceptors
+</code></pre></div>
+<p>Would the following be a "good" translation in Lean that's faithful to the TLA+ semantics?</p>
+<div class="codehilite" data-code-language="Lean"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="n">Mathlib</span>
+
+<span class="kd">variable</span><span class="w"> </span><span class="o">(</span><span class="n">Acceptor</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="kt">Type</span><span class="o">)</span>
+<span class="kd">variable</span><span class="w"> </span><span class="o">(</span><span class="n">Acceptors</span><span class="o">:</span><span class="w"> </span><span class="n">Set</span><span class="w"> </span><span class="n">Acceptor</span><span class="o">)</span>
+</code></pre></div>
+<hr>
+<p>however, since <code>Acceptors</code> is a constant, should I use <code>def</code> instead of <code>variable</code>?</p>
+
+
+
+<a name="562852197"></a>
+<h4><a href="https://leanprover.zulipchat.com#narrow/stream/236449-Program%20verification/topic/Lean%27s%20equivalence%20of%20TLA%2B%27s%20CONSTANT/near/562852197" class="zl"></a> George Pîrlea <a href="https://leanprover-community.github.io/archive/stream/236449-Program-verification/topic/Lean's.20equivalence.20of.20TLA.2B's.20CONSTANT.html#562852197">(Dec 10 2025 at 03:36)</a>:</h4>
+<p><span class="user-mention" data-user-id="910774">@Ethan Hong</span> <code>variable</code> in Lean means that it's a parameter, not that it can be mutated, so that's a perfectly fine encoding.</p>
+
+
+
+
+
+<hr><p>Last updated: Feb 28 2026 at 14:05 UTC</p>
+  </div>
+
+</article>
+
+          </div>
+        </div>
+      </div>
+      <footer class="site-footer">
+  <div class="container">
+    <div class="footer left column one-half">
+      <section class="small-font">
+        Theme <a href="https://github.com/wild-flame/jekyll-simple"> Simple </a> by <a href="http://wildflame.me">wildflame</a>
+        © 2016 
+        Powered by <a href="https://github.com/jekyll/jekyll">jekyll</a>
+      </section>
+    </div>
+
+    <div class="footer right column one-half">
+      <section class="small-font">
+        
+        
+      </section>
+    </div>
+  </div>
+</footer>
+ 
+    </div>
+  </body>
+</html>

@@ -1,0 +1,80 @@
+<html><head>
+<title>Stephan Merz : design documents for TLAPS</title>
+<link rel="stylesheet" type="text/css" href="../../style.css">
+</head>
+<body>
+
+<h2>Supplementary material on the design of TLAPS</h2>
+
+The TLA+ Proof System is developed at the Joint Centre of Microsoft Research and
+Inria in Saclay. The main home page is
+<a href="http://tla.msr-inria.inria.fr/tlaps/content/Home.html">here</a>;
+it contains the links for downloading TLAPS as well as documentation
+relevant for users.
+This page collects supplementary information of use for developers, on the
+design of TLAPS and some of its back-end provers.
+
+
+<h3>The SMT Backend</h3>
+
+The SMT backend is the main workhorse of TLAPS and is by default called first on
+every proof obligation. Its design is described in the papers listed below, and
+more details appear in Hern&aacute;n Vanzetto's PhD thesis. A variant of the
+backend can be used to produce input in TPTP-FOF format for use with automated
+first-order provers such as E or Spass. The translation from TLA+ set theory to
+(possibly multi-sorted) first-order logic relies on rewriting rules documented
+<a href="rewriting_rules.pdf">here</a>.
+
+<p>
+
+Some case studies demonstrating the reduction in proof size obtained thanks to
+the SMT backend are also available:
+
+<p>
+
+[ <a href="memoir.zip">Memoir</a> | <a href="paxos.zip">Paxos</a> ]
+
+<h5>References</h5>
+
+<ol>
+  <li> Stephan Merz, Hern&aacute;n Vanzetto.
+  <a href="https://members.loria.fr/SMerz/papers/lpar2012.html">Automatic Verification Of TLA+ Proof Obligations With SMT Solvers</a>.
+  18th Intl. Conf. Logic for Programming, Artificial Intelligence and Reasoning (LPAR-18).
+  &copy; Springer, LNCS 7180, pp. 289-303 (2012).
+  [<a href="https://members.loria.fr/SMerz/papers/lpar2012.pdf">PDF</a>
+  | <a href="http://link.springer.com/chapter/10.1007/978-3-642-28717-6_23">Springer Link</a>]
+
+  <li> Stephan Merz, Hern&aacute;n Vanzetto.
+  <a href="https://members.loria.fr/SMerz/papers/abz2016-smt.html">Encoding TLA+ into Many-Sorted First-Order Logic</a>.
+  5th Intl. Conf. Abstract State Machines, Alloy, B, TLA, VDM, and Z (ABZ 2016). 
+  &copy; Springer, LNCS 9675, pp. 54-69 (2016).
+  [<a href="https://members.loria.fr/SMerz/papers/abz2016-smt.pdf">PDF</a>
+  | <a href="http://link.springer.com/chapter/10.1007%2F978-3-319-33600-8_3">Springer Link</a>]
+
+  <li> Stephan Merz, Hern&aacute;n Vanzetto.
+  <a href="https://members.loria.fr/SMerz/papers/nfm2014.html">Refinement Types for TLA+</a>.
+  6th Intl. Symp. NASA Formal Methods (NFM 2014).
+  &copy; Springer, LNCS 8430, pp. 143-157 (2014).
+  [<a href="https://members.loria.fr/SMerz/papers/nfm2014.pdf">PDF</a>
+  | <a href="http://link.springer.com/chapter/10.1007%2F978-3-319-06200-6_11">Springer Link</a>]
+
+  <li> Hern&aacute;n Vanzetto.
+  <a href="http://www.theses.fr/2014LORR0208">Proof Automation and Type Synthesis for Set Theory in the Context of TLA+</a>.
+  PhD thesis, Universit&eacute; de Lorraine, 2014.
+</ol>
+
+
+<h3>The Isabelle Backend</h3>
+
+Isabelle/TLA+ is a faithful encoding of the set theory of TLA+ as an object
+logic in the proof assistant Isabelle. Pretty-printed versions of the Isabelle
+theories making up the encoding are available <a href="isa-tla+.pdf">here</a>.
+The sources of the Isabelle theories are part of the TLAPS distribution and are
+therefore not replicated here.
+
+
+<hr>
+<address>
+<a href="../../index.html">Stephan Merz</a>
+</address>
+</body></html>

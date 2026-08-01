@@ -1,0 +1,88 @@
+# Hardened conservative-extension gate for the randomized-leslie branch.
+#
+# Trust model
+# ===========
+#
+# This workflow uses `pull_request_target` (not `pull_request`) so that
+# it is *self-protecting* against PR-controlled code:
+#
+#   - GitHub Actions reads the workflow YAML for `pull_request_target`
+#     events from the **base branch** (main), not the PR head. A PR
+#     cannot disable, weaken, or replace the gate by editing this
+#     file: the version that runs is the one already on main.
+#   - `actions/checkout@v4` defaults to the base branch under
+#     `pull_request_target`, so `scripts/check-conservative.sh` and
+#     `scripts/check-conservative.test.sh` likewise execute from
+#     main, not from the PR head. A PR cannot weaken the allowlist
+#     regex for the same reason.
+#
+# The PR head is treated as untrusted *data* (a list of file paths
+# to compare against the allowlist). It is never sourced or executed.
+# The script's allowlist still permits edits under `scripts/` and
+# `.github/`; the safety comes from running the trusted base-branch
+# copy of the script, not from forbidding such edits.
+#
+# Bootstrap caveat
+# ================
+#
+# This PR (PR #25) is the bootstrap: until it lands, main has no
+# workflow file, so `pull_request_target` does not fire on PR #25
+# itself. PR #25 is gated only by the `push: randomized-leslie`
+# trigger below (running from the spike-branch HEAD, which is fine
+# during pre-merge review by maintainers) plus manual diff inspection.
+# Every PR opened *after* #25 merges is gated by main's hardened
+# workflow and is immune to the weakening pattern described above.
+#
+# Push trigger
+# ============
+#
+# Direct pushes to `randomized-leslie` run the workflow from the
+# pushed commit. This is the intended developer-feedback path:
+# pushes are gated upstream by branch protection.
+
+name: conservativity
+
+on:
+  pull_request_target:
+    branches:
+      - main
+  push:
+    branches:
+      - randomized-leslie
+
+jobs:
+  test:
+    name: regex test suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (base = main on pull_request_target; HEAD on push)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Run synthetic-diff tests (trusted scripts/)
+        run: bash scripts/check-conservative.test.sh
+
+  check:
+    name: actual diff vs main
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout (base = main on pull_request_target; HEAD on push)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch PR head as diff target (pull_request_target only)
+        if: ${{ github.event_name == 'pull_request_target' }}
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git fetch --no-tags --depth=1 origin "$PR_HEAD_SHA"
+      - name: Verify diff vs origin/main (pull_request_target)
+        if: ${{ github.event_name == 'pull_request_target' }}
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          CONSERVATIVE_CHECK_DIFF_CMD="git diff --name-only origin/main...$PR_HEAD_SHA" \
+            bash scripts/check-conservative.sh
+      - name: Verify diff vs origin/main (push)
+        if: ${{ github.event_name == 'push' }}
+        run: bash scripts/check-conservative.sh

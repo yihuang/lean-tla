@@ -1,0 +1,118 @@
+<HTML><HEAD>
+<link rel="stylesheet" type="text/css" href="../../style.css">
+<TITLE>An embedding of TLA in Isabelle/HOL</TITLE>
+</HEAD>
+<BODY>
+<A HREF="http://isabelle.in.tum.de"><IMG align=right border=0 SRC="../../pics/isabelle.gif" width=100></A>
+<H1>Isabelle/TLA</H1>
+
+<p>
+
+This Web page describes my encoding of Lamport's
+<A HREF="http://research.microsoft.com/users/lamport/tla/tla.html">Temporal Logic of Actions</A>
+in the higher-order logic of the generic interactive proof assistant
+<A HREF="http://isabelle.in.tum.de">Isabelle</A>.
+
+<P>
+
+<H3>Downloading</H3>
+
+The TLA embedding comes with the standard distribution of Isabelle,
+no separate download is required. It includes a number of examples
+that should help you to get started.
+
+<P>
+
+In order to work with TLA, you should first build a heap with
+TLA built-in. To do that, change to the directory
+<code>src/HOL/TLA</code> below the Isabelle installation directory
+and issue the command
+<pre>
+   isatool usedir -b HOL TLA
+</pre>
+(assuming <code>isatool</code> is in your search path). If all goes
+well, you should see output similar to
+<pre>
+   Building TLA ...
+   Finished TLA (0:00:24 elapsed time)
+</pre>
+This will create a heap file <em>in your <code>isabelle</code>
+directory</em> (usually located beneath your home directory,
+look in <code>~/isabelle/heaps/</code>). Be careful, heap files
+tend to be large, probably on the order of 20MB!
+
+<p>
+
+You may also want to generate the theory browsing information
+for TLA. To do this, change to the <code>src/HOL</code> directory
+(i.e., the one <em>just above</em> the directory containing
+the TLA sources) and issue the command
+<pre>
+   isatool usedir -i true HOL TLA
+</pre>
+The output should now look like
+<pre>
+   Running HOL-TLA ...
+   Finished HOL-TLA (0:00:08 elapsed time)
+</pre>
+The generated HTML files reside in 
+<code>~/isabelle/browser_info/HOL/TLA</code>.
+Alternatively, they can be browsed on the
+<A HREF="http://isabelle.in.tum.de/library/HOL/TLA/index.html">Isabelle WWW server</A>.
+Similar commands can be used to generate the files for the
+TLA examples.
+
+<p>
+
+To run the examples or create your own TLA projects, you should 
+tell Isabelle to use the TLA heap instead of the default one
+(usually HOL). If you are using ProofGeneral, you can enter the
+name of the heap to use when processing a theory file (you may
+have to enable an option allowing for interactive selection of
+the heap file). Also, since TLA is based on the traditional
+interface to Isabelle instead of the newer Isar interface, be sure
+to invoke ProofGeneral via <code>Isabelle -I false</code>.
+
+
+<H3>Documentation</H3>
+
+Isabelle/TLA is based on a complete axiomatization of the "raw"
+(stuttering-sensitive) variant of TLA. Here are two notes on the
+<A HREF="doc/design.ps.gz">design</A> of the
+prover and on a <A HREF="doc/ptla.ps.gz">completeness proof</A>
+for the underlying axiom system.
+
+<P>
+
+The distribution contains a few examples, including
+
+<UL>
+<LI>the 
+    <A HREF="http://isabelle.in.tum.de/library/HOL/TLA/Inc/index.html">increment example</A>
+    from Lamport's TLA paper
+<LI>the proof of the 
+    <A HREF="http://isabelle.in.tum.de/library/HOL/TLA/Memory/index.html">RPC-Memory</A> 
+    case study, which is described in a
+    <A HREF="../../papers/RPCMemory.html">paper</A> 
+    by Abadi, Lamport, and Merz.
+</UL>
+
+<P>
+
+Isabelle/TLA should be extended to provide an embedding of
+Lamport's TLA+ specification language (based on ZF set theory
+instead of HOL), and it should be updated for the more recent
+Isar interface to Isabelle. While I may eventually do this myself,
+I'd be happy to help anybody willing to undertake this.
+
+<P>
+
+Please let me know about any comments or suggestions.
+<p>
+<HR>
+
+<ADDRESS>
+<A HREF="../../index.html">Stephan Merz</A>
+</ADDRESS>
+</BODY></HTML>
+
