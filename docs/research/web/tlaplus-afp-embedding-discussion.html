@@ -1,0 +1,92 @@
+<!-- MHonArc v2.6.19+ -->
+<!--X-Subject: Re: [tlaplus] Trying to understand lifting in Isabelle/HOL TLA* -->
+<!--X-From-R13: Egrcuna [rem &#60;fgrcuna.zremNtznvy.pbz> -->
+<!--X-Date: Thu, 28 Dec 2023 10:07:48 +0100 -->
+<!--X-Message-Id: AB67F8B9&#45;2047&#45;4CF6&#45;AC37&#45;A2DFFBA3B2DB@gmail.com -->
+<!--X-Content-Type: multipart/alternative -->
+<!--X-Reference: CAFteovKyRWofbZ=Droh57HC8jDYbw_OSFJKL9EStQ&#45;HOJ4Nseg@mail.gmail.com -->
+<!--X-Head-End-->
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+        "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<title>Re: [tlaplus] Trying to understand lifting in Isabelle/HOL TLA*</title>
+</head>
+<body>
+<!--X-Body-Begin-->
+<!--X-User-Header-->
+<!--X-User-Header-End-->
+<!--X-TopPNI-->
+<hr>
+[<a href="msg05768.html">Date Prev</a>][<a href="msg05770.html">Date Next</a>][<a href="msg05768.html">Thread Prev</a>][<a href="msg05772.html">Thread Next</a>][<a href="maillist.html#05769">Date Index</a>][<a href="index.html#05769">Thread Index</a>]
+<!--X-TopPNI-End-->
+<!--X-MsgBody-->
+<!--X-Subject-Header-Begin-->
+<h1>Re: [tlaplus] Trying to understand lifting in Isabelle/HOL TLA*</h1>
+<hr>
+<!--X-Subject-Header-End-->
+<!--X-Head-of-Message-->
+<ul>
+<li><em>From</em>: Stephan Merz &lt;<a href="mailto:stephan.merz@DOMAIN.HIDDEN">stephan.merz@xxxxxxxxx</a>&gt;</li>
+<li><em>Date</em>: Thu, 28 Dec 2023 10:07:27 +0100</li>
+<li><em>References</em>: &lt;CAFteovKyRWofbZ=Droh57HC8jDYbw_OSFJKL9EStQ-HOJ4Nseg@mail.gmail.com&gt;</li>
+</ul>
+<!--X-Head-of-Message-End-->
+<!--X-Head-Body-Sep-Begin-->
+<hr>
+<!--X-Head-Body-Sep-End-->
+<!--X-Body-of-Message-->
+<table width="100%"><tr><td style="">Hi Karolis,<div><br></div><div>as you certainly noticed, the embedding that you refer to is completely unrelated to TLAPS. It aims at a representation of TLA (not TLA+) in Isabelle, with higher-order logic as the underlying data language. [1]</div><div><br></div><div>The idea is to have formulas that are interpreted over "possible worlds" as in modal logic, where worlds can be states, pairs of states or behaviors for TLA. For example, a temporal formula is represented as a function of type behavior =&gt; bool, where behavior is an infinite sequence of states. This representation is set up generically in theory Intensional [2] that attempts to introduce a syntax for expressions that hides their functional nature in many contexts, similar to the syntax used in modal logic.</div><div><br></div><div>For example, "w |= A" is really just fancy syntax for "A w", and you can use both interchangeably, and "|- A" is a shorthand for "&#x2200;w. w |= A". Similarly, standard HOL operators can be lifted to corresponding operators over modal expressions, thus "lift2 (&#x2227;)" denotes conjunction of modal formulas and has type</div><div><br></div><div>"('w =&gt; bool) =&gt; ('w =&gt; bool) =&gt; ('w =&gt; bool)"</div><div><br></div><div>for some type 'w of "worlds" whereas standard conjunction is of type "bool =&gt; bool =&gt; bool". Some trickery with the Isabelle parser allows the lifting functions to be hidden in modal contexts, for example "(lift2 (&#x2227;) a b) w" can be written "w |= a&nbsp;&#x2227; b". Finally, rewrite rules for distributing lifting functions over expressions are included in the standard simplification rules applied by Isabelle, for example in order to reduce "w |= a &#x2227; b" to&nbsp;"(w |= a) &#x2227; (w |= b)" where the conjunction in the latter is standard (unlifted) conjunction from HOL.</div><div><br></div><div>As you discovered, reasoning in this framework using elementary rule applications becomes tedious because rewriting needs to be applied throughout to simplify formulas. The intent was to make it possible for the user to state suitable intermediate assertions, then apply auto or simp to automate the steps that relate those assertions. The two examples provided in the AFP [3] illustrate how the embedding in Isabelle can be used, but I don't think anybody else used the theories. Since that encoding was made before the sledgehammer tool existed, I have no idea to what extent sledgehammer is useful in this context. Personally, I would recommend using TLAPS rather than that encoding of TLA in Isabelle/HOL.</div><div><br></div><div>Best,</div><div>Stephan</div><div><br></div><div>[1] TLAPS also includes an Isabelle backend, but that backend is based on an object logic different from HOL for representing TLA+ set theory, i.e. the constant level of TLA+. TLA* formalizes state-, action-, and temporal-level reasoning.</div><div>[2]&nbsp;<a rel="nofollow" href="https://www.isa-afp.org/sessions/tla/#Intensional">https://www.isa-afp.org/sessions/tla/#Intensional</a></div><div>[3]&nbsp;<a rel="nofollow" href="https://www.isa-afp.org/sessions/tla/#Inc">https://www.isa-afp.org/sessions/tla/#Inc</a>,&nbsp;<a rel="nofollow" href="https://www.isa-afp.org/sessions/tla/#Buffer">https://www.isa-afp.org/sessions/tla/#Buffer</a>&nbsp;</div><div><br></div><div><div><br><blockquote type="cite"><div>On 27 Dec 2023, at 23:57, Karolis Petrauskas &lt;k.petrauskas@xxxxxxxxx&gt; wrote:</div><br class="Apple-interchange-newline"><div><div dir="ltr"><div>Hello,</div><div><br></div><div>I'm trying to use TLA*, a generalization of TLA formalized in Isabelle/HOL (<a rel="nofollow" href="https://www.isa-afp.org/entries/TLA.html">https://www.isa-afp.org/entries/TLA.html</a>). The main confusion, I believe, is how to work with the lifted expressions.<br></div><div><br></div><div>In TLAPS, it is clear how to decompose a proof based on the connectives. But it is unclear to me how to approach the same in TLA*. I took the following as a trivial example:<br></div><div><br></div><div style="margin-left:40px"><span style="font-family:monospace">lemma<br>&nbsp; &nbsp; fixes a and b<br>&nbsp; assumes a1: "&#x22A2; a"<br>&nbsp; &nbsp; &nbsp; and a2: "&#x22A2; b"<br>&nbsp; &nbsp; shows "&#x22A2; a &#x2227; b"<br>&nbsp; using a1 a2 by auto<br></span></div><div><br></div><div>This lemma is proved by auto, but there is no direct rule for that. To understand what's happening here, I tried to decompose the proof into atomic steps:</div><div><br></div><div style="margin-left:40px"><span style="font-family:monospace">lemma<br>&nbsp; &nbsp; fixes a and b<br>&nbsp; assumes a1: "&#x22A2; a"<br>&nbsp; &nbsp; &nbsp; and a2: "&#x22A2; b"<br>&nbsp; &nbsp; shows "&#x22A2; a &#x2227; b"<br>proof<br>&nbsp; fix w<br>&nbsp; show "w &#x22A8; a &#x2227; b"<br>&nbsp; proof -<br>&nbsp; &nbsp; have "a w" using a1 by rule<br>&nbsp; &nbsp; moreover have "b w" using a2 by rule<br>&nbsp; &nbsp; ultimately have "a w &#x2227; b w" by rule<br>&nbsp; &nbsp; hence "(&#x2227;) (a w) (b w)" by simp<br>&nbsp; &nbsp; hence "(lift2 (&#x2227;) a b) w" using unl_lift2 by simp<br>&nbsp; &nbsp; hence "w &#x22A8; lift2 (&#x2227;) a b" by simp<br>&nbsp; &nbsp; thus "w &#x22A8; a &#x2227; b" by simp<br>&nbsp; qed<br>qed<br></span></div><div><br></div><div>Is this reasoning the one&nbsp;(approximately) the auto tactic should be used internally?<br></div><div>I don't know if those steps are atomic. I tried to use rule tactics only but failed to find the actual rules. Maybe it's because a lot is done by macro rewriting. My knowledge here is limited.<br></div><div><br></div><div>Maybe you know of good pointers (apart from the theory document) on how to prove things in this theory? I manage to prove simple invariants with the help of the sledgehammer, but I feel quite lost, only having random events of success.<br></div><div><br></div><div>Karolis<br></div></div><div><br class="webkit-block-placeholder"></div>
+
+-- <br>
+You received this message because you are subscribed to the Google Groups "tlaplus" group.<br>
+To unsubscribe from this group and stop receiving emails from it, send an email to <a rel="nofollow" href="mailto:tlaplus+unsubscribe@xxxxxxxxxxxxxxxx">tlaplus+unsubscribe@xxxxxxxxxxxxxxxx</a>.<br>
+To view this discussion on the web visit <a rel="nofollow" href="https://groups.google.com/d/msgid/tlaplus/CAFteovKyRWofbZ%3DDroh57HC8jDYbw_OSFJKL9EStQ-HOJ4Nseg%40mail.gmail.com?utm_medium=email&amp;utm_source=footer">https://groups.google.com/d/msgid/tlaplus/CAFteovKyRWofbZ%3DDroh57HC8jDYbw_OSFJKL9EStQ-HOJ4Nseg%40mail.gmail.com</a>.<br>
+</div></blockquote></div><br></div>
+
+<p></p>
+
+-- <br />
+You received this message because you are subscribed to the Google Groups &quot;tlaplus&quot; group.<br />
+To unsubscribe from this group and stop receiving emails from it, send an email to <a rel="nofollow" href="mailto:tlaplus+unsubscribe@xxxxxxxxxxxxxxxx">tlaplus+unsubscribe@xxxxxxxxxxxxxxxx</a>.<br />
+To view this discussion on the web visit <a rel="nofollow" href="https://groups.google.com/d/msgid/tlaplus/AB67F8B9-2047-4CF6-AC37-A2DFFBA3B2DB%40gmail.com?utm_medium=email&utm_source=footer">https://groups.google.com/d/msgid/tlaplus/AB67F8B9-2047-4CF6-AC37-A2DFFBA3B2DB%40gmail.com</a>.<br />
+</td></tr></table>
+<!--X-Body-of-Message-End-->
+<!--X-MsgBody-End-->
+<!--X-Follow-Ups-->
+<hr>
+<!--X-Follow-Ups-End-->
+<!--X-References-->
+<ul><li><strong>References</strong>:
+<ul>
+<li><strong><a name="05768" href="msg05768.html">[tlaplus] Trying to understand lifting in Isabelle/HOL TLA*</a></strong>
+<ul><li><em>From:</em> Karolis Petrauskas</li></ul></li>
+</ul></li></ul>
+<!--X-References-End-->
+<!--X-BotPNI-->
+<ul>
+<li>Prev by Date:
+<strong><a href="msg05768.html">[tlaplus] Trying to understand lifting in Isabelle/HOL TLA*</a></strong>
+</li>
+<li>Next by Date:
+<strong><a href="msg05770.html">[tlaplus] Re: Does TLC handle &lt;&gt; and ~[]~ differently?</a></strong>
+</li>
+<li>Previous by thread:
+<strong><a href="msg05768.html">[tlaplus] Trying to understand lifting in Isabelle/HOL TLA*</a></strong>
+</li>
+<li>Next by thread:
+<strong><a href="msg05772.html">[tlaplus] Using DownwardNatInduction from NaturalsInduction</a></strong>
+</li>
+<li>Index(es):
+<ul>
+<li><a href="maillist.html#05769"><strong>Date</strong></a></li>
+<li><a href="index.html#05769"><strong>Thread</strong></a></li>
+</ul>
+</li>
+</ul>
+
+<!--X-BotPNI-End-->
+<!--X-User-Footer-->
+<!--X-User-Footer-End-->
+</body>
+</html>

@@ -31,6 +31,7 @@ status. PDFs are the authors' online versions unless noted.
 | `leslie-reservoir.html` | Leslie (TLA in Lean 4) Reservoir project page: features, structure, examples | https://reservoir.lean-lang.org/@rupakm/leslie |
 | `tlaplus-constant-lean-zulip.html` | Zulip thread: Lean's equivalence of TLA+'s CONSTANT | https://leanprover-community.github.io/archive/stream/236449-Program-verification/topic/Lean's.20equivalence.20of.20TLA.2B's.20CONSTANT.html |
 | `lamport-science-of-concurrent-programs.html` | Lamport's *A Science of Concurrent Programs* book page (final draft, 2024/25) | https://lamport.azurewebsites.net/tla/science-book.html |
+| `tlaplus-afp-embedding-discussion.html` | tlaplus list, Dec 2023: Merz on the AFP TLA\* shallow embedding (why it was little used; TLAPS recommended) | https://discuss.tlapl.us/msg05769.html |
 
 ## Vendored sources (vendor/)
 

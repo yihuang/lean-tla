@@ -2,6 +2,13 @@
 
 *Working title: Lean/TLA+.* Status: design notes, not an implementation.
 
+> **Read this first:** [`deep-vs-dsl.md`](deep-vs-dsl.md) asks the strategic
+> question this document skips — whether a deep embedding is worth it at all
+> versus a native Lean DSL. The layers below are still the right blueprint,
+> but read them as the *internal semantics/oracle* architecture of a
+> TLA-flavored DSL unless the project's goals (importing `.tla` specs,
+> meta-theory of TLA+) actually demand a full deep embedding.
+
 This document maps the design space for a **deep embedding of TLA+** in Lean 4,
 using the Isabelle/TLA+ line of work as the primary reference and identifying
 where mathlib and CSLib change the cost/benefit calculus. It ends with a
