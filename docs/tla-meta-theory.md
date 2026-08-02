@@ -91,6 +91,19 @@ equivalence and the quotient, operator preservation (including fairness),
 the liveness rules (`WF1`/`SF1`), and refinement/hiding — all proved from
 the semantics, kernel-checked, mathlib-free.
 
+## Examples putting the meta-theory to work
+
+- `TlaDsl/Examples/Refinement.lean`: a two-counter concrete spec refines a
+  one-counter abstract spec by projection (`RefinesVia` +
+  `refinement_mapping`); the internal variable `y` is invisible to the
+  abstract spec.
+- `TlaDsl/Examples/TicketLock.lean`: critical-section entry proved with
+  `WF1` — the liveness theorem is a one-line application of `wf1` once the
+  three standard premises (step, action-to-q, enabled) are discharged by
+  `tla_unfold`/`omega`.
+
+Both compile with zero `sorry`s and zero dependencies.
+
 ## 4. Honest scope notes
 
 - `Sim` is currently the **finite-stuttering** relation (inductive: delete or

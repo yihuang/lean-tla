@@ -51,6 +51,7 @@ abbrev actLe {σ : Type u} {α : Type v} [LE α] (f g : σ → σ → α) : σ �
 /-- Lift a `[p| ...]` body to a state predicate. -/
 partial def liftState (stx : TSyntax `term) : MacroM (TSyntax `term) :=
   match stx with
+  | `(($e)) => liftState e
   | `($a + $b) => do
       let la ← liftState a
       let lb ← liftState b
@@ -93,6 +94,7 @@ partial def liftState (stx : TSyntax `term) : MacroM (TSyntax `term) :=
 /-- Lift an `[a| ...]` body to an action. `x'` is the post value of `x`. -/
 partial def liftAction (stx : TSyntax `term) : MacroM (TSyntax `term) :=
   match stx with
+  | `(($e)) => liftAction e
   | `($a + $b) => do
       let la ← liftAction a
       let lb ← liftAction b
@@ -142,6 +144,7 @@ partial def liftAction (stx : TSyntax `term) : MacroM (TSyntax `term) :=
 leaving everything else (lifts, temporal notations, named formulas) alone. -/
 partial def liftFormula (stx : TSyntax `term) : MacroM (TSyntax `term) :=
   match stx with
+  | `(($e)) => liftFormula e
   | `($a ∧ $b) => do
       let la ← liftFormula a
       let lb ← liftFormula b

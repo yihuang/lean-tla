@@ -6,3 +6,5 @@ import TlaDsl.Rules
 import TlaDsl.Tactic
 import TlaDsl.Meta
 import TlaDsl.Examples.Counter
+import TlaDsl.Examples.Refinement
+import TlaDsl.Examples.TicketLock
