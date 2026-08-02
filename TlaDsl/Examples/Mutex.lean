@@ -140,8 +140,9 @@ theorem henable0 : ∀ s, P0 s → Tla.Enabled (Tla.AngleAction Enter0 vars) s �
 /-- If it is process 0's turn, weak fairness on `Enter0` gets her in. -/
 theorem turn0_liveness :
     Tla.Entails (Tla.tlaAnd (Tla.stutAlways Next vars) (Tla.WF_v Enter0 vars))
-      (Tla.leadsTo (Tla.statePred P0) (Tla.statePred Q0)) :=
-  Tla.wf1 P0 Q0 Next Enter0 vars hstep0 haq0 henable0
+      (Tla.leadsTo (Tla.statePred P0) (Tla.statePred Q0)) := by
+  tla_wf1
+  exact henable0
 
 theorem hstepB : ∀ s s', PB s → Tla.StutAction Next vars s s' →
     PB s' ∨ (s'.pc0 = 1 ∧ s'.turn = 0) := by
@@ -181,8 +182,9 @@ theorem henableB : ∀ s, PB s → Tla.Enabled (Tla.AngleAction Exit1 vars) s �
 /-- If process 1 is critical, weak fairness on `Exit1` gives the turn to 0. -/
 theorem exit1_liveness :
     Tla.Entails (Tla.tlaAnd (Tla.stutAlways Next vars) (Tla.WF_v Exit1 vars))
-      (Tla.leadsTo (Tla.statePred PB) (Tla.statePred (fun s => s.pc0 = 1 ∧ s.turn = 0))) :=
-  Tla.wf1 PB (fun s => s.pc0 = 1 ∧ s.turn = 0) Next Exit1 vars hstepB haqB henableB
+      (Tla.leadsTo (Tla.statePred PB) (Tla.statePred (fun s => s.pc0 = 1 ∧ s.turn = 0))) := by
+  tla_wf1
+  exact henableB
 
 theorem hstepC : ∀ s s', PC s → Tla.StutAction Next vars s s' → PC s' ∨ PB s' := by
   intro s s' hp h
@@ -222,8 +224,9 @@ theorem henableC : ∀ s, PC s → Tla.Enabled (Tla.AngleAction Enter1 vars) s �
 puts her in the critical section. -/
 theorem enter1_liveness :
     Tla.Entails (Tla.tlaAnd (Tla.stutAlways Next vars) (Tla.WF_v Enter1 vars))
-      (Tla.leadsTo (Tla.statePred PC) (Tla.statePred PB)) :=
-  Tla.wf1 PC PB Next Enter1 vars hstepC haqC henableC
+      (Tla.leadsTo (Tla.statePred PC) (Tla.statePred PB)) := by
+  tla_wf1
+  exact henableC
 
 theorem hstepD : ∀ s s', PD s → Tla.StutAction Next vars s s' → PD s' ∨ PC s' := by
   intro s s' hp h
@@ -262,8 +265,9 @@ theorem henableD : ∀ s, PD s → Tla.Enabled (Tla.AngleAction Req1 vars) s ∨
 /-- If process 1 is idle, weak fairness on `Req1` starts her request. -/
 theorem req1_liveness :
     Tla.Entails (Tla.tlaAnd (Tla.stutAlways Next vars) (Tla.WF_v Req1 vars))
-      (Tla.leadsTo (Tla.statePred PD) (Tla.statePred PC)) :=
-  Tla.wf1 PD PC Next Req1 vars hstepD haqD henableD
+      (Tla.leadsTo (Tla.statePred PD) (Tla.statePred PC)) := by
+  tla_wf1
+  exact henableD
 
 /-- The fairness hypothesis: `□[Next]_vars` plus weak fairness on the four
 actions that make progress for process 0. -/
@@ -297,11 +301,11 @@ theorem full_liveness :
   have lD : Tla.leadsTo (Tla.statePred PD) (Tla.statePred PC) e :=
     req1_liveness e ⟨hspec, hWF1⟩
   have lCq : Tla.leadsTo (Tla.statePred PC) (Tla.statePred (fun s => s.pc0 = 1 ∧ s.turn = 0)) e :=
-    Tla.leadsTo_trans_entails (Tla.statePred PC) (Tla.statePred PB)
-      (Tla.statePred (fun s => s.pc0 = 1 ∧ s.turn = 0)) e ⟨lC, lB⟩
+    by
+      tla_leads_to
   have lDq : Tla.leadsTo (Tla.statePred PD) (Tla.statePred (fun s => s.pc0 = 1 ∧ s.turn = 0)) e :=
-    Tla.leadsTo_trans_entails (Tla.statePred PD) (Tla.statePred PC)
-      (Tla.statePred (fun s => s.pc0 = 1 ∧ s.turn = 0)) e ⟨lD, lCq⟩
+    by
+      tla_leads_to
   have hcaseTurn1 : ∀ e0 : Tla.Behavior St, ∀ n, Inv (e0 n) →
       (Tla.statePred (fun s : St => s.pc0 = 1 ∧ s.turn = 1)) (e0.drop n) →
       (Tla.tlaOr (Tla.tlaOr (Tla.statePred PB) (Tla.statePred PC)) (Tla.statePred PD)) (e0.drop n) := by
@@ -363,9 +367,9 @@ theorem two_process_liveness :
   have lB : Tla.leadsTo (Tla.statePred PB) (Tla.statePred (fun s => s.pc0 = 1 ∧ s.turn = 0)) e :=
     exit1_liveness e hspec2
   have lB2 : Tla.leadsTo (Tla.statePred PB) (Tla.statePred Q0) e :=
-    Tla.leadsTo_trans_entails (Tla.statePred PB) (Tla.statePred (fun s => s.pc0 = 1 ∧ s.turn = 0))
-      (Tla.statePred Q0) e ⟨lB, lA⟩
-  exact Tla.leadsTo_or (Tla.statePred P0) (Tla.statePred PB) (Tla.statePred Q0) e ⟨lA, lB2⟩
+    by
+      tla_leads_to
+  tla_leads_to
 
 end TlaDsl.Examples.TwoProcessMutex
 
@@ -439,17 +443,21 @@ theorem two_phase_liveness :
         (Tla.statePred (fun s : St => s.pc = 2))) := by
   have h01 : Tla.Entails (Tla.tlaAnd (Tla.stutAlways Next pc) (Tla.WF_v A1 pc))
       (Tla.leadsTo (Tla.statePred (fun s : St => s.pc = 0))
-        (Tla.statePred (fun s : St => s.pc = 1))) :=
-    Tla.wf1 (fun s : St => s.pc = 0) (fun s : St => s.pc = 1) Next A1 pc hstep1 haq1 henable1
+        (Tla.statePred (fun s : St => s.pc = 1))) := by
+    tla_wf1
+    exact henable1
   have h12 : Tla.Entails (Tla.tlaAnd (Tla.stutAlways Next pc) (Tla.WF_v A2 pc))
       (Tla.leadsTo (Tla.statePred (fun s : St => s.pc = 1))
-        (Tla.statePred (fun s : St => s.pc = 2))) :=
-    Tla.wf1 (fun s : St => s.pc = 1) (fun s : St => s.pc = 2) Next A2 pc hstep2 haq2 henable2
+        (Tla.statePred (fun s : St => s.pc = 2))) := by
+    tla_wf1
+    exact henable2
   intro e h
   have hspec1 : Tla.tlaAnd (Tla.stutAlways Next pc) (Tla.WF_v A1 pc) e := ⟨h.1.1, h.1.2⟩
   have hspec2 : Tla.tlaAnd (Tla.stutAlways Next pc) (Tla.WF_v A2 pc) e := ⟨h.1.1, h.2⟩
-  exact Tla.leadsTo_trans_entails (Tla.statePred (fun s : St => s.pc = 0))
-    (Tla.statePred (fun s : St => s.pc = 1)) (Tla.statePred (fun s : St => s.pc = 2))
-    e ⟨h01 e hspec1, h12 e hspec2⟩
+  have l1 : Tla.leadsTo (Tla.statePred (fun s : St => s.pc = 0))
+      (Tla.statePred (fun s : St => s.pc = 1)) e := h01 e hspec1
+  have l2 : Tla.leadsTo (Tla.statePred (fun s : St => s.pc = 1))
+      (Tla.statePred (fun s : St => s.pc = 2)) e := h12 e hspec2
+  tla_leads_to
 
 end TlaDsl.Examples.TwoPhase

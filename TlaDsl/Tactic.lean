@@ -31,4 +31,25 @@ Lean; now the recommended workhorse for action-level obligations). -/
 macro "tla_grind" : tactic =>
   `(tactic| (tla_unfold; grind))
 
+/-- Apply the semantically proved WF1 rule to a goal of the shape
+`⊢ Init ∧ □[N]_v ∧ WF_v(A) ⊢ P ↝ Q` (or the two-conjunct spec), leaving the
+three obligation goals — the `[N]_v`-step case, the `⟨A⟩_v`-step case and the
+enabledness — after discharging the simple ones with `tla_grind`. -/
+macro "tla_wf1" : tactic =>
+  `(tactic| (apply Tla.wf1 <;> try tla_grind))
+
+/-- SF1 analogue of `tla_wf1`. -/
+macro "tla_sf1" : tactic =>
+  `(tactic| (apply Tla.sf1 <;> try tla_grind))
+
+/-- Leads-to choreography: solve a `P ↝ Q` goal by assumption, disjunction
+on the left, or transitivity through a chain of leads-to facts in context. -/
+macro "tla_leads_to" : tactic => `(tactic| assumption)
+
+macro_rules
+  | `(tactic| tla_leads_to) => `(tactic| (first
+      | assumption
+      | exact Tla.leadsTo_or _ _ _ _ ⟨by assumption, by assumption⟩
+      | exact Tla.leadsTo_trans_entails _ _ _ _ ⟨by assumption, by tla_leads_to⟩))
+
 end Tla

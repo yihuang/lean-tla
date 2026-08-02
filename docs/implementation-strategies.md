@@ -177,12 +177,19 @@ task-level tactics:
    generates `init ⇒ inv` and `Next ∧ inv ⇒ inv'` goals, discharging with
    `grind`/`omega` where possible (Leslie's `init_invariant` is the lemma
    underneath; the tactic is the UX).
-2. **Liveness**: `tla_wf1`/`tla_sf1` — takes the fairness action, the rank
-   function, and the leads-to goal; sets up well-founded descent, with the
-   arithmetic obligations handed to `omega`/`linarith` (port `wf1` from
-   Leslie, add `sf1` from coq-tla's *rules*, re-proved semantically).
-3. **Leads-to choreography**: `tla_leads_to` — transitivity/consequence/
-   disjunction-elimination automation for `p ↝ q` chains.
+2. **Liveness (implemented 2026-08-02)**: `tla_wf1`/`tla_sf1` — apply the
+   semantically proved `wf1`/`sf1` rules to a
+   `Init ∧ □[N]_v ∧ WF_v(A) ⊢ P ↝ Q` goal, discharging the step and
+   angle-step obligations with `tla_grind` and leaving the enabledness
+   witness (which `grind` cannot construct — the one creative step). The
+   TicketLock liveness proof is now `tla_wf1; exact henable`; the Mutex's
+   four WF1 theorems and TwoPhase's two are the same shape.
+3. **Leads-to choreography (implemented 2026-08-02)**: `tla_leads_to` —
+   closes `P ↝ Q` goals by assumption, disjunction on the left, or
+   transitivity through a chain of leads-to facts in context (right-recursive
+   so arbitrarily long chains work; the left premise must be an assumption,
+   which also bounds the search). The Mutex chains (`lB2`, `lCq`, `lDq`, the
+   TwoProcess/TwoPhase finals) are now one tactic call each.
 4. **Fallback**: `tla_unfold` + `grind` for anything structural.
 
 Lentil's full proof mode is a *second* UX layer; keep it as a candidate but

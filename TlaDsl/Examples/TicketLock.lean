@@ -12,8 +12,9 @@ open scoped Tla
 
 A minimal protocol (`pc = 0` waiting, `pc = 1` critical). Weak fairness on
 the `Enter` action forces progress: from `pc = 0` the process eventually
-reaches `pc = 1`. The proof is a one-line application of the semantically
-proved `wf1` rule.
+reaches `pc = 1`. The proof is `tla_wf1` (which applies the semantically
+proved `wf1` rule and discharges the step obligations with `tla_grind`),
+leaving only the enabledness witness.
 -/
 
 namespace TlaDsl.Examples.TicketLock
@@ -59,8 +60,8 @@ eventually enters its critical section. -/
 theorem ticket_liveness :
     Tla.Entails (Tla.tlaAnd (Tla.stutAlways Next pc) (Tla.WF_v Enter pc))
       (Tla.leadsTo (Tla.statePred (fun s : St => s.pc = 0))
-        (Tla.statePred (fun s : St => s.pc = 1))) :=
-  Tla.wf1 (fun s : St => s.pc = 0) (fun s : St => s.pc = 1) Next Enter pc
-    hstep haq henable
+        (Tla.statePred (fun s : St => s.pc = 1))) := by
+  tla_wf1
+  exact henable
 
 end TlaDsl.Examples.TicketLock
