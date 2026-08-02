@@ -70,13 +70,13 @@ DSL as the user-facing layer on top.
 | `NstutInv A → StutInv (WF_v A)`, same for `SF_v A` | done — added `WF_v`/`SF_v` to the core |
 | quotient completeness: `StutInv F` iff `∃! G on Quot, G ⟦e⟧ = F e` | done in slice 1 |
 
-### Slice 3 — proof calculus soundness (later)
+### Slice 3 — proof calculus soundness (done, `TlaDsl/Rules.lean`)
 
 | Theorem | Notes |
 |---|---|
-| `WF1`: `(p ∧ [N]_v ⇒ ◯(p ∨ q)) ∧ (p ∧ ⟨A⟩_v ⇒ ◯q) ∧ (p ⇒ Enabled ⟨A⟩_v ∨ q) ⊢ p ↝ q` under `□[N]_v ∧ WF_v(A)` | port Leslie's semantic proof |
-| `SF1` (strong fairness analogue) | coq-tla's `sf.v` rule, re-proved semantically |
-| leads-to lattice laws (disjunction, conjunction, transitivity) | partially done (transitivity) |
+| `WF1`: under `□[N]_v ∧ WF_v(A)`, from `p ∧ [N]_v ⇒ ◯(p ∨ q)`, `p ∧ ⟨A⟩_v ⇒ ◯q`, `p ⇒ Enabled ⟨A⟩_v ∨ q` conclude `p ↝ q` | done — semantic proof by contradiction (p persists, A always enabled, fairness forces an A-step) |
+| `SF1` (strong fairness analogue) | done — same, with the premise that `p` eventually enables `⟨A⟩_v`; uses infinitely-often enabled |
+| leads-to lattice laws (disjunction, transitivity, consequence) | done (`leadsTo_or`, `leadsTo_trans_entails`, `leadsTo_consequence`) |
 
 ### Slice 4 — refinement and hiding (later)
 
