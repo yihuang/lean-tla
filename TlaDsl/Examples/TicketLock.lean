@@ -4,6 +4,7 @@ import TlaDsl.Coercion
 import TlaDsl.Prime
 import TlaDsl.Rules
 import TlaDsl.Tactic
+import TlaDsl.TlaVar
 
 open scoped Tla
 
@@ -22,8 +23,7 @@ structure St where
   x : Nat
 deriving Repr
 
-@[simp] def pc : St → Nat := St.pc
-@[simp] def x : St → Nat := St.x
+tla_var St pc x
 
 @[simp] def Enter : Tla.Action St := [a| pc = 0 ∧ pc' = 1 ∧ x' = x]
 @[simp] def Exit : Tla.Action St := [a| pc = 1 ∧ pc' = 0 ∧ x' = x]

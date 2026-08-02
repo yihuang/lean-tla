@@ -4,6 +4,7 @@ import TlaDsl.Coercion
 import TlaDsl.Prime
 import TlaDsl.Rules
 import TlaDsl.Tactic
+import TlaDsl.TlaVar
 
 open scoped Tla
 
@@ -21,38 +22,34 @@ structure St where
   y : Nat
 deriving Repr
 
-/-! State functions ("variables" in TLA speak) -/
+/-! State functions ("variables" in TLA speak), declared with `tla_var`. -/
 
-@[simp] def x : St → Nat := St.x
-@[simp] def y : St → Nat := St.y
+tla_var St x y
 
 @[simp] def Init : Tla.StatePred St := [p| x = 0 ∧ y = 0]
 
 @[simp] def Next : Tla.Action St := [a| x' = x + 1 ∧ y' = y + 1]
 
-/-- The observed variables, for `□[Next]_vars`. -/
-@[simp] def Vars : St → Nat × Nat := fun s => (s.x, s.y)
-
 /-- The specification, written with `[t| ...]` sugar (implicit lifting via
 `Coe` lifts `Init` automatically). -/
-def Spec : Tla.Pred St := [t| Init ∧ □[Next]_Vars]
+def Spec : Tla.Pred St := [t| Init ∧ □[Next]_vars]
 
 /-- The same spec with explicit lifts, for comparison. -/
-def Spec' : Tla.Pred St := Tla.tlaAnd ⌜ Init ⌝ (□[Next]_Vars)
+def Spec' : Tla.Pred St := Tla.tlaAnd ⌜ Init ⌝ (□[Next]_vars)
 
 theorem init_ok : ∀ s, Init s → s.x = s.y := by
   intro s hs
   tla_unfold
   omega
 
-theorem step_ok : ∀ s s', (Next s s' ∨ Vars s' = Vars s) → s.x = s.y → s'.x = s'.y := by
+theorem step_ok : ∀ s s', (Next s s' ∨ vars s' = vars s) → s.x = s.y → s'.x = s'.y := by
   intro s s' hstep hxy
   rcases hstep with hnext | hstut
   · tla_unfold
     omega
-  · have hstut' : (s'.x, s'.y) = (s.x, s.y) := by simpa [Vars] using hstut
-    injection hstut' with hx' hy'
-    omega
+  · tla_unfold
+    cases hstut
+    exact hxy
 
 theorem x_eq_y_invariant : Spec ⊢ □ ⌜ (fun s : St => s.x = s.y) ⌝ := by
   unfold Spec

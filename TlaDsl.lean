@@ -4,6 +4,7 @@ import TlaDsl.Coercion
 import TlaDsl.Prime
 import TlaDsl.Rules
 import TlaDsl.Tactic
+import TlaDsl.TlaVar
 import TlaDsl.Meta
 import TlaDsl.Examples.Counter
 import TlaDsl.Examples.Refinement

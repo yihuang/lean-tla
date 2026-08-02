@@ -70,10 +70,12 @@ result: **the pseudocode notation layer works**, including `x'` primes and
 1. **State functions need a declaration line and `@[simp]`.**
    `@[simp] def x : St → Nat := St.x` per variable. The `@[simp]` was not
    optional: with `abbrev`, `simp`/`omega` treated `x s` and `s.x` as
-   different atoms and proofs failed. Lesson: the DSL should generate or
-   register these automatically (a `tla_var` command), or the core should
-   provide a simp-normal form that connects field notation and state
-   functions.
+   different atoms and proofs failed. **Resolved:** the `tla_var St x y`
+   command (`TlaDsl/TlaVar.lean`) declares the state functions, the default
+   `vars` stuttering frame, and the `[simp]` `_apply` lemmas automatically.
+   Note: proofs should use plain `simp`/`tla_unfold`; listing a generated
+   variable explicitly (`simp [x]`) is not supported (programmatically
+   declared constants are not unfoldable that way).
 2. **The bracket macros are a small language.** Only identifiers, numerals,
    and `= + - * < ≤ ∧ ∨ ¬` are supported inside `[p|]/[a|]`. No function
    application (`f x`), no binders (`∃ x ∈ S, ...`), no `→`/`≠`/`if-then-else`.

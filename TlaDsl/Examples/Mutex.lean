@@ -5,6 +5,7 @@ import TlaDsl.Prime
 import TlaDsl.Rules
 import TlaDsl.Meta
 import TlaDsl.Tactic
+import TlaDsl.TlaVar
 
 open scoped Tla
 
@@ -24,9 +25,7 @@ structure St where
   turn : Nat
 deriving Repr
 
-@[simp] def pc0 : St → Nat := St.pc0
-@[simp] def pc1 : St → Nat := St.pc1
-@[simp] def turn : St → Nat := St.turn
+tla_var St pc0 pc1 turn
 
 @[simp] def Req0 : Tla.Action St := [a| pc0 = 0 ∧ pc0' = 1 ∧ pc1' = pc1 ∧ turn' = turn]
 @[simp] def Enter0 : Tla.Action St := [a| pc0 = 1 ∧ turn = 0 ∧ pc0' = 2 ∧ pc1' = pc1 ∧ turn' = turn]
@@ -39,9 +38,8 @@ deriving Repr
   Req0 s s' ∨ Enter0 s s' ∨ Exit0 s s' ∨ Req1 s s' ∨ Enter1 s s' ∨ Exit1 s s'
 
 @[simp] def Init : Tla.StatePred St := [p| pc0 = 0 ∧ pc1 = 0 ∧ turn = 0]
-@[simp] def Vars : St → Nat × Nat × Nat := fun s => (s.pc0, s.pc1, s.turn)
 
-def Spec : Tla.Pred St := [t| Init ∧ □[Next]_Vars]
+def Spec : Tla.Pred St := [t| Init ∧ □[Next]_vars]
 
 /-- The inductive invariant: whoever is in the critical section holds `turn`. -/
 def Inv : St → Prop := fun s => (s.pc0 = 2 → s.turn = 0) ∧ (s.pc1 = 2 → s.turn = 1)
@@ -52,7 +50,7 @@ theorem init_inv : ∀ s, Init s → Inv s := by
   simp [Inv]
   omega
 
-theorem step_inv : ∀ s s', Tla.StutAction Next Vars s s' → Inv s → Inv s' := by
+theorem step_inv : ∀ s s', Tla.StutAction Next vars s s' → Inv s → Inv s' := by
   intro s s' hstep hinv
   tla_unfold
   simp [Inv] at hinv ⊢
@@ -64,7 +62,8 @@ theorem step_inv : ∀ s s', Tla.StutAction Next Vars s s' → Inv s → Inv s' 
     · omega
     · omega
     · omega
-  · omega
+  · cases hstut
+    exact hinv
 
 theorem inv_invariant : Tla.Entails Spec (Tla.always (Tla.statePred Inv)) := by
   unfold Spec
@@ -96,8 +95,7 @@ structure St where
   x : Nat
 deriving Repr
 
-@[simp] def pc : St → Nat := St.pc
-@[simp] def x : St → Nat := St.x
+tla_var St pc x
 
 @[simp] def A1 : Tla.Action St := [a| pc = 0 ∧ pc' = 1 ∧ x' = x]
 @[simp] def A2 : Tla.Action St := [a| pc = 1 ∧ pc' = 2 ∧ x' = x]
