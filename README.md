@@ -29,10 +29,13 @@ Isabelle/TLA+ as the reference and mathlib/CSLib as leverage.
 
 ## Prototype status
 
-A minimal, mathlib-free vertical slice lives in [`TlaDsl/`](TlaDsl/) and
-builds with `lake build` on Lean 4.32: TLA-flavored semantics (behaviors,
-`□`/`◇`/`↝`, `[A]_v`, `WF`/`SF`), pseudocode notation (`[p| ...]`,
-`[a| x' = x + 1 ∧ ...]`, `[t| ...]`, implicit lifting), an invariant
-tactic, and a counter example with a machine-checked invariant proof.
+The working prototype lives in [`TlaDsl/`](TlaDsl/) and builds with
+`lake build`: TLA-flavored semantics (behaviors, `□`/`◇`/`↝`, `[A]_v`,
+`WF`/`SF`), pseudocode notation (`[p| ...]`, `[a| x' = x + 1 ∧ ...]`,
+`[t| ...]`, implicit lifting), the `tla_var` command for declaring
+variables, an invariant tactic, and machine-checked examples (counter,
+refinement, ticket-lock liveness, two-process mutex with full-chain
+liveness). Mathlib is a dependency (toolchain `v4.33.0-rc1`, matching
+mathlib's pin) and `tla_grind` provides SMT-style automation.
 
 The repository is currently design-documentation only; no Lean code yet.

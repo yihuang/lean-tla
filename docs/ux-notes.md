@@ -94,8 +94,11 @@ result: **the pseudocode notation layer works**, including `x'` primes and
    price of correct `[A]_v` semantics (vs Leslie's `s = s'`); a `tla_inv`
    tactic should `by_cases` the stutter automatically.
 6. **No mathlib**: no `grind`, `linarith`, `Finset`, or decidability
-   infrastructure. Fine for the slice; the model-checking UX
-   (`native_decide`) and heavy set reasoning need mathlib (and `grind`).
+   infrastructure. **Resolved:** mathlib is now a dependency (toolchain
+   `v4.33.0-rc1`, matching mathlib's pin; oleans fetched from the cache), and
+   the `tla_grind` tactic (`tla_unfold; grind`) discharges action-level
+   obligations with SMT-style automation. The whole library and all examples
+   build unchanged against mathlib.
 
 ## 5. What to prototype next (in rough priority)
 

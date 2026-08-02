@@ -26,4 +26,9 @@ macro "tla_unfold" : tactic =>
 and step cases as goals. -/
 macro "tla_inv" : tactic => `(tactic| (apply Tla.init_invariant_stut))
 
+/-- Unfold the DSL and finish with `grind` (SMT-style automation, from core
+Lean; now the recommended workhorse for action-level obligations). -/
+macro "tla_grind" : tactic =>
+  `(tactic| (tla_unfold; grind))
+
 end Tla

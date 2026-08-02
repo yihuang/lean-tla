@@ -64,4 +64,14 @@ example : ∀ s s' : St, x s ≤ 3 → y s ≤ 3 → Next s s' → x s' ≤ 4 �
   tla_unfold
   omega
 
+/-! ## grind demo (SMT-style automation, mathlib-era) -/
+
+example : ∀ s s' : St, Init s → Next s s' → x s' = 1 ∧ y s' = 1 := by
+  intro s s' hs hnext
+  tla_grind
+
+example : ∀ s s' : St, x s ≤ 3 → y s ≤ 3 → Next s s' → x s' ≤ 4 ∧ y s' ≤ 4 := by
+  intro s s' hx hy hnext
+  tla_grind
+
 end TlaDsl.Examples.Counter

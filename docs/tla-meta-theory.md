@@ -127,8 +127,10 @@ Both compile with zero `sorry`s and zero dependencies.
 - Values are typed (the DSL's choice). Meta-theory here is about the typed
   fragment's semantics; full TLA+ value semantics (ZFC) remains the
   conformance-oracle goal, not this track.
-- No mathlib yet: proofs use core `omega`/`simp`. If the coinductive slice
-  needs mathlib, that is the moment to add it as a dependency.
+- Mathlib is now a dependency (2026-08-02, toolchain `v4.33.0-rc1` matching
+  mathlib's pin); proofs use `grind` (`tla_grind`) alongside `omega`/`simp`.
+  The coinductive slice (infinite stuttering) can now use mathlib's
+  coinductive streams.
 
 ## 5. How this feeds the DSL
 
