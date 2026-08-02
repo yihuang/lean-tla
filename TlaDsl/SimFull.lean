@@ -28,8 +28,10 @@ integration work needs: `nextBlock` and `BlockStart` commute with
 are dropped at corresponding block starts. The in-block truncation machinery
 (`BlockOf`, `Compress_drop_blockOf`) then yields the suffix-matching lemmas
 (`SimFull e f → ∀ n, ∃ m, SimFull (e.drop n) (f.drop m)` and the right-handed
-version). The step-matching lemma and migrating the preservation theorems in
-`Meta.lean` to `SimFull` are the remaining pieces.
+version). The step-matching lemma (`SimFull.sim_step`, with the block-final
+and block-boundary cases handled via `BlockOf_eq_of_between` and
+`SimFull.nonfinal_iff`) completes the machinery the action-level preservation
+theorems in `Meta.lean` migrate with.
 -/
 
 /-- The start of the next maximal run: the first index `≥ n` where the value
@@ -388,6 +390,129 @@ theorem Compress_drop_blockOf {σ : Type u} (e : Behavior σ) (n : Nat) :
     rw [hBS2 k]
     exact hconst n hb
 
+/-! ## Step-level matching -/
+
+/-- Block starts are monotone in the block index. -/
+theorem BlockStart_mono_le {σ : Type u} (e : Behavior σ) {j k : Nat} (h : j ≤ k) :
+    BlockStart e j ≤ BlockStart e k := by
+  induction k with
+  | zero =>
+      have hj : j = 0 := Nat.eq_zero_of_le_zero h
+      subst hj
+      rfl
+  | succ k ih =>
+      by_cases hjk : j ≤ k
+      · exact le_trans (ih hjk) (BlockStart_mono e k)
+      · have hj : j = k + 1 := le_antisymm h (Nat.succ_le_of_lt (Nat.lt_of_not_ge hjk))
+        subst hj
+        rfl
+
+/-- Either the next block starts strictly after the current one, or the
+block starts have stabilized (the final block). -/
+theorem BlockStart_next_spec {σ : Type u} (e : Behavior σ) (i : Nat) :
+    BlockStart e (i + 1) < BlockStart e (i + 2) ∨ BlockStart e (i + 2) = BlockStart e (i + 1) := by
+  by_cases h : BlockStart e (i + 1) < BlockStart e (i + 2)
+  · exact Or.inl h
+  · exact Or.inr (le_antisymm (le_of_not_gt h) (BlockStart_mono_le e (by omega)))
+
+/-- Block `i` is non-final (there is a change after its start) iff the
+compressed sequence changes at `i`. -/
+theorem nonfinal_iff_compression_change {σ : Type u} (e : Behavior σ) (i : Nat) :
+    nextBlock e (BlockStart e i) > BlockStart e i ↔ Compress e i ≠ Compress e (i + 1) := by
+  let b := BlockStart e i
+  have hc : Compress e i = e b := by simp [Compress, b]
+  have hc' : Compress e (i + 1) = e (nextBlock e b) := by
+    simp [Compress, b, BlockStart]
+  rw [hc, hc']
+  constructor
+  · intro h
+    by_contra hEq
+    have hch : ∃ m, b ≤ m ∧ e (m + 1) ≠ e m := by
+      by_cases hc2 : ∃ m, b ≤ m ∧ e (m + 1) ≠ e m
+      · exact hc2
+      · have hnb : nextBlock e b = b := by
+          unfold nextBlock
+          rw [dif_neg hc2]
+        have hb : b = nextBlock e b := hnb.symm
+        dsimp [b] at h hb
+        exact False.elim (by omega)
+    have hnb : nextBlock e b = Nat.find (p := fun m => b ≤ m ∧ e (m + 1) ≠ e m) hch + 1 := by
+      unfold nextBlock
+      rw [dif_pos hch]
+    have hstep : e (nextBlock e b) ≠ e (nextBlock e b - 1) := by
+      rw [hnb]
+      simpa [Nat.add_sub_cancel] using (Nat.find_spec (p := fun m => b ≤ m ∧ e (m + 1) ≠ e m) hch).2
+    have hpred : e (nextBlock e b - 1) = e b := by
+      exact eq_of_block_between e b (nextBlock e b - 1) (by dsimp [b]; omega) (by dsimp [b]; omega)
+    exact hstep (hEq.symm.trans hpred.symm)
+  · intro hne
+    by_contra hle
+    have hEq : nextBlock e b = b := le_antisymm (le_of_not_gt hle) (nextBlock_ge e b)
+    exact hne (by rw [hEq])
+
+namespace SimFull
+
+/-- Non-finality of block `i` transfers across the equivalence. -/
+theorem nonfinal_iff {σ : Type u} {e f : Behavior σ} (h : SimFull e f) (i : Nat) :
+    nextBlock e (BlockStart e i) > BlockStart e i ↔
+      nextBlock f (BlockStart f i) > BlockStart f i := by
+  have hc1 : Compress e i ≠ Compress e (i + 1) ↔ Compress f i ≠ Compress f (i + 1) := by
+    constructor
+    · intro hne hnef
+      have hce := congrFun h i
+      have hcf := congrFun h (i + 1)
+      exact hne (hce.trans (hnef.trans hcf.symm))
+    · intro hne hnef
+      have hce := congrFun h i
+      have hcf := congrFun h (i + 1)
+      exact hne (hce.symm.trans (hnef.trans hcf))
+  rw [nonfinal_iff_compression_change e i, nonfinal_iff_compression_change f i]
+  exact hc1
+
+end SimFull
+
+/-- Every block before `BlockOf e n` is non-final. -/
+theorem BlockOf_blocks_nonfinal {σ : Type u} (e : Behavior σ) (n : Nat) :
+    ∀ k, k < BlockOf e n → nextBlock e (BlockStart e k) > BlockStart e k := by
+  intro k hk
+  by_contra hnot
+  have hEq : nextBlock e (BlockStart e k) = BlockStart e k :=
+    le_antisymm (le_of_not_gt hnot) (nextBlock_ge e (BlockStart e k))
+  have hstart : BlockStart e (k + 1) = BlockStart e k := by
+    simpa [BlockStart] using hEq
+  have hpk : n < BlockStart e (k + 1) ∨ BlockStart e (k + 1) = BlockStart e k := Or.inr hstart
+  have hmin : BlockOf e n ≤ k := by
+    simpa [BlockOf] using Nat.find_min' (BlockOf_exists e n) (m := k) hpk
+  omega
+
+/-- If `n` lies in block `i` (before its end, or in the final block) and all
+earlier blocks are non-final, then `BlockOf e n = i`. -/
+theorem BlockOf_eq_of_between {σ : Type u} (e : Behavior σ) (i n : Nat)
+    (hle : BlockStart e i ≤ n)
+    (hlt : n < BlockStart e (i + 1) ∨ BlockStart e (i + 1) = BlockStart e i)
+    (hstrict : ∀ k, k < i → nextBlock e (BlockStart e k) > BlockStart e k) :
+    BlockOf e n = i := by
+  have hle1 : BlockOf e n ≤ i := by
+    simpa [BlockOf] using Nat.find_min' (BlockOf_exists e n) (m := i) hlt
+  have hnot : ∀ k, k < i →
+      ¬ (n < BlockStart e (k + 1) ∨ BlockStart e (k + 1) = BlockStart e k) := by
+    intro k hk hp
+    rcases hp with h1 | h2
+    · have hmono : BlockStart e (k + 1) ≤ BlockStart e i := BlockStart_mono_le e (by omega)
+      omega
+    · have hstrictk := hstrict k hk
+      have hnb : BlockStart e (k + 1) = nextBlock e (BlockStart e k) := by
+        simp [BlockStart]
+      omega
+  have hle2 : i ≤ BlockOf e n := by
+    by_contra hlt2
+    have hko : BlockOf e n < i := by omega
+    have hp : n < BlockStart e (BlockOf e n + 1) ∨ BlockStart e (BlockOf e n + 1) = BlockStart e (BlockOf e n) :=
+      Nat.find_spec (p := fun k => n < BlockStart e (k + 1) ∨ BlockStart e (k + 1) = BlockStart e k)
+        (BlockOf_exists e n)
+    exact (hnot (BlockOf e n) hko) hp
+  exact le_antisymm hle1 hle2
+
 namespace SimFull
 
 theorem refl (e : Behavior σ) : SimFull e e := rfl
@@ -429,6 +554,107 @@ theorem sim_suffix_right {σ : Type u} {e f : Behavior σ} (h : SimFull e f) :
   intro m
   rcases sim_suffix_left (SimFull.symm h) m with ⟨n, hsf⟩
   exact ⟨n, SimFull.symm hsf⟩
+
+/-- Step-level suffix matching: for each position there is a matching
+position such that either the next steps also match, or the left next step
+matches the same right position (a stutter on the right). -/
+theorem sim_step {σ : Type u} {e f : Behavior σ} (h : SimFull e f) :
+    ∀ n : Nat, ∃ m : Nat,
+      SimFull (e.drop n) (f.drop m) ∧
+        (SimFull (e.drop (n + 1)) (f.drop (m + 1)) ∨ SimFull (e.drop (n + 1)) (f.drop m)) := by
+  intro n
+  have hle_i : BlockStart e (BlockOf e n) ≤ n := BlockOf_le e n
+  have hblocks : ∀ k, k < BlockOf e n →
+      nextBlock e (BlockStart e k) > BlockStart e k := BlockOf_blocks_nonfinal e n
+  rcases BlockOf_spec e n with hstrict | hfinal
+  · by_cases hn1 : n + 1 < BlockStart e (BlockOf e n + 1)
+    · -- n and n+1 are both inside block i
+      refine ⟨BlockStart f (BlockOf e n), ?_, Or.inr ?_⟩
+      · unfold SimFull
+        rw [Compress_drop_blockOf e n, Compress_drop_blockStart f (BlockOf e n)]
+        rw [h]
+      · have hbo : BlockOf e (n + 1) = BlockOf e n :=
+          BlockOf_eq_of_between e (BlockOf e n) (n + 1) (by omega) (Or.inl hn1) hblocks
+        unfold SimFull
+        rw [Compress_drop_blockOf e (n + 1), Compress_drop_blockStart f (BlockOf e n)]
+        rw [hbo, h]
+    · -- n is the last position of block i: e takes a real step into block i+1
+      have hn1' : n + 1 = BlockStart e (BlockOf e n + 1) := by omega
+      have hnonfinal : nextBlock e (BlockStart e (BlockOf e n)) > BlockStart e (BlockOf e n) := by
+        have hnb : BlockStart e (BlockOf e n + 1) = nextBlock e (BlockStart e (BlockOf e n)) := by
+          simp [BlockStart]
+        have hgt : BlockStart e (BlockOf e n + 1) > BlockStart e (BlockOf e n) := by
+          rw [← hn1']
+          omega
+        rw [← hnb]
+        exact hgt
+      have hnonfinal_f : nextBlock f (BlockStart f (BlockOf e n)) > BlockStart f (BlockOf e n) :=
+        (SimFull.nonfinal_iff h (BlockOf e n)).1 hnonfinal
+      have hnonfinal_f' : BlockStart f (BlockOf e n) < BlockStart f (BlockOf e n + 1) := by
+        simpa [BlockStart] using hnonfinal_f
+      let m := BlockStart f (BlockOf e n + 1) - 1
+      have hm1 : m + 1 = BlockStart f (BlockOf e n + 1) := by
+        dsimp [m]
+        omega
+      have hbo_f : BlockOf f m = BlockOf e n := BlockOf_eq_of_between f (BlockOf e n) m
+        (by dsimp [m]; omega) (Or.inl (by dsimp [m]; omega)) (by
+          intro k hk
+          exact (SimFull.nonfinal_iff h k).1 (hblocks k hk))
+      have hbo_e_next : BlockOf e (n + 1) = BlockOf e n + 1 :=
+        BlockOf_eq_of_between e (BlockOf e n + 1) (n + 1)
+        (by omega) (by
+          rcases BlockStart_next_spec e (BlockOf e n) with h1 | h2
+          · left
+            rw [hn1']
+            exact h1
+          · right
+            exact h2) (by
+          intro k hk
+          by_cases hki : k < BlockOf e n
+          · exact hblocks k hki
+          · have : k = BlockOf e n := by omega
+            subst k
+            exact hnonfinal)
+      have hbo_f_next : BlockOf f (m + 1) = BlockOf e n + 1 :=
+        BlockOf_eq_of_between f (BlockOf e n + 1) (m + 1)
+        (by omega) (by
+          rcases BlockStart_next_spec f (BlockOf e n) with h1 | h2
+          · left
+            rw [hm1]
+            exact h1
+          · right
+            exact h2) (by
+          intro k hk
+          by_cases hki : k < BlockOf e n
+          · exact (SimFull.nonfinal_iff h k).1 (hblocks k hki)
+          · have : k = BlockOf e n := by omega
+            subst k
+            exact hnonfinal_f)
+      refine ⟨m, ?_, Or.inl ?_⟩
+      · unfold SimFull
+        rw [Compress_drop_blockOf e n, Compress_drop_blockOf f m]
+        rw [hbo_f, h]
+      · unfold SimFull
+        rw [Compress_drop_blockOf e (n + 1), Compress_drop_blockOf f (m + 1)]
+        rw [hbo_e_next, hbo_f_next, h]
+  · -- block i is final
+    have hfinal_e : nextBlock e (BlockStart e (BlockOf e n)) = BlockStart e (BlockOf e n) := by
+      simpa [BlockStart] using hfinal
+    have hfinal_f : nextBlock f (BlockStart f (BlockOf e n)) = BlockStart f (BlockOf e n) := by
+      by_contra hnot
+      have hgt_f : nextBlock f (BlockStart f (BlockOf e n)) > BlockStart f (BlockOf e n) :=
+        lt_of_le_of_ne (nextBlock_ge f (BlockStart f (BlockOf e n))) (fun h => hnot h.symm)
+      have hgt_e := (SimFull.nonfinal_iff h (BlockOf e n)).2 hgt_f
+      omega
+    refine ⟨BlockStart f (BlockOf e n), ?_, Or.inr ?_⟩
+    · unfold SimFull
+      rw [Compress_drop_blockOf e n, Compress_drop_blockStart f (BlockOf e n)]
+      rw [h]
+    · have hbo : BlockOf e (n + 1) = BlockOf e n :=
+        BlockOf_eq_of_between e (BlockOf e n) (n + 1) (by omega) (Or.inr hfinal) hblocks
+      unfold SimFull
+      rw [Compress_drop_blockOf e (n + 1), Compress_drop_blockStart f (BlockOf e n)]
+      rw [hbo, h]
 
 instance setoid (σ : Type u) : Setoid (Behavior σ) where
   r := SimFull

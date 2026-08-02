@@ -131,12 +131,16 @@ Both compile with zero `sorry`s and zero dependencies.
   in-block truncation machinery (`BlockOf` — the index of the maximal run
   containing a position, including the final block — `eq_of_block_between`,
   `BlockStart_drop_shift`, `Compress_drop_blockOf`) completes the
-  suffix-matching lemmas (`SimFull.sim_suffix_left/right`). The preservation
-  theorems are migrating: `StutInvFull` (connectives, `always`, `eventually`,
-  `leadsTo`, and the full-quotient characterization
-  `stutinv_full_descends`) is proved in `SimFull.lean`; the action-level
-  slice (`NstutInv`, `WF_v`, `SF_v`) still needs a step-matching lemma for
-  `SimFull` and is the remaining integration work.
+  suffix-matching lemmas (`SimFull.sim_suffix_left/right`) and the
+  step-matching lemma (`SimFull.sim_step`, with the block-final and
+  block-boundary cases handled by `BlockOf_eq_of_between` and
+  `SimFull.nonfinal_iff`). The preservation theorems are fully migrated:
+  `StutInvFull` (connectives, `always`, `eventually`, `leadsTo`, the
+  full-quotient characterization `stutinv_full_descends`) plus the
+  action-level slice `NstutInvFull` (`◇⟨A⟩_v`, `□[A]_v`, `WF_v`, `SF_v`),
+  and `SimFull.map` (`Extend` preserves the equivalence). The finite-`Sim`
+  versions in `Meta.lean` remain as the "finitely many stutters" fragment;
+  both are now available.
 - Values are typed (the DSL's choice). Meta-theory here is about the typed
   fragment's semantics; full TLA+ value semantics (ZFC) remains the
   conformance-oracle goal, not this track.

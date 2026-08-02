@@ -1,4 +1,5 @@
 import TlaDsl.Basic
+import TlaDsl.SimFull
 
 namespace Tla
 
@@ -585,5 +586,207 @@ theorem spec_fair {σ : Type u} {α : Type v} (init : StatePred σ) (next : Acti
     Entails (tlaAnd (tlaAnd (statePred init) (stutAlways next v)) L) L := by
   intro e h
   exact h.2
+
+/-! # Slice 5: the full stuttering equivalence (action-level migration)
+
+The `StutInvFull` preservation theorems live in `TlaDsl/SimFull.lean`; the
+action-level slice migrates here: `NstutInvFull` (the `SimFull` analogue of
+`NstutInv`) and the `WF_v`/`SF_v`/`◇⟨A⟩_v`/`□[A]_v` preservation theorems,
+which use `SimFull.sim_step`. `SimFull.map` closes the migration with
+refinement-side extension.
+-/
+
+/-- Near-stuttering invariance for the full equivalence. -/
+def NstutInvFull {σ : Type u} (A : Action σ) : Prop :=
+  ∀ e f : Behavior σ, e 0 = f 0 → SimFull (e.drop 1) (f.drop 1) →
+    (A (e 0) (e 1) ↔ A (f 0) (f 1))
+
+theorem nstutinv_full_unchanged {σ : Type u} {α : Type v} (v : σ → α) :
+    NstutInvFull (Unchanged v) := by
+  intro e f hfirst htail
+  have hv1 : v (e 1) = v (f 1) := by
+    simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using
+      congrArg v (SimFull.first htail)
+  have hv0 : v (e 0) = v (f 0) := congrArg v hfirst
+  constructor <;> intro h
+  · simpa [Unchanged, hv1, hv0] using h
+  · simpa [Unchanged, hv1, hv0] using h
+
+theorem nstutinv_full_angle {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
+    (hA : NstutInvFull A) : NstutInvFull (AngleAction A v) := by
+  intro e f hfirst htail
+  have hv1 : v (e 1) = v (f 1) := by
+    simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using
+      congrArg v (SimFull.first htail)
+  have hv0 : v (e 0) = v (f 0) := congrArg v hfirst
+  constructor <;> intro h
+  · simp [AngleAction] at h
+    exact ⟨(hA e f hfirst htail).1 h.1, by simpa [hv1, hv0] using h.2⟩
+  · simp [AngleAction] at h
+    exact ⟨(hA e f hfirst htail).2 h.1, by simpa [hv1, hv0] using h.2⟩
+
+theorem nstutinv_full_stutAction {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
+    (hA : NstutInvFull A) : NstutInvFull (StutAction A v) := by
+  intro e f hfirst htail
+  have hv1 : v (e 1) = v (f 1) := by
+    simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using
+      congrArg v (SimFull.first htail)
+  have hv0 : v (e 0) = v (f 0) := congrArg v hfirst
+  constructor <;> intro h
+  · simp [StutAction] at h
+    rcases h with hAe | hve
+    · exact Or.inl ((hA e f hfirst htail).1 hAe)
+    · exact Or.inr (by simpa [hv1, hv0] using hve)
+  · simp [StutAction] at h
+    rcases h with hAf | hvf
+    · exact Or.inl ((hA e f hfirst htail).2 hAf)
+    · exact Or.inr (by simpa [hv1, hv0] using hvf)
+
+/-- `◇⟨A⟩_v` is fully stuttering invariant if `A` is nearly so. -/
+theorem stutinv_full_eventually_angle {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
+    (hA : NstutInvFull A) : StutInvFull (eventually (actionPred (AngleAction A v))) := by
+  have hB : NstutInvFull (AngleAction A v) := nstutinv_full_angle A v hA
+  intro e f h
+  constructor <;> intro hE
+  · rcases hE with ⟨n, hBn⟩
+    simp [actionPred, AngleAction] at hBn
+    rcases SimFull.sim_step h n with ⟨m, hmn, hmnnext⟩
+    rcases hmnnext with hnext | hsame
+    · exact ⟨m, (hB (e.drop n) (f.drop m) (SimFull.first hmn)
+        (by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hnext)).1
+        (by simpa [AngleAction, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hBn)⟩
+    · have he1 : (e.drop n) 1 = (e.drop n) 0 := by
+        have h1 : e (n + 1) = f m := by
+          simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (SimFull.first hsame)
+        have h2 : e n = f m := by
+          simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (SimFull.first hmn)
+        simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h1.trans h2.symm
+      exact False.elim (hBn.2 (by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (congrArg v he1)))
+  · rcases hE with ⟨m, hBm⟩
+    simp [actionPred, AngleAction] at hBm
+    rcases SimFull.sim_step (SimFull.symm h) m with ⟨n, hmn, hmnnext⟩
+    rcases hmnnext with hnext | hsame
+    · exact ⟨n, (hB (f.drop m) (e.drop n) (SimFull.first hmn)
+        (by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hnext)).1
+        (by simpa [AngleAction, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hBm)⟩
+    · have hf1 : (f.drop m) 1 = (f.drop m) 0 := by
+        have h1 : f (m + 1) = e n := by
+          simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (SimFull.first hsame)
+        have h2 : f m = e n := by
+          simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (SimFull.first hmn)
+        simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h1.trans h2.symm
+      exact False.elim (hBm.2 (by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (congrArg v hf1)))
+
+/-- `□[A]_v` is fully stuttering invariant if `A` is nearly so. -/
+theorem stutinv_full_stutAlways {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
+    (hA : NstutInvFull A) : StutInvFull (stutAlways A v) := by
+  have hB : NstutInvFull (StutAction A v) := nstutinv_full_stutAction A v hA
+  intro e f h
+  constructor <;> intro hAll
+  · intro m
+    rcases SimFull.sim_step (SimFull.symm h) m with ⟨n, hmn, hmnnext⟩
+    rcases hmnnext with hnext | hsame
+    · exact (hB (f.drop m) (e.drop n) (SimFull.first hmn)
+        (by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hnext)).2 (hAll n)
+    · have hf1 : (f.drop m) 1 = (f.drop m) 0 := by
+        have h1 : f (m + 1) = e n := by
+          simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (SimFull.first hsame)
+        have h2 : f m = e n := by
+          simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (SimFull.first hmn)
+        simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h1.trans h2.symm
+      exact Or.inr (congrArg v hf1)
+  · intro n
+    rcases SimFull.sim_step h n with ⟨m, hmn, hmnnext⟩
+    rcases hmnnext with hnext | hsame
+    · exact (hB (e.drop n) (f.drop m) (SimFull.first hmn)
+        (by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hnext)).2 (hAll m)
+    · have he1 : (e.drop n) 1 = (e.drop n) 0 := by
+        have h1 : e (n + 1) = f m := by
+          simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (SimFull.first hsame)
+        have h2 : e n = f m := by
+          simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (SimFull.first hmn)
+        simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h1.trans h2.symm
+      exact Or.inr (congrArg v he1)
+
+/-- Weak fairness is fully stuttering invariant if the action is nearly so. -/
+theorem stutinv_full_WF_v {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
+    (hA : NstutInvFull A) : StutInvFull (WF_v A v) := by
+  unfold WF_v
+  exact stutinv_full_always
+    (stutinv_full_imp (stutinv_full_always (stutinv_full_statePred (Enabled (AngleAction A v))))
+      (stutinv_full_eventually_angle A v hA))
+
+/-- Strong fairness is fully stuttering invariant if the action is nearly so. -/
+theorem stutinv_full_SF_v {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
+    (hA : NstutInvFull A) : StutInvFull (SF_v A v) := by
+  unfold SF_v
+  exact stutinv_full_always
+    (stutinv_full_imp (stutinv_full_always
+      (stutinv_full_eventually (stutinv_full_statePred (Enabled (AngleAction A v)))))
+      (stutinv_full_eventually_angle A v hA))
+
+/-! ## `SimFull.map`: extending with a state function -/
+
+/-- `Extend` preserves the change structure. -/
+theorem nextBlock_extend {σ : Type u} {τ : Type v} (x : σ → τ) (e : Behavior σ) (n : Nat) :
+    nextBlock (Extend x e) n = nextBlock e n := by
+  unfold nextBlock
+  by_cases hc : ∃ m, n ≤ m ∧ e (m + 1) ≠ e m
+  · have hc' : ∃ m, n ≤ m ∧ (Extend x e) (m + 1) ≠ (Extend x e) m := by
+      rcases hc with ⟨m, hm1, hm2⟩
+      exact ⟨m, hm1, by simp [Extend, hm2]⟩
+    rw [dif_pos hc', dif_pos hc]
+    congr 1
+    exact @Nat.find_congr'
+      (fun m => n ≤ m ∧ (Extend x e) (m + 1) ≠ (Extend x e) m)
+      (fun m => n ≤ m ∧ e (m + 1) ≠ e m)
+      (fun a => @instDecidableAnd (n ≤ a) ((Extend x e) (a + 1) ≠ (Extend x e) a)
+        (Nat.decLe n a)
+        (@instDecidableNot ((Extend x e) (a + 1) = (Extend x e) a) (Classical.propDecidable _)))
+      (fun a => @instDecidableAnd (n ≤ a) (e (a + 1) ≠ e a)
+        (Nat.decLe n a)
+        (@instDecidableNot (e (a + 1) = e a) (Classical.propDecidable _)))
+      hc' hc
+      (by
+        intro m
+        constructor
+        · intro hm
+          exact ⟨hm.1, by intro hEq; exact hm.2 (by simp [Extend, hEq])⟩
+        · intro hm
+          exact ⟨hm.1, by simp [Extend, hm.2]⟩)
+  · have hc' : ¬ ∃ m, n ≤ m ∧ (Extend x e) (m + 1) ≠ (Extend x e) m := by
+      intro hc2
+      rcases hc2 with ⟨m, hm1, hm2⟩
+      apply hc
+      refine ⟨m, hm1, ?_⟩
+      intro hEq
+      apply hm2
+      simp [Extend, hEq]
+    rw [dif_neg hc, dif_neg hc']
+
+/-- `Extend` preserves the block structure. -/
+theorem BlockStart_extend {σ : Type u} {τ : Type v} (x : σ → τ) (e : Behavior σ) (k : Nat) :
+    BlockStart (Extend x e) k = BlockStart e k := by
+  induction k with
+  | zero => simp [BlockStart]
+  | succ k ih =>
+      simp [BlockStart, nextBlock_extend, ih]
+
+namespace SimFull
+
+/-- Extending both behaviors with a state function preserves the equivalence. -/
+theorem map {σ : Type u} {τ : Type v} (x : σ → τ) {e f : Behavior σ} (h : SimFull e f) :
+    SimFull (Extend x e) (Extend x f) := by
+  unfold SimFull
+  funext k
+  have hc : e (BlockStart e k) = f (BlockStart f k) := by
+    have hc0 := congrFun h k
+    simpa [Compress] using hc0
+  have hbe : BlockStart (Extend x e) k = BlockStart e k := BlockStart_extend x e k
+  have hbf : BlockStart (Extend x f) k = BlockStart f k := BlockStart_extend x f k
+  simp [Compress, hbe, hbf]
+  simp [Extend, hc]
+
+end SimFull
 
 end Tla
