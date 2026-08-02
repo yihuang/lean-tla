@@ -41,8 +41,11 @@ tla_var St pc0 pc1 turn
 
 def Spec : Tla.Pred St := [t| Init ∧ □[Next]_vars]
 
-/-- The inductive invariant: whoever is in the critical section holds `turn`. -/
-def Inv : St → Prop := fun s => (s.pc0 = 2 → s.turn = 0) ∧ (s.pc1 = 2 → s.turn = 1)
+/-- The inductive invariant: whoever is in the critical section holds `turn`,
+and all control variables stay in range. -/
+def Inv : St → Prop := fun s =>
+  ((s.pc0 = 2 → s.turn = 0) ∧ (s.pc1 = 2 → s.turn = 1)) ∧
+    (s.pc0 ≤ 2 ∧ s.pc1 ≤ 2 ∧ s.turn ≤ 1)
 
 theorem init_inv : ∀ s, Init s → Inv s := by
   intro s hs
@@ -78,7 +81,8 @@ theorem mutual_exclusion :
     intro e h n
     have h' : Inv (e n) := by simpa [Tla.statePred, Tla.Behavior.drop] using h n
     intro hboth
-    rcases h' with ⟨h0, h1⟩
+    rcases h' with ⟨h01, hle⟩
+    rcases h01 with ⟨h0, h1⟩
     rcases hboth with ⟨hpc0, hpc1⟩
     have ht0 : (e n).turn = 0 := h0 hpc0
     have ht1 : (e n).turn = 1 := h1 hpc1
@@ -96,6 +100,8 @@ Two WF1 applications: if it is process 0's turn she enters (fairness on
 @[simp] def P0 : St → Prop := fun s => s.pc0 = 1 ∧ s.turn = 0
 @[simp] def Q0 : St → Prop := fun s => s.pc0 = 2
 @[simp] def PB : St → Prop := fun s => s.pc0 = 1 ∧ s.turn = 1 ∧ s.pc1 = 2
+@[simp] def PC : St → Prop := fun s => s.pc0 = 1 ∧ s.turn = 1 ∧ s.pc1 = 1
+@[simp] def PD : St → Prop := fun s => s.pc0 = 1 ∧ s.turn = 1 ∧ s.pc1 = 0
 
 theorem hstep0 : ∀ s s', P0 s → Tla.StutAction Next vars s s' → P0 s' ∨ Q0 s' := by
   intro s s' hp h
@@ -177,6 +183,169 @@ theorem exit1_liveness :
     Tla.Entails (Tla.tlaAnd (Tla.stutAlways Next vars) (Tla.WF_v Exit1 vars))
       (Tla.leadsTo (Tla.statePred PB) (Tla.statePred (fun s => s.pc0 = 1 ∧ s.turn = 0))) :=
   Tla.wf1 PB (fun s => s.pc0 = 1 ∧ s.turn = 0) Next Exit1 vars hstepB haqB henableB
+
+theorem hstepC : ∀ s s', PC s → Tla.StutAction Next vars s s' → PC s' ∨ PB s' := by
+  intro s s' hp h
+  rcases hp with ⟨hpc0, hturn, hpc1⟩
+  tla_unfold
+  rcases h with hnext | hstut
+  · rcases hnext with h1 | h2 | h3 | h4 | h5 | h6
+    · omega
+    · omega
+    · omega
+    · omega
+    · omega
+    · omega
+  · cases hstut
+    omega
+
+theorem haqC : ∀ s s', PC s → Tla.AngleAction Enter1 vars s s' → PB s' := by
+  intro s s' hp h
+  tla_unfold
+  rcases h with ⟨hA, hchg⟩
+  rcases hA with ⟨hpc1, hturn, hpc1', hpc0', hturn'⟩
+  exact ⟨hpc0'.trans hp.1, hturn'.trans hp.2.1, hpc1'⟩
+
+theorem henableC : ∀ s, PC s → Tla.Enabled (Tla.AngleAction Enter1 vars) s ∨ PB s := by
+  intro s hp
+  rcases hp with ⟨hpc0, hturn, hpc1⟩
+  left
+  refine ⟨{ pc0 := s.pc0, pc1 := 2, turn := s.turn }, ?_⟩
+  tla_unfold
+  constructor
+  · omega
+  · intro hEq
+    have hc : (2 : Nat) = s.pc1 := by simpa using congrArg St.pc1 hEq
+    omega
+
+/-- If process 1 is waiting and it is her turn, weak fairness on `Enter1`
+puts her in the critical section. -/
+theorem enter1_liveness :
+    Tla.Entails (Tla.tlaAnd (Tla.stutAlways Next vars) (Tla.WF_v Enter1 vars))
+      (Tla.leadsTo (Tla.statePred PC) (Tla.statePred PB)) :=
+  Tla.wf1 PC PB Next Enter1 vars hstepC haqC henableC
+
+theorem hstepD : ∀ s s', PD s → Tla.StutAction Next vars s s' → PD s' ∨ PC s' := by
+  intro s s' hp h
+  rcases hp with ⟨hpc0, hturn, hpc1⟩
+  tla_unfold
+  rcases h with hnext | hstut
+  · rcases hnext with h1 | h2 | h3 | h4 | h5 | h6
+    · omega
+    · omega
+    · omega
+    · omega
+    · omega
+    · omega
+  · cases hstut
+    omega
+
+theorem haqD : ∀ s s', PD s → Tla.AngleAction Req1 vars s s' → PC s' := by
+  intro s s' hp h
+  tla_unfold
+  rcases h with ⟨hA, hchg⟩
+  rcases hA with ⟨hpc1, hpc1', hpc0', hturn'⟩
+  exact ⟨hpc0'.trans hp.1, hturn'.trans hp.2.1, hpc1'⟩
+
+theorem henableD : ∀ s, PD s → Tla.Enabled (Tla.AngleAction Req1 vars) s ∨ PC s := by
+  intro s hp
+  rcases hp with ⟨hpc0, hturn, hpc1⟩
+  left
+  refine ⟨{ pc0 := s.pc0, pc1 := 1, turn := s.turn }, ?_⟩
+  tla_unfold
+  constructor
+  · omega
+  · intro hEq
+    have hc : (1 : Nat) = s.pc1 := by simpa using congrArg St.pc1 hEq
+    omega
+
+/-- If process 1 is idle, weak fairness on `Req1` starts her request. -/
+theorem req1_liveness :
+    Tla.Entails (Tla.tlaAnd (Tla.stutAlways Next vars) (Tla.WF_v Req1 vars))
+      (Tla.leadsTo (Tla.statePred PD) (Tla.statePred PC)) :=
+  Tla.wf1 PD PC Next Req1 vars hstepD haqD henableD
+
+/-- The fairness hypothesis: `□[Next]_vars` plus weak fairness on the four
+actions that make progress for process 0. -/
+def FairHyp : Tla.Pred St :=
+  Tla.tlaAnd (Tla.tlaAnd (Tla.tlaAnd (Tla.tlaAnd (Tla.stutAlways Next vars) (Tla.WF_v Enter0 vars))
+      (Tla.WF_v Req1 vars)) (Tla.WF_v Enter1 vars)) (Tla.WF_v Exit1 vars)
+
+/-- The full liveness chain: if process 0 is trying, she eventually enters the
+critical section, under fairness on `Enter0`, `Req1`, `Enter1`, `Exit1` and
+the inductive invariant. Process 1 must request, enter, and exit to hand the
+turn back to process 0. -/
+theorem full_liveness :
+    Tla.Entails (Tla.tlaAnd FairHyp (Tla.always (Tla.statePred Inv)))
+      (Tla.leadsTo (Tla.statePred (fun s : St => s.pc0 = 1))
+        (Tla.statePred Q0)) := by
+  intro e hΓ n hp
+  rcases hΓ with ⟨hFair, hInv⟩
+  rcases hFair with ⟨hFair4, hWF3⟩
+  rcases hFair4 with ⟨hFair3, hWF2⟩
+  rcases hFair3 with ⟨hFair2, hWF1⟩
+  rcases hFair2 with ⟨hspec, hWF0⟩
+  have hInvAlways : ∀ m, Inv (e m) := by
+    intro m
+    simpa [Tla.always, Tla.statePred, Tla.Behavior.drop] using hInv m
+  have l0 : Tla.leadsTo (Tla.statePred P0) (Tla.statePred Q0) e :=
+    turn0_liveness e ⟨hspec, hWF0⟩
+  have lB : Tla.leadsTo (Tla.statePred PB) (Tla.statePred (fun s => s.pc0 = 1 ∧ s.turn = 0)) e :=
+    exit1_liveness e ⟨hspec, hWF3⟩
+  have lC : Tla.leadsTo (Tla.statePred PC) (Tla.statePred PB) e :=
+    enter1_liveness e ⟨hspec, hWF2⟩
+  have lD : Tla.leadsTo (Tla.statePred PD) (Tla.statePred PC) e :=
+    req1_liveness e ⟨hspec, hWF1⟩
+  have lCq : Tla.leadsTo (Tla.statePred PC) (Tla.statePred (fun s => s.pc0 = 1 ∧ s.turn = 0)) e :=
+    Tla.leadsTo_trans_entails (Tla.statePred PC) (Tla.statePred PB)
+      (Tla.statePred (fun s => s.pc0 = 1 ∧ s.turn = 0)) e ⟨lC, lB⟩
+  have lDq : Tla.leadsTo (Tla.statePred PD) (Tla.statePred (fun s => s.pc0 = 1 ∧ s.turn = 0)) e :=
+    Tla.leadsTo_trans_entails (Tla.statePred PD) (Tla.statePred PC)
+      (Tla.statePred (fun s => s.pc0 = 1 ∧ s.turn = 0)) e ⟨lD, lCq⟩
+  have hcaseTurn1 : ∀ e0 : Tla.Behavior St, ∀ n, Inv (e0 n) →
+      (Tla.statePred (fun s : St => s.pc0 = 1 ∧ s.turn = 1)) (e0.drop n) →
+      (Tla.tlaOr (Tla.tlaOr (Tla.statePred PB) (Tla.statePred PC)) (Tla.statePred PD)) (e0.drop n) := by
+    intro e0 n hInv hp
+    rcases hInv with ⟨h01, hle⟩
+    rcases hle with ⟨hpc0le, hpc1le, hturnle⟩
+    have hp' : (e0 n).pc0 = 1 ∧ (e0 n).turn = 1 := by
+      simpa [Tla.statePred, Tla.Behavior.drop] using hp
+    by_cases h0 : (e0 n).pc1 = 0
+    · right
+      exact ⟨hp'.1, hp'.2, h0⟩
+    · by_cases h1 : (e0 n).pc1 = 1
+      · left
+        right
+        exact ⟨hp'.1, hp'.2, h1⟩
+      · by_cases h2 : (e0 n).pc1 = 2
+        · left
+          left
+          exact ⟨hp'.1, hp'.2, h2⟩
+        · exfalso
+          omega
+  have turn1Chain : ∀ n, Inv (e n) →
+      (Tla.statePred (fun s : St => s.pc0 = 1 ∧ s.turn = 1)) (e.drop n) →
+      Tla.eventually (Tla.statePred (fun s : St => s.pc0 = 1 ∧ s.turn = 0)) (e.drop n) :=
+    Tla.leads_to_cases e Inv (Tla.statePred (fun s : St => s.pc0 = 1 ∧ s.turn = 1))
+      (Tla.statePred (fun s : St => s.pc0 = 1 ∧ s.turn = 0))
+      (Tla.statePred PB) (Tla.statePred PC) (Tla.statePred PD)
+      (hcaseTurn1 e) lB lCq lDq
+  have hpe : (e n).pc0 = 1 := by simpa [Tla.statePred, Tla.Behavior.drop] using hp
+  rcases hInvAlways n with ⟨h01, hle⟩
+  rcases hle with ⟨hpc0le, hpc1le, hturnle⟩
+  by_cases ht0 : (e n).turn = 0
+  · exact l0 n (by simpa [P0, Tla.statePred, Tla.Behavior.drop] using ⟨hpe, ht0⟩)
+  · by_cases ht1 : (e n).turn = 1
+    · have hT1 : (Tla.statePred (fun s : St => s.pc0 = 1 ∧ s.turn = 1)) (e.drop n) := by
+        simpa [Tla.statePred, Tla.Behavior.drop] using ⟨hpe, ht1⟩
+      rcases turn1Chain n (hInvAlways n) hT1 with ⟨m, hq'⟩
+      have hP0' : Tla.statePred P0 (e.drop (n + m)) := by
+        simpa [P0, Tla.statePred, Tla.Behavior.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hq'
+      rcases l0 (n + m) hP0' with ⟨m2, hQ0⟩
+      refine ⟨m + m2, ?_⟩
+      simpa [Q0, Tla.Behavior.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hQ0
+    · exfalso
+      omega
 
 /-- If process 0 is trying and either it is her turn, or process 1 is critical
 (and will exit), she eventually enters the critical section. -/

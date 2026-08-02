@@ -69,6 +69,21 @@ theorem leadsTo_or {σ : Type u} (p1 p2 q : Pred σ) :
       simpa [leadsTo, always, tlaImp] using h.2
     exact h2 n hp2
 
+/-- Case split under an invariant: if `p` implies (under `inv`) one of
+`p1 ∨ p2 ∨ p3`, and each `pᵢ` leads to `q`, then `p` leads to `q`. -/
+theorem leads_to_cases {σ : Type u} (e : Behavior σ) (inv : σ → Prop) (p q p1 p2 p3 : Pred σ)
+    (hcase : ∀ n, inv (e n) → p (e.drop n) → (tlaOr (tlaOr p1 p2) p3) (e.drop n))
+    (h1 : ∀ n, p1 (e.drop n) → eventually q (e.drop n))
+    (h2 : ∀ n, p2 (e.drop n) → eventually q (e.drop n))
+    (h3 : ∀ n, p3 (e.drop n) → eventually q (e.drop n)) :
+    ∀ n, inv (e n) → p (e.drop n) → eventually q (e.drop n) := by
+  intro n hinv hp
+  rcases hcase n hinv hp with hAB | h3'
+  · rcases hAB with h1' | h2'
+    · exact h1 n h1'
+    · exact h2 n h2'
+  · exact h3 n h3'
+
 /-- WF1 (Lamport): under `□[N]_v ∧ WF_v(A)`, if from a `p` state each
 `[N]_v`-step reaches `p ∨ q`, each `⟨A⟩_v`-step reaches `q`, and `p` implies
 `Enabled ⟨A⟩_v ∨ q`, then `p` leads to `q`. Proved from the semantics. -/

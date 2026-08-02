@@ -105,6 +105,13 @@ the semantics, kernel-checked, mathlib-free.
   exclusion via the standard inductive invariant (`init_invariant_stut` with
   six-action case analysis), and two-phase progress `pc = 0 ↝ pc = 2` by
   chaining two `WF1` applications with leads-to transitivity.
+- `TlaDsl/Examples/Mutex.lean` (liveness section): the *full chain* — if
+  process 0 is trying, she eventually enters the critical section, under
+  fairness on `Enter0`, `Req1`, `Enter1`, `Exit1` and the inductive invariant
+  (which now also bounds the control variables). Process 1 must request,
+  enter, and exit to hand the turn back; the proof chains four `WF1`
+  applications and uses the reusable `leads_to_cases` rule (case split under
+  an invariant), added to `TlaDsl/Rules.lean`.
 
 Both compile with zero `sorry`s and zero dependencies.
 
