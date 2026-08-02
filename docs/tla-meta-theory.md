@@ -48,27 +48,27 @@ DSL as the user-facing layer on top.
 
 ## 3. The theorem list (status as of 2026-08-02)
 
-### Slice 1 — stuttering equivalence and invariance (in progress, `TlaDsl/Meta.lean`)
+### Slice 1 — stuttering equivalence and invariance (done, `TlaDsl/Meta.lean`)
 
 | Theorem | Status |
 |---|---|
-| `Sim` is reflexive/symmetric/transitive (an equivalence) | in progress |
-| `Sim e f → e 0 = f 0` (equal first states) | in progress |
-| suffix matching: `Sim e f → ∀ n, ∃ m, Sim (e.drop n) (f.drop m)` and the right-handed version | in progress |
-| `StutInv` preserved by `⌜p⌝`, `∧`, `∨`, `¬`, `⇒`, `↔` | in progress |
-| `StutInv` preserved by `□`, `◇`, `↝` | in progress |
-| stuttering-invariant formulas lift to `Quot Sim` (`StutInv.lift`) and the iff characterization | in progress |
-| box/eventually basics: `□F ⊢ F`, `□F ⊢ □□F`, `F ⊢ ◇F`, leads-to consequence | in progress |
+| `Sim` is reflexive/symmetric/transitive (an equivalence) | done |
+| `Sim e f → e 0 = f 0` (equal first states) | done |
+| suffix matching: `Sim e f → ∀ n, ∃ m, Sim (e.drop n) (f.drop m)` and the right-handed version | done |
+| `StutInv` preserved by `⌜p⌝`, `∧`, `∨`, `¬`, `⇒`, `↔` | done |
+| `StutInv` preserved by `□`, `◇`, `↝` | done |
+| stuttering-invariant formulas lift to `Quot Sim` (`StutInv.lift`) and the iff characterization | done |
+| box/eventually basics: `□F ⊢ F`, `□F ⊢ □□F`, `F ⊢ ◇F`, leads-to consequence | done |
 
-### Slice 2 — actions, near-stuttering invariance, fairness (next)
+### Slice 2 — actions, near-stuttering invariance, fairness (done, `TlaDsl/Meta.lean`)
 
 | Theorem | Notes |
 |---|---|
-| `NstutInv` for pre-formulas (`⟨A⟩_v`, `Unchanged v`) | the AFP `stutinv`/`nstutinv` split |
-| `NstutInv A → StutInv (◇⟨A⟩_v)` | eventually of a pre-formula is stuttering invariant |
-| `StutInv (□[A]_v)` given `NstutInv A` | the key action theorem |
-| `NstutInv A → StutInv (WF_v A)`, same for `SF_v A` | fairness is a TLA formula |
-| quotient completeness: `StutInv F` iff `∃! G on Quot, G ⟦e⟧ = F e` | finish the iff if slice 1 only does the forward direction |
+| `NstutInv` for pre-formulas (`⟨A⟩_v`, `Unchanged v`, `[A]_v`) | done — the AFP `stutinv`/`nstutinv` split, plus `sim_step` (step-level suffix matching) |
+| `NstutInv A → StutInv (◇⟨A⟩_v)` | done |
+| `StutInv (□[A]_v)` given `NstutInv A` | done — the key action theorem |
+| `NstutInv A → StutInv (WF_v A)`, same for `SF_v A` | done — added `WF_v`/`SF_v` to the core |
+| quotient completeness: `StutInv F` iff `∃! G on Quot, G ⟦e⟧ = F e` | done in slice 1 |
 
 ### Slice 3 — proof calculus soundness (later)
 

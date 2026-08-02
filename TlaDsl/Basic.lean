@@ -98,4 +98,14 @@ def WF {σ : Type u} (a : Action σ) : Pred σ :=
 def SF {σ : Type u} (a : Action σ) : Pred σ :=
   always (tlaImp (always (eventually (statePred (Enabled a)))) (eventually (actionPred a)))
 
+/-- Weak fairness of `A` with respect to the state function `v`. -/
+def WF_v {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α) : Pred σ :=
+  always (tlaImp (always (statePred (Enabled (AngleAction A v))))
+    (eventually (actionPred (AngleAction A v))))
+
+/-- Strong fairness of `A` with respect to the state function `v`. -/
+def SF_v {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α) : Pred σ :=
+  always (tlaImp (always (eventually (statePred (Enabled (AngleAction A v)))))
+    (eventually (actionPred (AngleAction A v))))
+
 end Tla

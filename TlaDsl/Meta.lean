@@ -275,4 +275,171 @@ theorem leadsTo_consequence {σ : Type u} {P P' Q Q' : Pred σ} :
   refine ⟨m, ?_⟩
   simpa [Behavior.drop] using h2 (n + m) (by simpa [Behavior.drop] using hQ)
 
+/-! # Slice 2: near-stuttering invariance and actions
+
+Pre-formulas (actions) are not stuttering invariant, but they are *nearly*
+stuttering invariant: their truth transfers between behaviors that agree on
+the first state and have stuttering-equivalent tails. This is exactly the
+condition under which `□[A]_v`, `◇⟨A⟩_v`, `WF_v(A)` and `SF_v(A)` become
+full TLA formulas (stuttering invariant).
+-/
+
+/-- Near-stuttering invariance for an action (pre-formula). -/
+def NstutInv {σ : Type u} (A : Action σ) : Prop :=
+  ∀ e f : Behavior σ, e 0 = f 0 → Sim (e.drop 1) (f.drop 1) →
+    (A (e 0) (e 1) ↔ A (f 0) (f 1))
+
+/-- Step-level suffix matching: for each index there is a matching index such
+that either the next steps also match, or the left next step matches the same
+right position (a stutter on the right). -/
+theorem sim_step {σ : Type u} {e f : Behavior σ} (h : Sim e f) :
+    ∀ n : Nat, ∃ m : Nat,
+      Sim (e.drop n) (f.drop m) ∧
+        (Sim (e.drop (n + 1)) (f.drop (m + 1)) ∨ Sim (e.drop (n + 1)) (f.drop m)) := by
+  intro n
+  induction h generalizing n with
+  | refl e =>
+      refine ⟨n, Sim.refl (e.drop n), Or.inl (Sim.refl (e.drop (n + 1)))⟩
+  | stepL e f hst hs ih =>
+      cases n with
+      | zero =>
+          refine ⟨0, ?_, Or.inr ?_⟩
+          · simpa using (Sim.stepL e f hst hs)
+          · simpa using hs
+      | succ n =>
+          rcases ih n with ⟨m, hm₁, hm₂⟩
+          refine ⟨m, ?_, ?_⟩
+          · simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hm₁
+          · cases hm₂ with
+            | inl h₂ =>
+                exact Or.inl (by simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
+            | inr h₂ =>
+                exact Or.inr (by simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
+  | stepR e f hst hs ih =>
+      cases n with
+      | zero =>
+          rcases ih 0 with ⟨m, hm₁, hm₂⟩
+          refine ⟨m + 1, ?_, ?_⟩
+          · simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hm₁
+          · cases hm₂ with
+            | inl h₂ =>
+                exact Or.inl (by simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
+            | inr h₂ =>
+                exact Or.inr (by simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
+      | succ n =>
+          rcases ih (n + 1) with ⟨m, hm₁, hm₂⟩
+          refine ⟨m + 1, ?_, ?_⟩
+          · simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hm₁
+          · cases hm₂ with
+            | inl h₂ =>
+                exact Or.inl (by simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
+            | inr h₂ =>
+                exact Or.inr (by simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
+
+/-- `Unchanged v` is nearly stuttering invariant. -/
+theorem nstutinv_unchanged {σ : Type u} {α : Type v} (v : σ → α) :
+    NstutInv (Unchanged v) := by
+  intro e f hfirst htail
+  have hv1 : v (e 1) = v (f 1) := by simpa [Behavior.drop] using congrArg v (Sim.first htail)
+  have hv0 : v (e 0) = v (f 0) := congrArg v hfirst
+  constructor <;> intro h
+  · simpa [Unchanged, hv1, hv0] using h
+  · simpa [Unchanged, hv1, hv0] using h
+
+/-- `⟨A⟩_v` is nearly stuttering invariant if `A` is. -/
+theorem nstutinv_angle {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
+    (hA : NstutInv A) : NstutInv (AngleAction A v) := by
+  intro e f hfirst htail
+  have hv1 : v (e 1) = v (f 1) := by simpa [Behavior.drop] using congrArg v (Sim.first htail)
+  have hv0 : v (e 0) = v (f 0) := congrArg v hfirst
+  constructor <;> intro h
+  · simp [AngleAction] at h
+    exact ⟨(hA e f hfirst htail).1 h.1, by simpa [hv1, hv0] using h.2⟩
+  · simp [AngleAction] at h
+    exact ⟨(hA e f hfirst htail).2 h.1, by simpa [hv1, hv0] using h.2⟩
+
+/-- `[A]_v = A ∨ Unchanged v` is nearly stuttering invariant if `A` is. -/
+theorem nstutinv_stutAction {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
+    (hA : NstutInv A) : NstutInv (StutAction A v) := by
+  intro e f hfirst htail
+  have hv1 : v (e 1) = v (f 1) := by simpa [Behavior.drop] using congrArg v (Sim.first htail)
+  have hv0 : v (e 0) = v (f 0) := congrArg v hfirst
+  constructor <;> intro h
+  · simp [StutAction] at h
+    rcases h with hAe | hve
+    · exact Or.inl ((hA e f hfirst htail).1 hAe)
+    · exact Or.inr (by simpa [hv1, hv0] using hve)
+  · simp [StutAction] at h
+    rcases h with hAf | hvf
+    · exact Or.inl ((hA e f hfirst htail).2 hAf)
+    · exact Or.inr (by simpa [hv1, hv0] using hvf)
+
+/-- `◇⟨A⟩_v` is stuttering invariant if `A` is nearly stuttering invariant. -/
+theorem stutinv_eventually_angle {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
+    (hA : NstutInv A) : StutInv (eventually (actionPred (AngleAction A v))) := by
+  have hB : NstutInv (AngleAction A v) := nstutinv_angle A v hA
+  intro e f h
+  constructor <;> intro hE
+  · rcases hE with ⟨n, hBn⟩
+    simp [actionPred, AngleAction] at hBn
+    rcases sim_step h n with ⟨m, hmn, hmnnext⟩
+    rcases hmnnext with hnext | hsame
+    · exact ⟨m, (hB (e.drop n) (f.drop m) (Sim.first hmn) (by simpa [Behavior.drop] using hnext)).1 hBn⟩
+    · have he1 : (e.drop n) 1 = (e.drop n) 0 := by
+        have h1 : e (n + 1) = f m := by simpa [Behavior.drop] using (Sim.first hsame)
+        have h2 : e n = f m := by simpa [Behavior.drop] using (Sim.first hmn)
+        simpa [Behavior.drop] using h1.trans h2.symm
+      exact False.elim (hBn.2 (by simpa [Behavior.drop] using (congrArg v he1)))
+  · rcases hE with ⟨m, hBm⟩
+    simp [actionPred, AngleAction] at hBm
+    rcases sim_step (Sim.symm h) m with ⟨n, hmn, hmnnext⟩
+    rcases hmnnext with hnext | hsame
+    · exact ⟨n, (hB (f.drop m) (e.drop n) (Sim.first hmn) (by simpa [Behavior.drop] using hnext)).1 hBm⟩
+    · have hf1 : (f.drop m) 1 = (f.drop m) 0 := by
+        have h1 : f (m + 1) = e n := by simpa [Behavior.drop] using (Sim.first hsame)
+        have h2 : f m = e n := by simpa [Behavior.drop] using (Sim.first hmn)
+        simpa [Behavior.drop] using h1.trans h2.symm
+      exact False.elim (hBm.2 (by simpa [Behavior.drop] using (congrArg v hf1)))
+
+/-- `□[A]_v` is stuttering invariant if `A` is nearly stuttering invariant. -/
+theorem stutinv_stutAlways {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
+    (hA : NstutInv A) : StutInv (stutAlways A v) := by
+  have hB : NstutInv (StutAction A v) := nstutinv_stutAction A v hA
+  intro e f h
+  constructor <;> intro hAll
+  · intro m
+    rcases sim_step (Sim.symm h) m with ⟨n, hmn, hmnnext⟩
+    rcases hmnnext with hnext | hsame
+    · exact (hB (f.drop m) (e.drop n) (Sim.first hmn) (by simpa [Behavior.drop] using hnext)).2 (hAll n)
+    · have hf1 : (f.drop m) 1 = (f.drop m) 0 := by
+        have h1 : f (m + 1) = e n := by simpa [Behavior.drop] using (Sim.first hsame)
+        have h2 : f m = e n := by simpa [Behavior.drop] using (Sim.first hmn)
+        simpa [Behavior.drop] using h1.trans h2.symm
+      exact Or.inr (congrArg v hf1)
+  · intro n
+    rcases sim_step h n with ⟨m, hmn, hmnnext⟩
+    rcases hmnnext with hnext | hsame
+    · exact (hB (e.drop n) (f.drop m) (Sim.first hmn) (by simpa [Behavior.drop] using hnext)).2 (hAll m)
+    · have he1 : (e.drop n) 1 = (e.drop n) 0 := by
+        have h1 : e (n + 1) = f m := by simpa [Behavior.drop] using (Sim.first hsame)
+        have h2 : e n = f m := by simpa [Behavior.drop] using (Sim.first hmn)
+        simpa [Behavior.drop] using h1.trans h2.symm
+      exact Or.inr (congrArg v he1)
+
+/-- Weak fairness is stuttering invariant if the action is nearly so. -/
+theorem stutinv_WF_v {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
+    (hA : NstutInv A) : StutInv (WF_v A v) := by
+  unfold WF_v
+  exact stutinv_always
+    (stutinv_imp (stutinv_always (stutinv_statePred (Enabled (AngleAction A v))))
+      (stutinv_eventually_angle A v hA))
+
+/-- Strong fairness is stuttering invariant if the action is nearly so. -/
+theorem stutinv_SF_v {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
+    (hA : NstutInv A) : StutInv (SF_v A v) := by
+  unfold SF_v
+  exact stutinv_always
+    (stutinv_imp (stutinv_always (stutinv_eventually (stutinv_statePred (Enabled (AngleAction A v)))))
+      (stutinv_eventually_angle A v hA))
+
 end Tla

@@ -13,7 +13,7 @@ proof ceremony this removes.
 /-- Unfold DSL definitions in the goal and all hypotheses. -/
 macro "tla_unfold" : tactic =>
   `(tactic| (try simp [Tla.always, Tla.eventually, Tla.later, Tla.leadsTo, Tla.strongUntil,
-    Tla.WF, Tla.SF, Tla.stutAlways, Tla.statePred, Tla.actionPred, Tla.purePred,
+    Tla.WF, Tla.SF, Tla.WF_v, Tla.SF_v, Tla.stutAlways, Tla.statePred, Tla.actionPred, Tla.purePred,
     Tla.tlaAnd, Tla.tlaOr, Tla.tlaNot, Tla.tlaImp, Tla.tlaIff, Tla.tlaTrue,
     Tla.tlaFalse, Tla.Valid, Tla.Entails, Tla.Satisfies, Tla.Enabled,
     Tla.Unchanged, Tla.StutAction, Tla.AngleAction, Tla.Behavior.drop,
