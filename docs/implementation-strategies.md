@@ -199,11 +199,18 @@ case.
   theorem over all behaviors; `mcEntails` gives the DSL form
   (`Init ∧ □[Next]_v ⊢ □Inv`). Example: `TlaDsl/Examples/ModelCheck.lean`
   proves mutual exclusion for a finite two-process mutex by `native_decide`
-  alone. Design note: decidable predicates over concrete finite specs need
-  explicit `DecidablePred`/`DecidableRel` instances (`unfold ...;
-  infer_instance`), and `v` must be the full state for true stuttering
-  (using only a projection allows arbitrary changes to other variables —
-  the standard TLA `[Next]_v` lesson).
+  alone. Counterexample extraction (`mcTrace`, given an explicit state
+  enumeration — Finset→List is noncomputable in this mathlib) prints the
+  failing trace, and bounded liveness (`mcLeadsTo` + `mcLeadsTo_sound`) checks
+  `P ↝ Q` via the inevitability fixpoint (`goodN`, computed as an
+  accumulator so evaluation is linear in the state count; a naive nested-∀
+  filter formulation blows up exponentially under evaluation). Design notes:
+  decidable predicates over concrete finite specs need explicit
+  `DecidablePred`/`DecidableRel` instances (`unfold ...; infer_instance`);
+  `v` must be the full state for true stuttering; and liveness in DSL form
+  (`mcEntailsLeadsTo`) requires fairness — under `□[Next]_v` an infinite
+  stutter is a legal behavior, so `P ↝ Q` without fairness is false whenever
+  `P` can stutter forever (the plain-`next` check is the fairness-free case).
 - Keep random trace simulation (Leslie's `Simulate`), add counterexample
   printing.
 - Later: bounded invariant checking as a test harness (`#eval` runs of the

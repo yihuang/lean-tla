@@ -165,15 +165,11 @@ def mcInvariant [Fintype σ] [DecidableEq σ]
     [∀ s, Decidable (inv s)] : Bool :=
   decide (∀ s : σ, s ∈ reachableN next (Finset.univ.filter init) (Fintype.card σ) → inv s)
 
-/-- A successful model check is sound: it yields a machine-checked invariant
-for every behavior of the spec. -/
-theorem mcInvariant_sound [Fintype σ] [DecidableEq σ]
-    (init : σ → Prop) (next : σ → σ → Prop) (inv : σ → Prop)
-    [∀ s, Decidable (init s)] [DecidableRel next]
-    [∀ s, Decidable (inv s)]
-    (h : mcInvariant init next inv = true) :
-    ∀ e : Behavior σ, init (e 0) → (∀ n, next (e n) (e (n + 1))) → ∀ n, inv (e n) := by
-  intro e hinit hnext n
+/-- Every state visited by a behavior is in the reachable fixpoint. -/
+theorem reachable_mem [Fintype σ] [DecidableEq σ]
+    (init : σ → Prop) (next : σ → σ → Prop) [∀ s, Decidable (init s)] [DecidableRel next]
+    {e : Behavior σ} (hinit : init (e 0)) (hnext : ∀ n, next (e n) (e (n + 1))) (n : Nat) :
+    e n ∈ reachableN next (Finset.univ.filter init) (Fintype.card σ) := by
   have hmem0 : e n ∈ reachableN next (Finset.univ.filter init) n := by
     induction n with
     | zero => simp [reachableN, hinit]
@@ -183,15 +179,192 @@ theorem mcInvariant_sound [Fintype σ] [DecidableEq σ]
         right
         refine ⟨e n, ih, ?_⟩
         simp [hnext n]
-  have hmem : e n ∈ reachableN next (Finset.univ.filter init) (Fintype.card σ) := by
-    by_cases hn : n ≤ Fintype.card σ
-    · exact reachableN_mono_le next (Finset.univ.filter init) hn hmem0
-    · have hsat : reachableN next (Finset.univ.filter init) n =
-          reachableN next (Finset.univ.filter init) (Fintype.card σ) :=
-        reachableN_saturates_from next (Finset.univ.filter init) (by omega)
-      simpa [hsat] using hmem0
+  by_cases hn : n ≤ Fintype.card σ
+  · exact reachableN_mono_le next (Finset.univ.filter init) hn hmem0
+  · have hsat : reachableN next (Finset.univ.filter init) n =
+        reachableN next (Finset.univ.filter init) (Fintype.card σ) :=
+      reachableN_saturates_from next (Finset.univ.filter init) (by omega)
+    simpa [hsat] using hmem0
+
+/-- A successful model check is sound: it yields a machine-checked invariant
+for every behavior of the spec. -/
+theorem mcInvariant_sound [Fintype σ] [DecidableEq σ]
+    (init : σ → Prop) (next : σ → σ → Prop) (inv : σ → Prop)
+    [∀ s, Decidable (init s)] [DecidableRel next]
+    [∀ s, Decidable (inv s)]
+    (h : mcInvariant init next inv = true) :
+    ∀ e : Behavior σ, init (e 0) → (∀ n, next (e n) (e (n + 1))) → ∀ n, inv (e n) := by
+  intro e hinit hnext n
+  have hmem := reachable_mem init next hinit hnext n
   have hall := of_decide_eq_true h
   exact hall (e n) hmem
+
+/-! ## Counterexample extraction -/
+
+/-- Is there a state violating `inv` reachable within `k` steps? -/
+def badAt [Fintype σ] [DecidableEq σ] (next : σ → σ → Prop) [DecidableRel next]
+    (S : Finset σ) (inv : σ → Prop) [∀ s, Decidable (inv s)] (k : Nat) : Bool :=
+  decide (∃ s : σ, s ∈ reachableN next S k ∧ ¬ inv s)
+
+/-- The first depth at which a bad state appears, if any. -/
+def badDepth [Fintype σ] [DecidableEq σ] (next : σ → σ → Prop) [DecidableRel next]
+    (S : Finset σ) (inv : σ → Prop) [∀ s, Decidable (inv s)] : Option Nat :=
+  (List.range (Fintype.card σ + 1)).find? (fun k => badAt next S inv k)
+
+/-- A bad state reachable within `k` steps, if any. -/
+def badState [Fintype σ] [DecidableEq σ] (enum : List σ)
+    (next : σ → σ → Prop) [DecidableRel next]
+    (S : Finset σ) (inv : σ → Prop) [∀ s, Decidable (inv s)] (k : Nat) : Option σ :=
+  enum.find? (fun s => decide (s ∈ reachableN next S k ∧ ¬ inv s))
+
+/-- Reconstruct a trace ending at `cur`, given `cur` is reachable from `S`
+within `k` steps. -/
+def traceBack [Fintype σ] [DecidableEq σ] (enum : List σ)
+    (next : σ → σ → Prop) [DecidableRel next] (S : Finset σ) : Nat → σ → List σ → List σ
+  | 0, cur, acc => cur :: acc
+  | j + 1, cur, acc =>
+      if cur ∈ reachableN next S j then
+        traceBack enum next S j cur acc
+      else
+        match enum.find? (fun p => decide (p ∈ reachableN next S j ∧ next p cur)) with
+        | some p => traceBack enum next S j p (cur :: acc)
+        | none => cur :: acc
+
+/-- A counterexample trace from an initial state to a state violating `inv`,
+or `none` if the invariant holds. The enumeration `enum` (e.g. the list of
+all states, used by the search) must contain every state. -/
+def mcTrace [Fintype σ] [DecidableEq σ] (enum : List σ)
+    (init : σ → Prop) (next : σ → σ → Prop) (inv : σ → Prop)
+    [∀ s, Decidable (init s)] [DecidableRel next] [∀ s, Decidable (inv s)] : Option (List σ) :=
+  let S := Finset.univ.filter init
+  match badDepth next S inv with
+  | none => none
+  | some k =>
+      match badState enum next S inv k with
+      | none => none
+      | some b => some (traceBack enum next S k b [])
+
+/-- If the invariant holds, there is no counterexample trace. -/
+theorem mcTrace_none_of_invariant [Fintype σ] [DecidableEq σ]
+    (enum : List σ) (init : σ → Prop) (next : σ → σ → Prop) (inv : σ → Prop)
+    [∀ s, Decidable (init s)] [DecidableRel next] [∀ s, Decidable (inv s)]
+    (h : mcInvariant init next inv = true) : mcTrace enum init next inv = none := by
+  let S := Finset.univ.filter init
+  have hno : ∀ k : Nat, k ≤ Fintype.card σ →
+      ¬ (∃ s : σ, s ∈ reachableN next S k ∧ ¬ inv s) := by
+    intro k hk hb
+    rcases hb with ⟨s, hs, hsi⟩
+    have hmem : s ∈ reachableN next S (Fintype.card σ) := reachableN_mono_le next S hk hs
+    have hinv := (of_decide_eq_true h) s hmem
+    exact hsi hinv
+  have hbad : ∀ k ∈ List.range (Fintype.card σ + 1), badAt next S inv k = false := by
+    intro k hk
+    have hk' : k ≤ Fintype.card σ := by
+      have hlt : k < Fintype.card σ + 1 := by simpa [List.mem_range] using hk
+      omega
+    simp [badAt, hno k hk']
+  have hd : badDepth next S inv = none := by
+    exact List.find?_eq_none.mpr (by
+      intro k hk
+      simp [hbad k hk])
+  simp [mcTrace]
+  rw [hd]
+
+/-! ## Bounded liveness: `P ↝ Q` on finite state spaces -/
+
+/-- One inevitability layer: the previous set, plus every state whose
+successors are all already inevitable. -/
+def goodLayer [Fintype σ] [DecidableEq σ] (next : σ → σ → Prop) [DecidableRel next]
+    (Q : σ → Prop) [∀ s, Decidable (Q s)] (G : Finset σ) : Finset σ :=
+  G ∪ Finset.univ.filter (fun s => ∀ s', next s s' → s' ∈ G)
+
+/-- Iterated inevitability: `goodN next Q n` is the set of states from which
+`Q` is inevitable within `n` steps. Computed as an accumulator (each layer
+reuses the previous one), so evaluation is linear in `n`. -/
+def goodN [Fintype σ] [DecidableEq σ] (next : σ → σ → Prop) [DecidableRel next]
+    (Q : σ → Prop) [∀ s, Decidable (Q s)] : Nat → Finset σ
+  | 0 => Finset.univ.filter Q
+  | n + 1 => goodLayer next Q (goodN next Q n)
+
+/-- A layer adds exactly the states whose successors are all already
+inevitable. -/
+theorem goodN_succ [Fintype σ] [DecidableEq σ] (next : σ → σ → Prop) [DecidableRel next]
+    (Q : σ → Prop) [∀ s, Decidable (Q s)] (n : Nat) :
+    goodN next Q (n + 1) = goodLayer next Q (goodN next Q n) := by
+  rfl
+
+/-- From a state in `goodN Q m`, every behavior reaches `Q` within `m`
+steps. -/
+theorem goodN_eventually [Fintype σ] [DecidableEq σ] (next : σ → σ → Prop) [DecidableRel next]
+    (Q : σ → Prop) [∀ s, Decidable (Q s)] {m : Nat} {s : σ} (hs : s ∈ goodN next Q m) :
+    ∀ e : Behavior σ, e 0 = s → (∀ n, next (e n) (e (n + 1))) → ∃ j, Q (e j) := by
+  induction m generalizing s with
+  | zero =>
+      intro e he0 hnext
+      have hQ : Q s := by
+        simpa [goodN] using hs
+      exact ⟨0, by simpa [he0] using hQ⟩
+  | succ m ih =>
+      intro e he0 hnext
+      have hmem : s ∈ goodN next Q m ∨ ∀ s', next s s' → s' ∈ goodN next Q m := by
+        have hsu : s ∈ goodN next Q (m + 1) := hs
+        rw [goodN_succ] at hsu
+        rcases Finset.mem_union.mp hsu with hleft | hright
+        · exact Or.inl hleft
+        · have hpred : ∀ s', next s s' → s' ∈ goodN next Q m := by
+            simpa using (Finset.mem_filter.mp hright).2
+          exact Or.inr hpred
+      rcases hmem with hsame | hsucc
+      · rcases ih hsame e he0 hnext with ⟨j, hQ⟩
+        exact ⟨j, hQ⟩
+      · have hstep : next s (e 1) := by simpa [he0] using hnext 0
+        have hnext' : ∀ n, next ((e.drop 1) n) ((e.drop 1) (n + 1)) := by
+          intro n
+          simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hnext (n + 1)
+        rcases ih (hsucc (e 1) hstep) (e.drop 1) (by simp) hnext' with ⟨j, hQ⟩
+        exact ⟨j + 1, by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hQ⟩
+
+/-- Finite-state leads-to check: every reachable `P`-state is in the
+inevitability fixpoint for `Q`. -/
+def mcLeadsTo [Fintype σ] [DecidableEq σ]
+    (init : σ → Prop) (next : σ → σ → Prop) (P Q : σ → Prop)
+    [∀ s, Decidable (init s)] [DecidableRel next] [∀ s, Decidable (P s)] [∀ s, Decidable (Q s)] :
+    Bool :=
+  decide (∀ s : σ, s ∈ reachableN next (Finset.univ.filter init) (Fintype.card σ) →
+    P s → s ∈ goodN next Q (Fintype.card σ))
+
+/-- A successful leads-to check is sound: every behavior satisfies
+`P ↝ Q`. -/
+theorem mcLeadsTo_sound [Fintype σ] [DecidableEq σ]
+    (init : σ → Prop) (next : σ → σ → Prop) (P Q : σ → Prop)
+    [∀ s, Decidable (init s)] [DecidableRel next] [∀ s, Decidable (P s)] [∀ s, Decidable (Q s)]
+    (h : mcLeadsTo init next P Q = true) :
+    ∀ e : Behavior σ, init (e 0) → (∀ n, next (e n) (e (n + 1))) →
+      leadsTo (statePred P) (statePred Q) e := by
+  intro e hinit hnext k hpk
+  have hmem := reachable_mem init next hinit hnext k
+  have hall := of_decide_eq_true h
+  have hp : P (e k) := by simpa [statePred] using hpk
+  have hg : e k ∈ goodN next Q (Fintype.card σ) := hall (e k) hmem hp
+  rcases goodN_eventually next Q hg (e.drop k) (by simp [Cslib.ωSequence.drop]) (by
+    intro n
+    simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hnext (k + n)) with ⟨j, hQ⟩
+  exact ⟨j, by simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hQ⟩
+
+/-- Model-checked leads-to in DSL form: a successful check of
+`Next ∨ Unchanged v` yields `Init ∧ □[Next]_v ⊢ P ↝ Q`. -/
+theorem mcEntailsLeadsTo [Fintype σ] [DecidableEq σ] {α : Type v}
+    (init : StatePred σ) (next : Action σ) (v : σ → α) (P Q : StatePred σ)
+    [∀ s, Decidable (init s)] [DecidableRel next] [∀ s, Decidable (P s)] [∀ s, Decidable (Q s)]
+    [∀ s s', Decidable (v s' = v s)]
+    (h : mcLeadsTo init (fun s s' => next s s' ∨ v s' = v s) P Q = true) :
+    Entails (tlaAnd (statePred init) (stutAlways next v)) (leadsTo (statePred P) (statePred Q)) := by
+  intro e he
+  have h0 : init (e 0) := by simpa [tlaAnd, statePred] using he.1
+  have hN : ∀ n, next (e n) (e (n + 1)) ∨ v (e (n + 1)) = v (e n) := by
+    intro n
+    simpa [stutAlways, always, actionPred, StutAction] using he.2 n
+  exact mcLeadsTo_sound init (fun s s' => next s s' ∨ v s' = v s) P Q h e h0 hN
 
 /-- Model-checked invariant in DSL form: a successful check of
 `Next ∨ Unchanged v` yields `Init ∧ □[Next]_v ⊢ □Inv`. -/

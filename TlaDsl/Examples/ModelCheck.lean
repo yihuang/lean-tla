@@ -22,7 +22,7 @@ structure St where
   pc0 : Fin 3
   pc1 : Fin 3
   turn : Fin 2
-deriving DecidableEq
+deriving DecidableEq, Repr
 
 instance : Fintype St := Fintype.ofEquiv (Fin 3 × Fin 3 × Fin 2) {
   toFun := fun p => { pc0 := p.1, pc1 := p.2.1, turn := p.2.2 }
@@ -65,6 +65,58 @@ example : Entails (tlaAnd (statePred init) (stutAlways next (fun s : St => s)))
     (always (statePred inv)) := by
   apply mcEntails init next (fun s : St => s) inv
   native_decide
+
+/-! ## Counterexamples: a buggy variant -/
+
+/-- The state enumeration used by the counterexample search. -/
+def allStates : List St :=
+  List.flatMap (fun a : Fin 3 =>
+    List.flatMap (fun b : Fin 3 =>
+      List.map (fun c : Fin 2 => { pc0 := a, pc1 := b, turn := c }) (List.finRange 2))
+      (List.finRange 3))
+    (List.finRange 3)
+
+/-- A buggy variant: process 1 may enter the critical section without the
+turn, breaking mutual exclusion. -/
+def nextBuggy (s s' : St) : Prop :=
+  (s.pc0 = Idle ∧ s'.pc0 = Wait ∧ s'.pc1 = s.pc1 ∧ s'.turn = s.turn) ∨
+  (s.pc0 = Wait ∧ s.turn = 0 ∧ s'.pc0 = Crit ∧ s'.pc1 = s.pc1 ∧ s'.turn = s.turn) ∨
+  (s.pc0 = Crit ∧ s'.pc0 = Idle ∧ s'.turn = 1 ∧ s'.pc1 = s.pc1) ∨
+  (s.pc1 = Idle ∧ s'.pc1 = Wait ∧ s'.pc0 = s.pc0 ∧ s'.turn = s.turn) ∨
+  (s.pc1 = Wait ∧ s'.pc1 = Crit ∧ s'.pc0 = s.pc0 ∧ s'.turn = s.turn) ∨
+  (s.pc1 = Crit ∧ s'.pc1 = Idle ∧ s'.turn = 0 ∧ s'.pc0 = s.pc0)
+
+instance : DecidableRel nextBuggy := fun s s' => by unfold nextBuggy; infer_instance
+
+/-- The buggy check fails... -/
+example : mcInvariant init nextBuggy inv = false := by
+  native_decide
+
+-- ...and the counterexample search finds a trace: both processes end up in
+-- the critical section.
+#eval! mcTrace allStates init nextBuggy inv
+
+/-! ## Liveness: `P ↝ Q` -/
+
+/-- Process 0 enters the critical section as soon as it holds the turn. -/
+example : mcLeadsTo init next (fun s => s.pc0 = Wait ∧ s.turn = 0)
+    (fun s => s.pc0 = Crit) = true := by
+  native_decide
+
+example : ∀ e : Behavior St, init (e 0) → (∀ n, next (e n) (e (n + 1))) →
+    leadsTo (statePred (fun s => s.pc0 = Wait ∧ s.turn = 0))
+      (statePred (fun s => s.pc0 = Crit)) e :=
+  mcLeadsTo_sound init next (fun s => s.pc0 = Wait ∧ s.turn = 0)
+    (fun s => s.pc0 = Crit) (by native_decide)
+
+-- The DSL form (`mcEntailsLeadsTo`) needs a fairness assumption: under
+-- `□[Next]_v` an infinite stutter is a legal behavior, so `P ↝ Q` without
+-- fairness is false whenever P can stutter forever. The plain-`next` check
+-- above is the fairness-free case.
+
+-- The buggy spec breaks process-0's eventual entry (process 1 can hog the
+-- critical section forever).
+#eval mcLeadsTo init nextBuggy (fun _ : St => True) (fun s => s.pc0 = Crit)
 
 end ModelCheckExample
 end Tla
