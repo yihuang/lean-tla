@@ -25,10 +25,11 @@ quotient) and the block/drop machinery over `Nat.find` that the remaining
 integration work needs: `nextBlock` and `BlockStart` commute with
 `ωSequence.drop` at block boundaries, so compression commutes with such drops
 (`Compress_drop_blockStart`), and `SimFull` is preserved when both behaviors
-are dropped at corresponding block starts. The suffix-matching lemma
-(`SimFull e f → ∀ n, ∃ m, SimFull (e.drop n) (f.drop m)`), the step matching
-lemma, and `Sim.map` are the remaining pieces before the preservation
-theorems in `Meta.lean` can migrate to `SimFull`.
+are dropped at corresponding block starts. The in-block truncation machinery
+(`BlockOf`, `Compress_drop_blockOf`) then yields the suffix-matching lemmas
+(`SimFull e f → ∀ n, ∃ m, SimFull (e.drop n) (f.drop m)` and the right-handed
+version). The step-matching lemma and migrating the preservation theorems in
+`Meta.lean` to `SimFull` are the remaining pieces.
 -/
 
 /-- The start of the next maximal run: the first index `≥ n` where the value
@@ -153,6 +154,240 @@ theorem Compress_drop_blockStart {σ : Type u} (e : Behavior σ) (i : Nat) :
   simp [Compress]
   rw [Nat.add_comm, BlockStart_drop_add]
 
+/-! ## In-block truncation and suffix matching -/
+
+/-- `BlockOf`'s search terminates: either block starts outrun `n`, or they
+stabilize at the final block. -/
+theorem BlockOf_exists {σ : Type u} (e : Behavior σ) (n : Nat) :
+    ∃ k, n < BlockStart e (k + 1) ∨ BlockStart e (k + 1) = BlockStart e k := by
+  by_cases hdiv : ∀ k, BlockStart e k < BlockStart e (k + 1)
+  · refine ⟨n, Or.inl ?_⟩
+    have hge : ∀ k, k ≤ BlockStart e k := by
+      intro k
+      induction k with
+      | zero => simp [BlockStart]
+      | succ k ih =>
+          have hlt : BlockStart e k < BlockStart e (k + 1) := hdiv k
+          omega
+    have hge' : n + 1 ≤ BlockStart e (n + 1) := hge (n + 1)
+    omega
+  · rcases not_forall.mp hdiv with ⟨k, hnot⟩
+    refine ⟨k, Or.inr ?_⟩
+    exact (le_antisymm (BlockStart_mono e k) (le_of_not_gt hnot)).symm
+
+/-- `BlockOf e n`: the index of the maximal run (block) containing position
+`n`. If the tail from that block on is constant (the final block), the search
+terminates at that block. -/
+noncomputable def BlockOf {σ : Type u} (e : Behavior σ) (n : Nat) : Nat :=
+  Nat.find (p := fun k => n < BlockStart e (k + 1) ∨ BlockStart e (k + 1) = BlockStart e k)
+    (BlockOf_exists e n)
+
+/-- The block containing `n` starts at or before `n`. -/
+theorem BlockOf_le {σ : Type u} (e : Behavior σ) (n : Nat) :
+    BlockStart e (BlockOf e n) ≤ n := by
+  by_cases hz : BlockOf e n = 0
+  · simp [hz, BlockStart]
+  · have hnot : ¬ (n < BlockStart e (BlockOf e n - 1 + 1) ∨
+        BlockStart e (BlockOf e n - 1 + 1) = BlockStart e (BlockOf e n - 1)) := by
+      intro hp
+      have hmin : BlockOf e n ≤ BlockOf e n - 1 :=
+        Nat.find_min' (BlockOf_exists e n) (m := BlockOf e n - 1) hp
+      omega
+    have hz1 : 1 ≤ BlockOf e n := by omega
+    exact (by simpa [Nat.sub_add_cancel hz1] using (le_of_not_gt (not_or.mp hnot).1))
+
+/-- The block containing `n`: either `n` is before the next block start, or
+the block is the final (infinite) one. -/
+theorem BlockOf_spec {σ : Type u} (e : Behavior σ) (n : Nat) :
+    n < BlockStart e (BlockOf e n + 1) ∨ BlockStart e (BlockOf e n + 1) = BlockStart e (BlockOf e n) :=
+  Nat.find_spec (p := fun k => n < BlockStart e (k + 1) ∨ BlockStart e (k + 1) = BlockStart e k)
+    (BlockOf_exists e n)
+
+/-- No changes inside a block: if `b ≤ n < nextBlock e b`, then `e n = e b`. -/
+theorem eq_of_block_between {σ : Type u} (e : Behavior σ) (b n : Nat)
+    (hb : b ≤ n) (hn : n < nextBlock e b) : e n = e b := by
+  by_cases hch : ∃ m, b ≤ m ∧ e (m + 1) ≠ e m
+  · have hstep (j : Nat) (hj : b ≤ j)
+        (hjf : j < Nat.find (p := fun m => b ≤ m ∧ e (m + 1) ≠ e m) hch) :
+        e (j + 1) = e j := by
+      by_contra hne
+      have hw : b ≤ j ∧ e (j + 1) ≠ e j := ⟨hj, hne⟩
+      have hmin : Nat.find (p := fun m => b ≤ m ∧ e (m + 1) ≠ e m) hch ≤ j :=
+        Nat.find_min' hch hw
+      omega
+    have hchain : ∀ m : Nat, b ≤ m → m < nextBlock e b → e m = e b := by
+      intro m
+      induction m with
+      | zero => intro hb' hm; have hb0 : b = 0 := le_antisymm hb' (Nat.zero_le b); subst hb0; rfl
+      | succ m ih =>
+          intro hb' hm
+          by_cases hbm : b ≤ m
+          · have hmf : m < Nat.find (p := fun m => b ≤ m ∧ e (m + 1) ≠ e m) hch := by
+              have hm' : m + 1 < Nat.find (p := fun m => b ≤ m ∧ e (m + 1) ≠ e m) hch + 1 := by
+                unfold nextBlock at hm
+                rw [dif_pos hch] at hm
+                exact hm
+              omega
+            have hstepm : e (m + 1) = e m := hstep m hbm hmf
+            rw [hstepm]
+            have hm2 : m < nextBlock e b := by
+              unfold nextBlock
+              have hm' : m + 1 < Nat.find (p := fun m => b ≤ m ∧ e (m + 1) ≠ e m) hch + 1 := by
+                unfold nextBlock at hm
+                rw [dif_pos hch] at hm
+                exact hm
+              simp [hch]
+              omega
+            exact ih hbm hm2
+          · have hb' : b = m + 1 := le_antisymm hb' (Nat.succ_le_of_lt (Nat.lt_of_not_ge hbm))
+            subst hb'
+            rfl
+    exact hchain n hb hn
+  · have hn' : n < b := by
+      unfold nextBlock at hn
+      simpa [hch] using hn
+    omega
+
+/-- `nextBlock` is constant within a non-final block. -/
+theorem nextBlock_eq_of_block_between {σ : Type u} (e : Behavior σ) (b n : Nat)
+    (hch : ∃ m, b ≤ m ∧ e (m + 1) ≠ e m)
+    (hb : b ≤ n) (hn : n < nextBlock e b) : nextBlock e n = nextBlock e b := by
+  unfold nextBlock
+  have hfindb : n ≤ Nat.find (p := fun m => b ≤ m ∧ e (m + 1) ≠ e m) hch := by
+    unfold nextBlock at hn
+    rw [dif_pos hch] at hn
+    omega
+  have hchn : ∃ m, n ≤ m ∧ e (m + 1) ≠ e m := by
+    refine ⟨Nat.find (p := fun m => b ≤ m ∧ e (m + 1) ≠ e m) hch, ?_, ?_⟩
+    · exact hfindb
+    · exact (Nat.find_spec (p := fun m => b ≤ m ∧ e (m + 1) ≠ e m) hch).2
+  have hle1 : Nat.find (p := fun m => n ≤ m ∧ e (m + 1) ≠ e m) hchn ≤
+      Nat.find (p := fun m => b ≤ m ∧ e (m + 1) ≠ e m) hch := by
+    apply Nat.find_min' hchn
+    constructor
+    · exact hfindb
+    · exact (Nat.find_spec (p := fun m => b ≤ m ∧ e (m + 1) ≠ e m) hch).2
+  have hle2 : Nat.find (p := fun m => b ≤ m ∧ e (m + 1) ≠ e m) hch ≤
+      Nat.find (p := fun m => n ≤ m ∧ e (m + 1) ≠ e m) hchn := by
+    apply Nat.find_min' hch
+    constructor
+    · have hnle : n ≤ Nat.find (p := fun m => n ≤ m ∧ e (m + 1) ≠ e m) hchn :=
+        (Nat.find_spec (p := fun m => n ≤ m ∧ e (m + 1) ≠ e m) hchn).1
+      omega
+    · exact (Nat.find_spec (p := fun m => n ≤ m ∧ e (m + 1) ≠ e m) hchn).2
+  have hEq : Nat.find (p := fun m => n ≤ m ∧ e (m + 1) ≠ e m) hchn =
+      Nat.find (p := fun m => b ≤ m ∧ e (m + 1) ≠ e m) hch := le_antisymm hle1 hle2
+  rw [dif_pos hchn, dif_pos hch, hEq]
+
+/-- Dropping at a position inside a non-final block shifts the later block
+starts by one: block `k + 1` of `e.drop n` starts at block `i + k + 1` of `e`,
+where `i` is the block containing `n`. -/
+theorem BlockStart_drop_shift {σ : Type u} (e : Behavior σ) (i n : Nat)
+    (hb : BlockStart e i ≤ n) (hn : n < nextBlock e (BlockStart e i)) :
+    ∀ k : Nat, BlockStart (e.drop n) (Nat.succ k) + n = BlockStart e (i + Nat.succ k) := by
+  intro k
+  induction k with
+  | zero =>
+      simp [BlockStart]
+      rw [nextBlock_drop_add]
+      simp
+      have hchb : ∃ m, BlockStart e i ≤ m ∧ e (m + 1) ≠ e m := by
+        by_contra hnone
+        have hnb : n < BlockStart e i := by
+          unfold nextBlock at hn
+          rw [dif_neg hnone] at hn
+          exact hn
+        omega
+      rw [nextBlock_eq_of_block_between e (BlockStart e i) n hchb hb hn]
+  | succ k ih =>
+      simp [BlockStart]
+      rw [nextBlock_drop_add]
+      rw [Nat.add_comm]
+      have ih' : nextBlock (e.drop n) (BlockStart (e.drop n) k) + n =
+          BlockStart e (i + Nat.succ k) := by
+        simpa [BlockStart] using ih
+      rw [ih']
+      simp [BlockStart]
+
+/-- Compression commutes with dropping at any position: dropping `n` shifts
+the compressed value sequence to the block containing `n`. -/
+theorem Compress_drop_blockOf {σ : Type u} (e : Behavior σ) (n : Nat) :
+    Compress (e.drop n) = Cslib.ωSequence.drop (BlockOf e n) (Compress e) := by
+  let i := BlockOf e n
+  let b := BlockStart e i
+  have hb : b ≤ n := by
+    dsimp [b, i]
+    exact BlockOf_le e n
+  rcases BlockOf_spec e n with hstrict | hfinal
+  · have hn' : n < nextBlock e b := by
+      simpa [b, i, BlockStart] using hstrict
+    have hneq : e n = e b := eq_of_block_between e b n hb hn'
+    have hshift : ∀ k : Nat, BlockStart (e.drop n) (Nat.succ k) + n =
+        BlockStart e (i + Nat.succ k) :=
+      BlockStart_drop_shift e i n (by simpa [b] using hb) hn'
+    funext k
+    cases k with
+    | zero =>
+        simp [Compress, BlockStart, Cslib.ωSequence.drop]
+        simpa [i, b] using hneq
+    | succ k =>
+        simp [Compress, BlockStart]
+        have hsk' : n + nextBlock (e.drop n) (BlockStart (e.drop n) k) =
+            nextBlock e (BlockStart e (i + k)) := by
+          simpa [BlockStart, Nat.add_comm] using hshift k
+        rw [hsk']
+  · have hfinal' : nextBlock e b = b := by
+      simpa [b, i, BlockStart] using hfinal
+    have hnone : ¬ ∃ j, b ≤ j ∧ e (j + 1) ≠ e j := by
+      intro hc
+      have hgt : b < nextBlock e b := by
+        unfold nextBlock
+        have hfind : b ≤ Nat.find (p := fun j => b ≤ j ∧ e (j + 1) ≠ e j) hc :=
+          (Nat.find_spec (p := fun j => b ≤ j ∧ e (j + 1) ≠ e j) hc).1
+        simp [hc]
+        omega
+      omega
+    have hconst (m : Nat) (hm : b ≤ m) : e m = e b := by
+      induction m with
+      | zero => have hb0 : b = 0 := le_antisymm hm (Nat.zero_le b); simp [hb0]
+      | succ m ih =>
+          by_cases hbm : b ≤ m
+          · have hstepm : e (m + 1) = e m := by
+              by_contra hne
+              exact False.elim (hnone ⟨m, hbm, hne⟩)
+            rw [hstepm]
+            exact ih hbm
+          · have hb'' : b = m + 1 := le_antisymm hm (Nat.succ_le_of_lt (Nat.lt_of_not_ge hbm))
+            simp [hb'']
+    have hconstDrop (j : Nat) : (e.drop n) (j + 1) = (e.drop n) j := by
+      simp [Cslib.ωSequence.drop]
+      rw [hconst (j + 1 + n) (by omega), hconst (j + n) (by omega)]
+    have hnoneDrop : ¬ ∃ j, (e.drop n) (j + 1) ≠ (e.drop n) j := by
+      intro hc
+      rcases hc with ⟨j, hj⟩
+      exact hj (hconstDrop j)
+    have hnext0 : nextBlock (e.drop n) 0 = 0 := by
+      unfold nextBlock
+      have hnone0 : ¬ ∃ j, 0 ≤ j ∧ (e.drop n) (j + 1) ≠ (e.drop n) j := by
+        intro hc
+        rcases hc with ⟨j, _hj0, hj⟩
+        exact False.elim (hnoneDrop ⟨j, hj⟩)
+      rw [dif_neg hnone0]
+    have hBS (k : Nat) : BlockStart (e.drop n) k = 0 := by
+      induction k with
+      | zero => simp [BlockStart]
+      | succ k ih =>
+          simp [BlockStart, ih, hnext0]
+    have hBS2 (k : Nat) : BlockStart e (i + k) = b := by
+      induction k with
+      | zero => simp [b]
+      | succ k ih =>
+          simp [BlockStart, ih, hfinal', b]
+    funext k
+    simp [Compress, hBS k]
+    rw [hBS2 k]
+    exact hconst n hb
+
 namespace SimFull
 
 theorem refl (e : Behavior σ) : SimFull e e := rfl
@@ -175,6 +410,26 @@ theorem drop_blockStart {e f : Behavior σ} (h : SimFull e f) (i : Nat) :
   rw [Compress_drop_blockStart, Compress_drop_blockStart]
   rw [h]
 
+/-- Every suffix of `e` is stuttering-equivalent to some suffix of `f`:
+dropping `n` steps shifts the compression to the block containing `n`, and
+`f` has a block with the same index. -/
+theorem sim_suffix_left {σ : Type u} {e f : Behavior σ} (h : SimFull e f) :
+    ∀ n : Nat, ∃ m : Nat, SimFull (e.drop n) (f.drop m) := by
+  intro n
+  let i := BlockOf e n
+  refine ⟨BlockStart f i, ?_⟩
+  unfold SimFull
+  rw [Compress_drop_blockOf e n, Compress_drop_blockStart f i]
+  dsimp [i]
+  rw [h]
+
+/-- Right-handed version of `sim_suffix_left`. -/
+theorem sim_suffix_right {σ : Type u} {e f : Behavior σ} (h : SimFull e f) :
+    ∀ m : Nat, ∃ n : Nat, SimFull (e.drop n) (f.drop m) := by
+  intro m
+  rcases sim_suffix_left (SimFull.symm h) m with ⟨n, hsf⟩
+  exact ⟨n, SimFull.symm hsf⟩
+
 instance setoid (σ : Type u) : Setoid (Behavior σ) where
   r := SimFull
   iseqv := ⟨SimFull.refl, SimFull.symm, SimFull.trans⟩
@@ -183,5 +438,142 @@ end SimFull
 
 /-- The stuttering quotient for the full equivalence. -/
 abbrev StutQuotFull (σ : Type u) := Quot (SimFull : Behavior σ → Behavior σ → Prop)
+
+/-! ## Full stuttering invariance (preservation theorems migrated to `SimFull`)
+
+The preservation theorems of `TlaDsl/Meta.lean`, re-proved for the full
+stuttering equivalence. The `always`/`eventually`/`leadsTo` cases use the
+suffix-matching lemmas above; the action-level (`NstutInv`, `WF_v`, `SF_v`)
+cases still need a step-matching lemma for `SimFull` and are tracked as the
+remaining migration work.
+-/
+
+/-- A formula is invariant under full stuttering equivalence. -/
+def StutInvFull {σ : Type u} (F : Pred σ) : Prop :=
+  ∀ e f : Behavior σ, SimFull e f → (F e ↔ F f)
+
+theorem stutinv_full_statePred {σ : Type u} (p : StatePred σ) : StutInvFull (statePred p) := by
+  intro e f h
+  constructor <;> intro hpf
+  · simpa [statePred] using (SimFull.first h ▸ hpf)
+  · simpa [statePred] using (SimFull.first h ▸ hpf)
+
+theorem stutinv_full_purePred {σ : Type u} (p : Prop) : StutInvFull (purePred (σ := σ) p) := by
+  intro e f h
+  simp [purePred]
+
+theorem stutinv_full_and {σ : Type u} {F G : Pred σ} (hF : StutInvFull F) (hG : StutInvFull G) :
+    StutInvFull (tlaAnd F G) := by
+  intro e f h
+  constructor <;> intro hfg
+  · exact ⟨(hF e f h).1 hfg.1, (hG e f h).1 hfg.2⟩
+  · exact ⟨(hF e f h).2 hfg.1, (hG e f h).2 hfg.2⟩
+
+theorem stutinv_full_or {σ : Type u} {F G : Pred σ} (hF : StutInvFull F) (hG : StutInvFull G) :
+    StutInvFull (tlaOr F G) := by
+  intro e f h
+  constructor <;> intro hfg
+  · exact hfg.elim (fun hFe => Or.inl ((hF e f h).1 hFe)) (fun hGe => Or.inr ((hG e f h).1 hGe))
+  · exact hfg.elim (fun hFf => Or.inl ((hF e f h).2 hFf)) (fun hGf => Or.inr ((hG e f h).2 hGf))
+
+theorem stutinv_full_not {σ : Type u} {F : Pred σ} (hF : StutInvFull F) : StutInvFull (tlaNot F) := by
+  intro e f h
+  constructor
+  · intro hnf hFf
+    exact hnf ((hF e f h).2 hFf)
+  · intro hnf hFe
+    exact hnf ((hF e f h).1 hFe)
+
+theorem stutinv_full_imp {σ : Type u} {F G : Pred σ} (hF : StutInvFull F) (hG : StutInvFull G) :
+    StutInvFull (tlaImp F G) := by
+  intro e f h
+  constructor
+  · intro hfg hFf
+    exact (hG e f h).1 (hfg ((hF e f h).2 hFf))
+  · intro hfg hFe
+    exact (hG e f h).2 (hfg ((hF e f h).1 hFe))
+
+theorem stutinv_full_iff {σ : Type u} {F G : Pred σ} (hF : StutInvFull F) (hG : StutInvFull G) :
+    StutInvFull (tlaIff F G) := by
+  intro e f h
+  constructor <;> intro hfg
+  · constructor
+    · intro hFf
+      exact (hG e f h).1 (hfg.1 ((hF e f h).2 hFf))
+    · intro hGf
+      exact (hF e f h).1 (hfg.2 ((hG e f h).2 hGf))
+  · constructor
+    · intro hFe
+      exact (hG e f h).2 (hfg.1 ((hF e f h).1 hFe))
+    · intro hGe
+      exact (hF e f h).2 (hfg.2 ((hG e f h).1 hGe))
+
+theorem stutinv_full_always {σ : Type u} {F : Pred σ} (hF : StutInvFull F) :
+    StutInvFull (always F) := by
+  intro e f h
+  constructor <;> intro hA
+  · intro m
+    rcases SimFull.sim_suffix_right h m with ⟨n, hsim⟩
+    exact (hF (e.drop n) (f.drop m) hsim).1 (hA n)
+  · intro n
+    rcases SimFull.sim_suffix_left h n with ⟨m, hsim⟩
+    exact (hF (e.drop n) (f.drop m) hsim).2 (hA m)
+
+theorem stutinv_full_eventually {σ : Type u} {F : Pred σ} (hF : StutInvFull F) :
+    StutInvFull (eventually F) := by
+  intro e f h
+  constructor <;> intro hE
+  · rcases hE with ⟨n, hFn⟩
+    rcases SimFull.sim_suffix_left h n with ⟨m, hsim⟩
+    exact ⟨m, (hF (e.drop n) (f.drop m) hsim).1 hFn⟩
+  · rcases hE with ⟨m, hFm⟩
+    rcases SimFull.sim_suffix_right h m with ⟨n, hsim⟩
+    exact ⟨n, (hF (e.drop n) (f.drop m) hsim).2 hFm⟩
+
+theorem stutinv_full_leadsTo {σ : Type u} {P Q : Pred σ} (hP : StutInvFull P) (hQ : StutInvFull Q) :
+    StutInvFull (leadsTo P Q) := by
+  unfold leadsTo
+  exact stutinv_full_always (stutinv_full_imp hP (stutinv_full_eventually hQ))
+
+/-! ## The full quotient characterization -/
+
+namespace StutInvFull
+
+/-- A fully stuttering-invariant formula descends to the full quotient. -/
+def lift {σ : Type u} {F : Pred σ} (hF : StutInvFull F) : StutQuotFull σ → Prop :=
+  Quot.lift F (fun e f hsim => propext (hF e f hsim))
+
+theorem lift_apply {σ : Type u} {F : Pred σ} (hF : StutInvFull F) (e : Behavior σ) :
+    hF.lift (Quot.mk SimFull e) = F e := by
+  simp [StutInvFull.lift]
+
+end StutInvFull
+
+/-- Fully stuttering-invariant formulas are exactly the well-defined
+predicates on the full stuttering quotient. -/
+theorem stutinv_full_descends {σ : Type u} (F : Pred σ) :
+    StutInvFull F ↔
+      ∃ G : StutQuotFull σ → Prop,
+        (∀ e : Behavior σ, G (Quot.mk SimFull e) = F e) ∧
+          ∀ G' : StutQuotFull σ → Prop, (∀ e : Behavior σ, G' (Quot.mk SimFull e) = F e) → G' = G := by
+  constructor
+  · intro hF
+    refine ⟨hF.lift, ?_⟩
+    constructor
+    · intro e
+      exact hF.lift_apply e
+    · intro G hG
+      funext q
+      refine Quot.ind (β := fun q => G q = hF.lift q) ?_ q
+      intro e
+      calc
+        G (Quot.mk SimFull e) = F e := hG e
+        _ = hF.lift (Quot.mk SimFull e) := (hF.lift_apply e).symm
+  · rintro ⟨G, hG, _⟩
+    intro e f hsim
+    have hq : Quot.mk SimFull e = Quot.mk SimFull f := Quot.sound hsim
+    constructor <;> intro hFe
+    · simpa [(hG e).symm, hG f, hq] using hFe
+    · simpa [(hG f).symm, hG e, hq.symm] using hFe
 
 end Tla

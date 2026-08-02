@@ -127,11 +127,16 @@ Both compile with zero `sorry`s and zero dependencies.
   the block/drop machinery: `nextBlock_drop_add`, `BlockStart_drop_add`, and
   `Compress_drop_blockStart` (compression commutes with dropping at a block
   boundary), giving `SimFull.drop_blockStart` (the equivalence is preserved
-  when both behaviors are dropped at corresponding block starts). These pair
-  `Nat.find` with `ωSequence.drop` — the piece that was previously missing.
-  The suffix-matching and step-matching lemmas, and migrating the
-  preservation theorems to `SimFull`, are the remaining integration work and
-  should not change the shape of the theorems.
+  when both behaviors are dropped at corresponding block starts). The
+  in-block truncation machinery (`BlockOf` — the index of the maximal run
+  containing a position, including the final block — `eq_of_block_between`,
+  `BlockStart_drop_shift`, `Compress_drop_blockOf`) completes the
+  suffix-matching lemmas (`SimFull.sim_suffix_left/right`). The preservation
+  theorems are migrating: `StutInvFull` (connectives, `always`, `eventually`,
+  `leadsTo`, and the full-quotient characterization
+  `stutinv_full_descends`) is proved in `SimFull.lean`; the action-level
+  slice (`NstutInv`, `WF_v`, `SF_v`) still needs a step-matching lemma for
+  `SimFull` and is the remaining integration work.
 - Values are typed (the DSL's choice). Meta-theory here is about the typed
   fragment's semantics; full TLA+ value semantics (ZFC) remains the
   conformance-oracle goal, not this track.
