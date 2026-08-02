@@ -117,13 +117,16 @@ Both compile with zero `sorry`s and zero dependencies.
 
 ## 4. Honest scope notes
 
-- `Sim` is currently the **finite-stuttering** relation (inductive: delete or
-  duplicate finitely many equal-state runs). The full TLA notion must also
-  identify behaviors differing in *infinitely many* stuttering steps; that
-  needs a coinductive or block-based definition, likely with mathlib's
-  coinductive streams. Slice 1 proves the finite case; the coinductive
-  upgrade is tracked as a follow-up and should not change the shape of the
-  theorems.
+- `Sim` (in `Meta.lean`) is the **finite-stuttering** relation (inductive:
+  delete or duplicate finitely many equal-state runs). The full TLA notion
+  must also identify behaviors differing in *infinitely many* stuttering
+  steps; that is now defined in `SimFull.lean` via run-compression
+  (`Compress` — the maximal-run value sequence, computed with `Nat.find`;
+  eventually-constant behaviors pad with the final value). `SimFull` has the
+  equivalence structure (refl/symm/trans, first-state, quotient) proved; the
+  suffix-matching and step-matching lemmas, and migrating the preservation
+  theorems to it, are the remaining integration work and should not change
+  the shape of the theorems.
 - Values are typed (the DSL's choice). Meta-theory here is about the typed
   fragment's semantics; full TLA+ value semantics (ZFC) remains the
   conformance-oracle goal, not this track.
