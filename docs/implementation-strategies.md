@@ -192,9 +192,18 @@ case.
 
 ### D6. Model checking / validation UX
 
-- A `tla_finite_check`-style tactic using `native_decide` for decidable
-  finite instances (needs `Decidable` instances for the DSL's semantics —
-  design them in from day one).
+- **Implemented (2026-08-02)**: `TlaDsl/ModelCheck.lean` —
+  `mcInvariant` computes the reachable-state fixpoint for a finite state
+  type (saturating within `Fintype.card` iterations) and `mcInvariant_sound`
+  turns a successful `native_decide` check into a machine-checked invariant
+  theorem over all behaviors; `mcEntails` gives the DSL form
+  (`Init ∧ □[Next]_v ⊢ □Inv`). Example: `TlaDsl/Examples/ModelCheck.lean`
+  proves mutual exclusion for a finite two-process mutex by `native_decide`
+  alone. Design note: decidable predicates over concrete finite specs need
+  explicit `DecidablePred`/`DecidableRel` instances (`unfold ...;
+  infer_instance`), and `v` must be the full state for true stuttering
+  (using only a projection allows arbitrary changes to other variables —
+  the standard TLA `[Next]_v` lesson).
 - Keep random trace simulation (Leslie's `Simulate`), add counterexample
   printing.
 - Later: bounded invariant checking as a test harness (`#eval` runs of the
