@@ -442,4 +442,147 @@ theorem stutinv_SF_v {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
     (stutinv_imp (stutinv_always (stutinv_eventually (stutinv_statePred (Enabled (AngleAction A v)))))
       (stutinv_eventually_angle A v hA))
 
+/-! # Slice 4: refinement, hiding, canonical forms -/
+
+/-- Concrete spec `conc` refines abstract spec `abs` via state mapping `f`:
+every concrete behavior, mapped through `f`, satisfies the abstract spec. -/
+def RefinesVia {σ : Type u} {τ : Type v} (f : τ → σ) (conc : Pred τ) (abs : Pred σ) : Prop :=
+  ∀ e : Behavior τ, conc e → abs (Behavior.map f e)
+
+/-- Abadi–Lamport safety refinement: if every concrete step (or `v`-stutter)
+maps to an abstract step (or `u`-stutter), and initial states map, then the
+concrete spec refines the abstract one. -/
+theorem refinement_mapping {σ τ : Type u} {α β : Type v}
+    (initA : StatePred σ) (nextA : Action σ) (u : σ → α)
+    (initC : StatePred τ) (nextC : Action τ) (v : τ → β)
+    (f : τ → σ)
+    (hinit : ∀ s, initC s → initA (f s))
+    (hstep : ∀ s s', (nextC s s' ∨ v s' = v s) → (nextA (f s) (f s') ∨ u (f s') = u (f s))) :
+    RefinesVia f (tlaAnd (statePred initC) (stutAlways nextC v))
+      (tlaAnd (statePred initA) (stutAlways nextA u)) := by
+  intro e he
+  constructor
+  · exact hinit (e 0) (by simpa [statePred] using he.1)
+  · intro n
+    have h2 : ∀ n, actionPred (StutAction nextC v) (e.drop n) := by
+      simpa [stutAlways, always] using he.2
+    have hstepC : StutAction nextC v (e n) (e (n + 1)) := by
+      simpa [actionPred, Behavior.drop] using h2 n
+    simpa [StutAction, actionPred, Behavior.drop, Behavior.map] using (hstep (e n) (e (n + 1)) hstepC)
+
+/-- Refinement is transitive. -/
+theorem refines_via_trans {σ τ υ : Type u} (f : τ → σ) (g : υ → τ)
+    (conc : Pred υ) (mid : Pred τ) (abs : Pred σ)
+    (h1 : RefinesVia g conc mid) (h2 : RefinesVia f mid abs) :
+    RefinesVia (f ∘ g) conc abs := by
+  intro e he
+  exact h2 (Behavior.map g e) (h1 e he)
+
+/-- Refinement is reflexive. -/
+theorem refines_via_refl {σ : Type u} (F : Pred σ) : RefinesVia (fun s => s) F F := by
+  intro e he
+  have hmap : Behavior.map (fun s => s) e = e := by
+    funext n
+    rfl
+  rw [hmap]
+  exact he
+
+/-! ## Flexible existential quantification (`\EE`, hiding) -/
+
+/-- Extend a behavior with a state function's values. -/
+def Extend {σ : Type u} {τ : Type v} (x : σ → τ) (e : Behavior σ) : Behavior (σ × τ) :=
+  fun n => (e n, x (e n))
+
+/-- `\EE x : F` (hiding): F holds on some extension of the behavior. -/
+def EEx {σ : Type u} {τ : Type v} (F : Pred (σ × τ)) : Pred σ :=
+  fun e => ∃ x : σ → τ, F (Extend x e)
+
+/-- Stuttering equivalence is preserved by extending with a state function. -/
+theorem Sim.map {σ : Type u} {τ : Type v} (x : σ → τ) {e f : Behavior σ} (h : Sim e f) :
+    Sim (Extend x e) (Extend x f) := by
+  induction h with
+  | refl e => exact Sim.refl (Extend x e)
+  | stepL e f hst hs ih =>
+      have htail : (Extend x e).drop 1 = Extend x (e.drop 1) := by
+        funext i
+        rfl
+      exact Sim.stepL (Extend x e) (Extend x f) (by simp [Extend, hst])
+        (by simpa [htail] using ih)
+  | stepR e f hst hs ih =>
+      have htail : (Extend x f).drop 1 = Extend x (f.drop 1) := by
+        funext i
+        rfl
+      exact Sim.stepR (Extend x e) (Extend x f) (by simp [Extend, hst])
+        (by simpa [htail] using ih)
+
+/-- Hiding preserves stuttering invariance: if `F` is stuttering invariant,
+so is `\EE x : F`. -/
+theorem stutinv_eex {σ : Type u} {τ : Type v} {F : Pred (σ × τ)} (hF : StutInv F) :
+    StutInv (EEx F) := by
+  intro e f hsim
+  constructor <;> intro hE
+  · rcases hE with ⟨x, hFx⟩
+    exact ⟨x, (hF (Extend x e) (Extend x f) (Sim.map x hsim)).1 hFx⟩
+  · rcases hE with ⟨x, hFx⟩
+    exact ⟨x, (hF (Extend x e) (Extend x f) (Sim.map x hsim)).2 hFx⟩
+
+/-- Hiding is monotone. -/
+theorem eex_mono {σ : Type u} {τ : Type v} {F G : Pred (σ × τ)} (h : Entails F G) :
+    Entails (EEx F) (EEx G) := by
+  intro e hE
+  rcases hE with ⟨x, hFx⟩
+  exact ⟨x, h (Extend x e) hFx⟩
+
+/-! ## Canonical-form lemmas -/
+
+/-- `□` distributes over `∧`. -/
+theorem always_and {σ : Type u} (F G : Pred σ) :
+    always (tlaAnd F G) = tlaAnd (always F) (always G) := by
+  funext e
+  apply propext
+  constructor
+  · intro h
+    exact ⟨fun n => (h n).1, fun n => (h n).2⟩
+  · intro h n
+    exact ⟨h.1 n, h.2 n⟩
+
+/-- `◇` distributes over `∨`. -/
+theorem eventually_or {σ : Type u} (F G : Pred σ) :
+    eventually (tlaOr F G) = tlaOr (eventually F) (eventually G) := by
+  funext e
+  apply propext
+  constructor
+  · intro h
+    rcases h with ⟨n, hFG⟩
+    rcases hFG with hF | hG
+    · exact Or.inl ⟨n, hF⟩
+    · exact Or.inr ⟨n, hG⟩
+  · intro h
+    rcases h with hF | hG
+    · rcases hF with ⟨n, hFn⟩
+      exact ⟨n, Or.inl hFn⟩
+    · rcases hG with ⟨n, hGn⟩
+      exact ⟨n, Or.inr hGn⟩
+
+/-- The canonical form `Init ∧ □[Next]_v ∧ L` entails its initial-state part. -/
+theorem spec_init {σ : Type u} {α : Type v} (init : StatePred σ) (next : Action σ)
+    (v : σ → α) (L : Pred σ) :
+    Entails (tlaAnd (tlaAnd (statePred init) (stutAlways next v)) L) (statePred init) := by
+  intro e h
+  exact h.1.1
+
+/-- The canonical form entails its next-state part. -/
+theorem spec_stutAlways {σ : Type u} {α : Type v} (init : StatePred σ) (next : Action σ)
+    (v : σ → α) (L : Pred σ) :
+    Entails (tlaAnd (tlaAnd (statePred init) (stutAlways next v)) L) (stutAlways next v) := by
+  intro e h
+  exact h.1.2
+
+/-- The canonical form entails its liveness part. -/
+theorem spec_fair {σ : Type u} {α : Type v} (init : StatePred σ) (next : Action σ)
+    (v : σ → α) (L : Pred σ) :
+    Entails (tlaAnd (tlaAnd (statePred init) (stutAlways next v)) L) L := by
+  intro e h
+  exact h.2
+
 end Tla

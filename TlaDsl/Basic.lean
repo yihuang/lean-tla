@@ -48,6 +48,10 @@ def Behavior.drop {σ : Type u} (e : Behavior σ) (n : Nat) : Behavior σ := fun
   funext i
   simp [Behavior.drop, Nat.add_assoc]
 
+/-- Map a behavior through a state function. -/
+def Behavior.map {σ : Type u} {τ : Type v} (f : σ → τ) (e : Behavior σ) : Behavior τ :=
+  fun n => f (e n)
+
 /-- `□ F`: F holds at every suffix. -/
 def always {σ : Type u} (F : Pred σ) : Pred σ := fun e => ∀ n, F (e.drop n)
 

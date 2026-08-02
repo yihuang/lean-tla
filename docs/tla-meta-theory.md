@@ -78,13 +78,18 @@ DSL as the user-facing layer on top.
 | `SF1` (strong fairness analogue) | done — same, with the premise that `p` eventually enables `⟨A⟩_v`; uses infinitely-often enabled |
 | leads-to lattice laws (disjunction, transitivity, consequence) | done (`leadsTo_or`, `leadsTo_trans_entails`, `leadsTo_consequence`) |
 
-### Slice 4 — refinement and hiding (later)
+### Slice 4 — refinement and hiding (done, `TlaDsl/Meta.lean`)
 
 | Theorem | Notes |
 |---|---|
-| refinement mapping soundness over `StutQuot` | Abadi–Lamport safety part |
-| `\EE` (hiding) laws: intro/elim, stuttering closure | the typed formulation from `implementation-strategies.md` |
-| canonical form: `Spec = Init ∧ □[Next]_v ∧ L` decomposition lemmas | the engineer-facing normal form |
+| refinement mapping soundness | done — `RefinesVia` + `refinement_mapping` (Abadi–Lamport safety part), transitivity and reflexivity |
+| `\EE` (hiding) laws | done — `EEx`/`Extend` with `stutinv_eex` (hiding preserves stuttering invariance via `Sim.map`), monotonicity |
+| canonical form: `Spec = Init ∧ □[Next]_v ∧ L` decomposition lemmas | done — `spec_init`, `spec_stutAlways`, `spec_fair`, plus `□`/`∧` and `◇`/`∨` distribution |
+
+**Status: slices 1–4 complete.** The semantic core now covers stuttering
+equivalence and the quotient, operator preservation (including fairness),
+the liveness rules (`WF1`/`SF1`), and refinement/hiding — all proved from
+the semantics, kernel-checked, mathlib-free.
 
 ## 4. Honest scope notes
 
