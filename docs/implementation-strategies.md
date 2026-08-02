@@ -238,8 +238,12 @@ optional cslib interop (LTS bridge for trace/bisimulation-based reasoning).
   functions-with-domains; arithmetic is typed and total. Document the
   divergence from TLA+ in a `CONFORMANCE.md` once the DSL stabilizes (the
   intended reading: "typed fragment of TLA+ semantics").
-- No meta-theory of TLA+ itself (per decision framework), beyond the
-  stuttering-invariance lemmas the DSL's own refinement machinery needs.
+- Meta-theory of the TLA-flavored semantics **is now a priority**
+  (2026-08-02 pivot): stuttering equivalence, operator preservation, quotient
+  characterization, and proof-rule soundness come first — see
+  [`tla-meta-theory.md`](tla-meta-theory.md). This supersedes the earlier
+  decision-framework answer; full TLA+ *language* meta-theory (syntax,
+  completeness of the calculus) is still out of scope.
 
 ## 6. How we will know the UX is good
 

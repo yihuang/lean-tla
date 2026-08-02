@@ -23,6 +23,9 @@ Isabelle/TLA+ as the reference and mathlib/CSLib as leverage.
 - [`docs/ux-notes.md`](docs/ux-notes.md) — notes from the first working
   prototype (the "feel the water" slice): what the notation and proof UX
   actually felt like, what broke, and what to prototype next.
+- [`docs/tla-meta-theory.md`](docs/tla-meta-theory.md) — the current focus:
+  TLA meta-theory first (stuttering equivalence, quotient characterization,
+  rule soundness), the theorem list, and how it feeds the DSL.
 
 ## Prototype status
 
