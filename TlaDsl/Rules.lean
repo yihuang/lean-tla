@@ -164,6 +164,58 @@ theorem sf1 {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Action σ) (
     simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hB
   exact False.elim (hqall (j + 1) (by simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using haq (e (k + j)) (e (k + j + 1)) (hp j) hB'))
 
+/-- Standard-form SF1: under `□[N]_v ∧ SF_v(A)`, if from a `p` state each
+`[N]_v`-step either reaches `q` or is eventually followed by
+`Enabled ⟨A⟩_v`, then `p` leads to `q`. The enablement is *spec-relative*
+(it recurs along the spec's own steps) — this is the distinguishing SF1
+premise: weak fairness needs enablement to hold eventually-always, strong
+fairness only needs it to recur. -/
+theorem sf1_standard {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Action σ)
+    (v : σ → α)
+    (hstep : ∀ s s', p s → StutAction N v s s' → p s' ∨ q s')
+    (haq : ∀ s s', p s → AngleAction A v s s' → q s') :
+    Entails (tlaAnd (tlaAnd (stutAlways N v) (SF_v A v))
+      (always (tlaImp (tlaAnd (statePred p) (actionPred (StutAction N v)))
+        (tlaOr (eventually (statePred (Enabled (AngleAction A v)))) (statePred q)))))
+      (leadsTo (statePred p) (statePred q)) := by
+  intro e h k hpk
+  simp [eventually, statePred, Cslib.ωSequence.drop, Nat.add_comm] at hpk ⊢
+  apply Classical.byContradiction
+  intro hq
+  have hqall : ∀ m, ¬ q (e (k + m)) := by
+    intro m hm
+    exact hq ⟨m, hm⟩
+  have hN : ∀ n, StutAction N v (e n) (e (n + 1)) := by
+    simpa [stutAlways, always, actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h.1.1
+  have hp : ∀ j, p (e (k + j)) := by
+    intro j
+    induction j with
+    | zero => simpa using hpk
+    | succ j ih =>
+        rcases hstep (e (k + j)) (e (k + j + 1)) ih (hN (k + j)) with hp' | hq'
+        · simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hp'
+        · exact False.elim (hqall (j + 1) (by simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hq'))
+  have hEn : ∀ i, (tlaOr (eventually (statePred (Enabled (AngleAction A v)))) (statePred q))
+      (e.drop (k + i)) := by
+    intro i
+    have hc := h.2 (k + i)
+    exact hc ⟨by simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hp i,
+      by simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hN (k + i)⟩
+  have hInf : ∀ i, ∃ j, Enabled (AngleAction A v) (e (k + i + j)) := by
+    intro i
+    rcases hEn i with hE | hq'
+    · simpa [eventually, statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hE
+    · exact False.elim (hqall i (by simpa [statePred, Cslib.ωSequence.drop] using hq'))
+  have hSF : ∀ n, (always (eventually (statePred (Enabled (AngleAction A v)))) (e.drop n)) →
+      eventually (actionPred (AngleAction A v)) (e.drop n) := by
+    simpa [SF_v, always, tlaImp] using h.1.2
+  have hInfAlways : always (eventually (statePred (Enabled (AngleAction A v)))) (e.drop k) := by
+    simpa [always, eventually, statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hInf
+  rcases hSF k hInfAlways with ⟨j, hB⟩
+  have hB' : AngleAction A v (e (k + j)) (e (k + j + 1)) := by
+    simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hB
+  exact False.elim (hqall (j + 1) (by simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using haq (e (k + j)) (e (k + j + 1)) (hp j) hB'))
+
 /-! ## CSLib bridges: enabled-infinitely-often in filter vocabulary -/
 
 open Filter

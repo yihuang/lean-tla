@@ -19,8 +19,10 @@ macro "tla_unfold" : tactic =>
     Tla.Unchanged, Tla.StutAction, Tla.AngleAction, Cslib.ωSequence.drop,
     Tla.stEq, Tla.stNe, Tla.stAnd, Tla.stOr, Tla.stNot, Tla.stImp,
     Tla.stAdd, Tla.stSub, Tla.stMul, Tla.stLt, Tla.stLe,
+    Tla.stGt, Tla.stGe, Tla.stMod,
     Tla.actEq, Tla.actNe, Tla.actAnd, Tla.actOr, Tla.actNot,
-    Tla.actAdd, Tla.actSub, Tla.actMul, Tla.actLt, Tla.actLe] at *))
+    Tla.actAdd, Tla.actSub, Tla.actMul, Tla.actLt, Tla.actLe,
+    Tla.actGt, Tla.actGe, Tla.actMod] at *))
 
 /-- Apply the stuttering-aware invariant induction theorem. Leaves the init
 and step cases as goals. -/
@@ -41,6 +43,13 @@ macro "tla_wf1" : tactic =>
 /-- SF1 analogue of `tla_wf1`. -/
 macro "tla_sf1" : tactic =>
   `(tactic| (apply Tla.sf1 <;> try tla_grind))
+
+/-- Apply the standard-form SF1 rule (`sf1_standard`) — with the
+spec-relative enablement premise `p ∧ [N]_v ⇒ ◇ Enabled ⟨A⟩_v ∨ q` as a
+spec conjunct — leaving the two obligation goals (step case, angle-step
+case). -/
+macro "tla_sf1_standard" : tactic =>
+  `(tactic| (apply Tla.sf1_standard <;> try tla_grind))
 
 /-- Leads-to choreography: solve a `P ↝ Q` goal by assumption, disjunction
 on the left, or transitivity through a chain of leads-to facts in context. -/

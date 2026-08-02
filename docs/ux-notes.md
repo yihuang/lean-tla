@@ -80,8 +80,13 @@ result: **the pseudocode notation layer works**, including `x'` primes and
    and `= + - * < ≤ ∧ ∨ ¬` are supported inside `[p|]/[a|]`. No function
    application (`f x`), no binders (`∃ x ∈ S, ...`), no `→`/`≠`/`if-then-else`.
    Real specs (arrays, records, quantifiers over processes) will hit this
-   immediately. Options: grow the macro (fragile), or switch to a small
-   custom elaborator / dedicated syntax category with real grammar.
+   immediately. **Progress (2026-08-03):** function applications (arguments
+   lifted pointwise — `Even x`, `n % 2`), `≠ > ≥ %`, `→` in `[t| ...]`, and
+   type ascriptions are now supported; the parity-based SF1 example
+   (`StrongFair.lean`) is back in bracket syntax. Remaining gaps: binders
+   (`∃ x ∈ S, ...`), `if-then-else`, qualified names. Options: grow the macro
+   further (fragile), or switch to a small custom elaborator / dedicated
+   syntax category with real grammar.
 3. **Prime handling is purely syntactic** (strip the trailing `'`), so `x''`
    or qualified names misbehave; documented, acceptable for a prototype.
 4. **`tla_unfold` had to be `simp at *` under `try`**: this Lean version

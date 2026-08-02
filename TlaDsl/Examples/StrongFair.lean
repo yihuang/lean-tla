@@ -8,18 +8,20 @@ import TlaDsl.TlaVar
 
 open scoped Tla
 
-/-! # Liveness example: strong fairness (SF1)
+/-! # Liveness example: strong fairness (SF1, standard form)
 
-A "set the flag" action `Set` under strong fairness: the spec increments a
-counter forever, and `Set` (enabled whenever the flag is still down) marks
-the work as done. `SF_v(Set)` forces the flag to be set eventually.
+The counter `n` increments forever; the action `A` is enabled exactly when
+`n` is even, and firing it marks the work as done. Because the increments
+alternate parity, `A` is enabled *infinitely often* along progressing
+behaviors — but never *eventually always* (it is disabled at every odd
+counter value). Weak fairness would not suffice; strong fairness
+`SF_id(A)` forces the flag to be set.
 
-Note on the enablement premise: the semantically proved `sf1` asks for
-`Enabled ⟨A⟩_v` at some later position along *every* behavior. Under a
-stuttering semantics the only form that holds unconditionally is immediate
-enablement (`j = 0`) — a behavior may stutter forever, so a spec-relative
-"eventually enabled" premise (`p ∧ [N]_v ⇒ ◇ Enabled ⟨A⟩_v`) is the
-standard-form SF1 and is tracked as the follow-up refinement of the rule.
+This is the standard-form SF1 (`sf1_standard`): the enablement premise is
+spec-relative — `p ∧ [N]_v ⇒ ◇ Enabled ⟨A⟩_v ∨ q` — and lives as a conjunct
+of the spec. (The `sf1` variant asks for enablement along every behavior,
+which under stuttering semantics is only usable when enablement is
+immediate.)
 -/
 
 namespace TlaDsl.Examples.StrongFair
@@ -31,11 +33,12 @@ deriving Repr
 
 tla_var St n done
 
-/-- The counter increments; the flag is untouched. -/
-@[simp] def Next : Tla.Action St := [a| n' = n + 1 ∧ done' = done]
+/-- The counter increments; when it is even, the work may be marked done. -/
+@[simp] def Next : Tla.Action St :=
+  [a| (n' = n + 1 ∧ done' = done) ∨ (n % 2 = 0 ∧ n' = n + 1 ∧ done' = 1)]
 
-/-- The strong-fairness action: mark the work as done. -/
-@[simp] def Set : Tla.Action St := [a| done' = 1 ∧ n' = n]
+/-- The strong-fairness action: mark the work as done (on an even tick). -/
+@[simp] def A : Tla.Action St := [a| n % 2 = 0 ∧ n' = n + 1 ∧ done' = 1]
 
 /-- The flag is down. -/
 @[simp] def p : Tla.StatePred St := fun s => s.done = 0
@@ -46,27 +49,21 @@ tla_var St n done
 theorem hstep : ∀ s s', p s → Tla.StutAction Next (fun s : St => s) s s' → p s' ∨ q s' := by
   tla_grind
 
-theorem haq : ∀ s s', p s → Tla.AngleAction Set (fun s : St => s) s s' → q s' := by
+theorem haq : ∀ s s', p s → Tla.AngleAction A (fun s : St => s) s s' → q s' := by
   tla_grind
 
-theorem henable : ∀ e : Tla.Behavior St, ∀ k : Nat, p (e k) →
-    ∃ j : Nat, Tla.Enabled (Tla.AngleAction Set (fun s : St => s)) (e (k + j)) := by
-  intro e k hp
-  refine ⟨0, ?_⟩
-  refine ⟨{ n := (e k).n, done := 1 }, ?_, ?_⟩
-  · tla_unfold
-  · intro hEq
-    have hd : 1 = (e k).done := congrArg St.done hEq
-    simp [p] at hp
-    omega
-
-/-- Strong fairness on `Set` forces the flag to be set: `□[Next]_id ∧
-SF_id(Set) ⊢ p ↝ q`. -/
+/-- Strong fairness on `A` forces the flag to be set: under
+`□[Next]_id ∧ SF_id(A)` plus the standard-form enablement premise
+`p ∧ [Next]_id ⇒ ◇ Enabled ⟨A⟩_id ∨ q`, `p` leads to `q`. -/
 theorem sf_liveness :
-    Tla.Entails (Tla.tlaAnd (Tla.stutAlways Next (fun s : St => s))
-        (Tla.SF_v Set (fun s : St => s)))
+    Tla.Entails
+      (Tla.tlaAnd (Tla.tlaAnd (Tla.stutAlways Next (fun s : St => s))
+          (Tla.SF_v A (fun s : St => s)))
+        (Tla.always (Tla.tlaImp
+          (Tla.tlaAnd (Tla.statePred p) (Tla.actionPred (Tla.StutAction Next (fun s : St => s))))
+          (Tla.tlaOr (Tla.eventually (Tla.statePred (Tla.Enabled (Tla.AngleAction A (fun s : St => s)))))
+            (Tla.statePred q)))))
       (Tla.leadsTo (Tla.statePred p) (Tla.statePred q)) := by
-  tla_sf1
-  exact henable
+  tla_sf1_standard
 
 end TlaDsl.Examples.StrongFair
