@@ -101,6 +101,10 @@ the semantics, kernel-checked, mathlib-free.
   `WF1` — the liveness theorem is a one-line application of `wf1` once the
   three standard premises (step, action-to-q, enabled) are discharged by
   `tla_unfold`/`omega`.
+- `TlaDsl/Examples/Mutex.lean`: two-process turn-based mutex — mutual
+  exclusion via the standard inductive invariant (`init_invariant_stut` with
+  six-action case analysis), and two-phase progress `pc = 0 ↝ pc = 2` by
+  chaining two `WF1` applications with leads-to transitivity.
 
 Both compile with zero `sorry`s and zero dependencies.
 

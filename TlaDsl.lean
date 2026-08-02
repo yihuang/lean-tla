@@ -8,3 +8,4 @@ import TlaDsl.Meta
 import TlaDsl.Examples.Counter
 import TlaDsl.Examples.Refinement
 import TlaDsl.Examples.TicketLock
+import TlaDsl.Examples.Mutex
