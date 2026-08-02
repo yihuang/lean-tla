@@ -56,6 +56,33 @@ and Ltac automation (`automation.v`).
 | Two diverging codebases to reconcile | Leslie vs Lentil | Same semantics, different UX layers; both thin in different places | — |
 | Toolchain/dependency hygiene | Leslie pins Lean 4.27; Lentil similar | mathlib churn management needs a policy, not an accident | `lean-toolchain` |
 
+### 1.3 CSLib: the foundations layer we adopt
+
+**CSLib** (github.com/leanprover/cslib, same toolchain pin as mathlib main,
+Apache-2.0) is building exactly the ω-semantics layer this project needs, so
+we depend on it directly instead of re-implementing:
+
+- `Cslib.ωSequence α` (a `ℕ → α` wrapper) is the carrier of
+  `Tla.Behavior` (`TlaDsl/Basic.lean`). We inherit `head`/`tail`/`drop`/
+  `take`/`extract`/`const`/`map`/`flatten` plus their simp lemmas
+  (`get_drop`, `drop_drop`, ...), which is exactly the block-prefix
+  machinery the `SimFull` run-compression proofs need.
+- `ωSequence.Temporal` (`Step`, `LeadsTo`, frequently-lemmas) overlaps our
+  `Rules.lean` leads-to laws; `ωSequence.InfOcc` is the "enabled infinitely
+  often" predicate behind strong fairness — `sf1` is now bridgeable to the
+  `∃ᶠ` filter vocabulary (`sf_enabled_frequently_iff`, `sf1_frequently`).
+- `LTS`/`OmegaExecution`/`HasTau`/`TraceEq` are the labeled-transition layer
+  a future refinement-through-τ story can build on.
+
+Adoption notes:
+- cslib main pins mathlib to its own rev; Lake kept our newer mathlib
+  (`ae0d973d`, 2026-08-02) and compiled cslib cleanly against it. If a future
+  `lake update` forces a mathlib rev move, expect one rebuild.
+- The one behavioral difference that bit us: cslib's `drop n s = fun i =>
+  s (i + n)` (ours was `e (n + i)`), and Lean's `Nat.add` reduces `n + 0`
+  but not `0 + n`. Proofs that previously closed by `rfl`/`exact` now need a
+  `simp` (which carries `Nat.add_zero`/`Nat.zero_add`/`get_drop`).
+
 ## 2. Implementation strategies: the big decisions
 
 ### D1. Fork Leslie vs. new package

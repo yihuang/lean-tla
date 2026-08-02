@@ -31,11 +31,11 @@ theorem first {σ : Type u} {e f : Behavior σ} (h : Sim e f) : e 0 = f 0 := by
   | refl e => rfl
   | stepL e f hst hs ih =>
       have htail : (e.drop 1) 0 = f 0 := ih
-      have he1 : e 1 = f 0 := by simpa [Behavior.drop] using htail
+      have he1 : e 1 = f 0 := by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using htail
       exact hst ▸ he1
   | stepR e f hst hs ih =>
       have htail : e 0 = (f.drop 1) 0 := ih
-      have he0 : e 0 = f 1 := by simpa [Behavior.drop] using htail
+      have he0 : e 0 = f 1 := by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using htail
       exact he0 ▸ hst.symm
 
 /-- If the left behavior stutters, the stutter can be dropped. -/
@@ -98,7 +98,7 @@ theorem sim_suffix_left {σ : Type u} {e f : Behavior σ} (h : Sim e f) :
       | succ n =>
           rcases ih n with ⟨m, hm⟩
           refine ⟨m, ?_⟩
-          simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hm
+          simpa [Cslib.ωSequence.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hm
   | stepR e f hst hs ih =>
       cases n with
       | zero =>
@@ -107,7 +107,7 @@ theorem sim_suffix_left {σ : Type u} {e f : Behavior σ} (h : Sim e f) :
       | succ n =>
           rcases ih (n + 1) with ⟨m, hm⟩
           refine ⟨m + 1, ?_⟩
-          simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hm
+          simpa [Cslib.ωSequence.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hm
 
 /-- Given a matching of two behaviors, any suffix of the right one matches some
 suffix of the left one. -/
@@ -255,7 +255,7 @@ theorem entails_always_self {σ : Type u} (F : Pred σ) : Entails (always F) F :
 
 theorem entails_always_always {σ : Type u} (F : Pred σ) : Entails (always F) (always (always F)) := by
   intro e h n m
-  simpa [Behavior.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h (n + m)
+  simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h (n + m)
 
 theorem entails_eventually_self {σ : Type u} (F : Pred σ) : Entails F (eventually F) := by
   intro e h
@@ -273,7 +273,7 @@ theorem leadsTo_consequence {σ : Type u} {P P' Q Q' : Pred σ} :
     simpa [leadsTo, always, tlaImp] using h.2
   rcases hPQ n (h1 n hP') with ⟨m, hQ⟩
   refine ⟨m, ?_⟩
-  simpa [Behavior.drop] using h2 (n + m) (by simpa [Behavior.drop] using hQ)
+  simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h2 (n + m) (by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hQ)
 
 /-! # Slice 2: near-stuttering invariance and actions
 
@@ -309,38 +309,38 @@ theorem sim_step {σ : Type u} {e f : Behavior σ} (h : Sim e f) :
       | succ n =>
           rcases ih n with ⟨m, hm₁, hm₂⟩
           refine ⟨m, ?_, ?_⟩
-          · simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hm₁
+          · simpa [Cslib.ωSequence.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hm₁
           · cases hm₂ with
             | inl h₂ =>
-                exact Or.inl (by simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
+                exact Or.inl (by simpa [Cslib.ωSequence.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
             | inr h₂ =>
-                exact Or.inr (by simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
+                exact Or.inr (by simpa [Cslib.ωSequence.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
   | stepR e f hst hs ih =>
       cases n with
       | zero =>
           rcases ih 0 with ⟨m, hm₁, hm₂⟩
           refine ⟨m + 1, ?_, ?_⟩
-          · simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hm₁
+          · simpa [Cslib.ωSequence.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hm₁
           · cases hm₂ with
             | inl h₂ =>
-                exact Or.inl (by simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
+                exact Or.inl (by simpa [Cslib.ωSequence.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
             | inr h₂ =>
-                exact Or.inr (by simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
+                exact Or.inr (by simpa [Cslib.ωSequence.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
       | succ n =>
           rcases ih (n + 1) with ⟨m, hm₁, hm₂⟩
           refine ⟨m + 1, ?_, ?_⟩
-          · simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hm₁
+          · simpa [Cslib.ωSequence.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hm₁
           · cases hm₂ with
             | inl h₂ =>
-                exact Or.inl (by simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
+                exact Or.inl (by simpa [Cslib.ωSequence.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
             | inr h₂ =>
-                exact Or.inr (by simpa [Behavior.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
+                exact Or.inr (by simpa [Cslib.ωSequence.drop, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h₂)
 
 /-- `Unchanged v` is nearly stuttering invariant. -/
 theorem nstutinv_unchanged {σ : Type u} {α : Type v} (v : σ → α) :
     NstutInv (Unchanged v) := by
   intro e f hfirst htail
-  have hv1 : v (e 1) = v (f 1) := by simpa [Behavior.drop] using congrArg v (Sim.first htail)
+  have hv1 : v (e 1) = v (f 1) := by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using congrArg v (Sim.first htail)
   have hv0 : v (e 0) = v (f 0) := congrArg v hfirst
   constructor <;> intro h
   · simpa [Unchanged, hv1, hv0] using h
@@ -350,7 +350,7 @@ theorem nstutinv_unchanged {σ : Type u} {α : Type v} (v : σ → α) :
 theorem nstutinv_angle {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
     (hA : NstutInv A) : NstutInv (AngleAction A v) := by
   intro e f hfirst htail
-  have hv1 : v (e 1) = v (f 1) := by simpa [Behavior.drop] using congrArg v (Sim.first htail)
+  have hv1 : v (e 1) = v (f 1) := by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using congrArg v (Sim.first htail)
   have hv0 : v (e 0) = v (f 0) := congrArg v hfirst
   constructor <;> intro h
   · simp [AngleAction] at h
@@ -362,7 +362,7 @@ theorem nstutinv_angle {σ : Type u} {α : Type v} (A : Action σ) (v : σ → �
 theorem nstutinv_stutAction {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
     (hA : NstutInv A) : NstutInv (StutAction A v) := by
   intro e f hfirst htail
-  have hv1 : v (e 1) = v (f 1) := by simpa [Behavior.drop] using congrArg v (Sim.first htail)
+  have hv1 : v (e 1) = v (f 1) := by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using congrArg v (Sim.first htail)
   have hv0 : v (e 0) = v (f 0) := congrArg v hfirst
   constructor <;> intro h
   · simp [StutAction] at h
@@ -384,22 +384,26 @@ theorem stutinv_eventually_angle {σ : Type u} {α : Type v} (A : Action σ) (v 
     simp [actionPred, AngleAction] at hBn
     rcases sim_step h n with ⟨m, hmn, hmnnext⟩
     rcases hmnnext with hnext | hsame
-    · exact ⟨m, (hB (e.drop n) (f.drop m) (Sim.first hmn) (by simpa [Behavior.drop] using hnext)).1 hBn⟩
+    · exact ⟨m, (hB (e.drop n) (f.drop m) (Sim.first hmn)
+        (by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hnext)).1
+        (by simpa [AngleAction, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hBn)⟩
     · have he1 : (e.drop n) 1 = (e.drop n) 0 := by
-        have h1 : e (n + 1) = f m := by simpa [Behavior.drop] using (Sim.first hsame)
-        have h2 : e n = f m := by simpa [Behavior.drop] using (Sim.first hmn)
-        simpa [Behavior.drop] using h1.trans h2.symm
-      exact False.elim (hBn.2 (by simpa [Behavior.drop] using (congrArg v he1)))
+        have h1 : e (n + 1) = f m := by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (Sim.first hsame)
+        have h2 : e n = f m := by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (Sim.first hmn)
+        simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h1.trans h2.symm
+      exact False.elim (hBn.2 (by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (congrArg v he1)))
   · rcases hE with ⟨m, hBm⟩
     simp [actionPred, AngleAction] at hBm
     rcases sim_step (Sim.symm h) m with ⟨n, hmn, hmnnext⟩
     rcases hmnnext with hnext | hsame
-    · exact ⟨n, (hB (f.drop m) (e.drop n) (Sim.first hmn) (by simpa [Behavior.drop] using hnext)).1 hBm⟩
+    · exact ⟨n, (hB (f.drop m) (e.drop n) (Sim.first hmn)
+        (by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hnext)).1
+        (by simpa [AngleAction, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hBm)⟩
     · have hf1 : (f.drop m) 1 = (f.drop m) 0 := by
-        have h1 : f (m + 1) = e n := by simpa [Behavior.drop] using (Sim.first hsame)
-        have h2 : f m = e n := by simpa [Behavior.drop] using (Sim.first hmn)
-        simpa [Behavior.drop] using h1.trans h2.symm
-      exact False.elim (hBm.2 (by simpa [Behavior.drop] using (congrArg v hf1)))
+        have h1 : f (m + 1) = e n := by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (Sim.first hsame)
+        have h2 : f m = e n := by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (Sim.first hmn)
+        simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h1.trans h2.symm
+      exact False.elim (hBm.2 (by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (congrArg v hf1)))
 
 /-- `□[A]_v` is stuttering invariant if `A` is nearly stuttering invariant. -/
 theorem stutinv_stutAlways {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
@@ -410,20 +414,20 @@ theorem stutinv_stutAlways {σ : Type u} {α : Type v} (A : Action σ) (v : σ �
   · intro m
     rcases sim_step (Sim.symm h) m with ⟨n, hmn, hmnnext⟩
     rcases hmnnext with hnext | hsame
-    · exact (hB (f.drop m) (e.drop n) (Sim.first hmn) (by simpa [Behavior.drop] using hnext)).2 (hAll n)
+    · exact (hB (f.drop m) (e.drop n) (Sim.first hmn) (by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hnext)).2 (hAll n)
     · have hf1 : (f.drop m) 1 = (f.drop m) 0 := by
-        have h1 : f (m + 1) = e n := by simpa [Behavior.drop] using (Sim.first hsame)
-        have h2 : f m = e n := by simpa [Behavior.drop] using (Sim.first hmn)
-        simpa [Behavior.drop] using h1.trans h2.symm
+        have h1 : f (m + 1) = e n := by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (Sim.first hsame)
+        have h2 : f m = e n := by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (Sim.first hmn)
+        simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h1.trans h2.symm
       exact Or.inr (congrArg v hf1)
   · intro n
     rcases sim_step h n with ⟨m, hmn, hmnnext⟩
     rcases hmnnext with hnext | hsame
-    · exact (hB (e.drop n) (f.drop m) (Sim.first hmn) (by simpa [Behavior.drop] using hnext)).2 (hAll m)
+    · exact (hB (e.drop n) (f.drop m) (Sim.first hmn) (by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hnext)).2 (hAll m)
     · have he1 : (e.drop n) 1 = (e.drop n) 0 := by
-        have h1 : e (n + 1) = f m := by simpa [Behavior.drop] using (Sim.first hsame)
-        have h2 : e n = f m := by simpa [Behavior.drop] using (Sim.first hmn)
-        simpa [Behavior.drop] using h1.trans h2.symm
+        have h1 : e (n + 1) = f m := by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (Sim.first hsame)
+        have h2 : e n = f m := by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (Sim.first hmn)
+        simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h1.trans h2.symm
       exact Or.inr (congrArg v he1)
 
 /-- Weak fairness is stuttering invariant if the action is nearly so. -/
@@ -447,7 +451,7 @@ theorem stutinv_SF_v {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
 /-- Concrete spec `conc` refines abstract spec `abs` via state mapping `f`:
 every concrete behavior, mapped through `f`, satisfies the abstract spec. -/
 def RefinesVia {σ : Type u} {τ : Type v} (f : τ → σ) (conc : Pred τ) (abs : Pred σ) : Prop :=
-  ∀ e : Behavior τ, conc e → abs (Behavior.map f e)
+  ∀ e : Behavior τ, conc e → abs (Cslib.ωSequence.map f e)
 
 /-- Abadi–Lamport safety refinement: if every concrete step (or `v`-stutter)
 maps to an abstract step (or `u`-stutter), and initial states map, then the
@@ -467,8 +471,8 @@ theorem refinement_mapping {σ τ : Type u} {α β : Type v}
     have h2 : ∀ n, actionPred (StutAction nextC v) (e.drop n) := by
       simpa [stutAlways, always] using he.2
     have hstepC : StutAction nextC v (e n) (e (n + 1)) := by
-      simpa [actionPred, Behavior.drop] using h2 n
-    simpa [StutAction, actionPred, Behavior.drop, Behavior.map] using (hstep (e n) (e (n + 1)) hstepC)
+      simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h2 n
+    simpa [StutAction, actionPred, Cslib.ωSequence.drop, Cslib.ωSequence.map, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (hstep (e n) (e (n + 1)) hstepC)
 
 /-- Refinement is transitive. -/
 theorem refines_via_trans {σ τ υ : Type u} (f : τ → σ) (g : υ → τ)
@@ -476,13 +480,12 @@ theorem refines_via_trans {σ τ υ : Type u} (f : τ → σ) (g : υ → τ)
     (h1 : RefinesVia g conc mid) (h2 : RefinesVia f mid abs) :
     RefinesVia (f ∘ g) conc abs := by
   intro e he
-  exact h2 (Behavior.map g e) (h1 e he)
+  exact h2 (Cslib.ωSequence.map g e) (h1 e he)
 
 /-- Refinement is reflexive. -/
 theorem refines_via_refl {σ : Type u} (F : Pred σ) : RefinesVia (fun s => s) F F := by
   intro e he
-  have hmap : Behavior.map (fun s => s) e = e := by
-    funext n
+  have hmap : Cslib.ωSequence.map (fun s => s) e = e := by
     rfl
   rw [hmap]
   exact he
@@ -504,13 +507,11 @@ theorem Sim.map {σ : Type u} {τ : Type v} (x : σ → τ) {e f : Behavior σ} 
   | refl e => exact Sim.refl (Extend x e)
   | stepL e f hst hs ih =>
       have htail : (Extend x e).drop 1 = Extend x (e.drop 1) := by
-        funext i
         rfl
       exact Sim.stepL (Extend x e) (Extend x f) (by simp [Extend, hst])
         (by simpa [htail] using ih)
   | stepR e f hst hs ih =>
       have htail : (Extend x f).drop 1 = Extend x (f.drop 1) := by
-        funext i
         rfl
       exact Sim.stepR (Extend x e) (Extend x f) (by simp [Extend, hst])
         (by simpa [htail] using ih)

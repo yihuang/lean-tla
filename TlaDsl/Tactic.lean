@@ -16,7 +16,7 @@ macro "tla_unfold" : tactic =>
     Tla.WF, Tla.SF, Tla.WF_v, Tla.SF_v, Tla.stutAlways, Tla.statePred, Tla.actionPred, Tla.purePred,
     Tla.tlaAnd, Tla.tlaOr, Tla.tlaNot, Tla.tlaImp, Tla.tlaIff, Tla.tlaTrue,
     Tla.tlaFalse, Tla.Valid, Tla.Entails, Tla.Satisfies, Tla.Enabled,
-    Tla.Unchanged, Tla.StutAction, Tla.AngleAction, Tla.Behavior.drop,
+    Tla.Unchanged, Tla.StutAction, Tla.AngleAction, Cslib.ωSequence.drop,
     Tla.stEq, Tla.stNe, Tla.stAnd, Tla.stOr, Tla.stNot, Tla.stImp,
     Tla.stAdd, Tla.stSub, Tla.stMul, Tla.stLt, Tla.stLe,
     Tla.actEq, Tla.actNe, Tla.actAnd, Tla.actOr, Tla.actNot,

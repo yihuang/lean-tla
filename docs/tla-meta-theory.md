@@ -123,10 +123,15 @@ Both compile with zero `sorry`s and zero dependencies.
   steps; that is now defined in `SimFull.lean` via run-compression
   (`Compress` — the maximal-run value sequence, computed with `Nat.find`;
   eventually-constant behaviors pad with the final value). `SimFull` has the
-  equivalence structure (refl/symm/trans, first-state, quotient) proved; the
-  suffix-matching and step-matching lemmas, and migrating the preservation
-  theorems to it, are the remaining integration work and should not change
-  the shape of the theorems.
+  equivalence structure (refl/symm/trans, first-state, quotient) proved, plus
+  the block/drop machinery: `nextBlock_drop_add`, `BlockStart_drop_add`, and
+  `Compress_drop_blockStart` (compression commutes with dropping at a block
+  boundary), giving `SimFull.drop_blockStart` (the equivalence is preserved
+  when both behaviors are dropped at corresponding block starts). These pair
+  `Nat.find` with `ωSequence.drop` — the piece that was previously missing.
+  The suffix-matching and step-matching lemmas, and migrating the
+  preservation theorems to `SimFull`, are the remaining integration work and
+  should not change the shape of the theorems.
 - Values are typed (the DSL's choice). Meta-theory here is about the typed
   fragment's semantics; full TLA+ value semantics (ZFC) remains the
   conformance-oracle goal, not this track.

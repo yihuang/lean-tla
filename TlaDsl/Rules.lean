@@ -1,3 +1,4 @@
+import Mathlib.Order.Filter.AtTopBot.Basic
 import TlaDsl.Basic
 
 namespace Tla
@@ -21,8 +22,8 @@ theorem init_invariant {σ : Type u} (init : StatePred σ) (next : Action σ) (i
   | zero => exact hinit (e 0) hinit0
   | succ n ih =>
       have hstepn : next (e n) (e (n + 1)) := by
-        simpa [actionPred, Behavior.drop] using hnext n
-      exact hstep (e n) (e (n + 1)) hstepn ih
+        simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hnext n
+      exact (by simpa [statePred] using hstep (e n) (e (n + 1)) hstepn (by simpa [statePred] using ih))
 
 /-- Invariant induction for stuttering specs `Init ∧ □[Next]_v ⊢ □Inv`.
 The step case must account for the stutter disjunct. -/
@@ -40,8 +41,8 @@ theorem init_invariant_stut {σ : Type u} {α : Type v} (init : StatePred σ) (n
   | zero => exact hinit (e 0) hinit0
   | succ n ih =>
       have hstepn : next (e n) (e (n + 1)) ∨ v (e (n + 1)) = v (e n) := by
-        simpa [actionPred, StutAction, Behavior.drop] using hnext n
-      exact hstep (e n) (e (n + 1)) hstepn ih
+        simpa [actionPred, StutAction, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hnext n
+      exact (by simpa [statePred] using hstep (e n) (e (n + 1)) hstepn (by simpa [statePred] using ih))
 
 /-- Leads-to is transitive. -/
 theorem leadsTo_trans_entails {σ : Type u} (P Q R : Pred σ) :
@@ -50,10 +51,10 @@ theorem leadsTo_trans_entails {σ : Type u} (P Q R : Pred σ) :
   have h1 : ∀ k, (tlaImp P (eventually Q)) (e.drop k) := by simpa [leadsTo, always] using h.1
   have h2 : ∀ k, (tlaImp Q (eventually R)) (e.drop k) := by simpa [leadsTo, always] using h.2
   rcases h1 n hP with ⟨k, hQ⟩
-  have hQ' : Q (e.drop (n + k)) := by simpa [Behavior.drop] using hQ
+  have hQ' : Q (e.drop (n + k)) := by simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hQ
   rcases h2 (n + k) hQ' with ⟨m, hR⟩
   refine ⟨k + m, ?_⟩
-  simpa [Behavior.drop, Nat.add_assoc] using hR
+  simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hR
 
 /-! ## Liveness rules: WF1 and SF1 -/
 
@@ -93,14 +94,14 @@ theorem wf1 {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Action σ) (
     (henable : ∀ s, p s → Enabled (AngleAction A v) s ∨ q s) :
     Entails (tlaAnd (stutAlways N v) (WF_v A v)) (leadsTo (statePred p) (statePred q)) := by
   intro e h k hpk
-  simp [eventually, statePred, Behavior.drop] at hpk ⊢
+  simp [eventually, statePred, Cslib.ωSequence.drop, Nat.add_comm] at hpk ⊢
   apply Classical.byContradiction
   intro hq
   have hqall : ∀ m, ¬ q (e (k + m)) := by
     intro m hm
     exact hq ⟨m, hm⟩
   have hN : ∀ n, StutAction N v (e n) (e (n + 1)) := by
-    simpa [stutAlways, always, actionPred, Behavior.drop] using h.1
+    simpa [stutAlways, always, actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h.1
   have hp : ∀ j, p (e (k + j)) := by
     intro j
     induction j with
@@ -118,10 +119,10 @@ theorem wf1 {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Action σ) (
       eventually (actionPred (AngleAction A v)) (e.drop n) := by
     simpa [WF_v, always, tlaImp] using h.2
   have hEnAlways : always (statePred (Enabled (AngleAction A v))) (e.drop k) := by
-    simpa [always, statePred, Behavior.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hen
+    simpa [always, statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hen
   rcases hWF k hEnAlways with ⟨j, hB⟩
   have hB' : AngleAction A v (e (k + j)) (e (k + j + 1)) := by
-    simpa [actionPred, Behavior.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hB
+    simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hB
   exact False.elim (hqall (j + 1) (by simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using haq (e (k + j)) (e (k + j + 1)) (hp j) hB'))
 
 /-- SF1 (strong fairness): like WF1, but `p` only requires `A` to be
@@ -134,14 +135,14 @@ theorem sf1 {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Action σ) (
       ∃ j : Nat, Enabled (AngleAction A v) (e (k + j))) :
     Entails (tlaAnd (stutAlways N v) (SF_v A v)) (leadsTo (statePred p) (statePred q)) := by
   intro e h k hpk
-  simp [eventually, statePred, Behavior.drop] at hpk ⊢
+  simp [eventually, statePred, Cslib.ωSequence.drop, Nat.add_comm] at hpk ⊢
   apply Classical.byContradiction
   intro hq
   have hqall : ∀ m, ¬ q (e (k + m)) := by
     intro m hm
     exact hq ⟨m, hm⟩
   have hN : ∀ n, StutAction N v (e n) (e (n + 1)) := by
-    simpa [stutAlways, always, actionPred, Behavior.drop] using h.1
+    simpa [stutAlways, always, actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h.1
   have hp : ∀ j, p (e (k + j)) := by
     intro j
     induction j with
@@ -157,10 +158,50 @@ theorem sf1 {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Action σ) (
       eventually (actionPred (AngleAction A v)) (e.drop n) := by
     simpa [SF_v, always, tlaImp] using h.2
   have hInfAlways : always (eventually (statePred (Enabled (AngleAction A v)))) (e.drop k) := by
-    simpa [always, eventually, statePred, Behavior.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hInf
+    simpa [always, eventually, statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hInf
   rcases hSF k hInfAlways with ⟨j, hB⟩
   have hB' : AngleAction A v (e (k + j)) (e (k + j + 1)) := by
-    simpa [actionPred, Behavior.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hB
+    simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hB
   exact False.elim (hqall (j + 1) (by simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using haq (e (k + j)) (e (k + j + 1)) (hp j) hB'))
+
+/-! ## CSLib bridges: enabled-infinitely-often in filter vocabulary -/
+
+open Filter
+
+/-- The `SF_v` premise "`Enabled a` infinitely often along the behavior",
+written with mathlib's `∃ᶠ` filter (the vocabulary of CSLib's
+`ωSequence.Temporal` and `ωSequence.InfOcc`), is equivalent to the pointwise
+form `∀ i, ∃ j, Enabled a (e (i + j))` used in `sf1`. -/
+theorem sf_enabled_frequently_iff {σ : Type u} (e : Behavior σ) (a : Action σ) :
+    (∀ n : Nat, ∃ j : Nat, Enabled a (e (n + j))) ↔
+      ∃ᶠ k in atTop, Enabled a (e k) := by
+  rw [frequently_atTop]
+  constructor
+  · intro h m
+    rcases h m with ⟨j, hj⟩
+    exact ⟨m + j, Nat.le_add_right m j, hj⟩
+  · intro h n
+    rcases h n with ⟨k, hnk, hk⟩
+    exact ⟨k - n, by simpa [Nat.add_sub_of_le hnk] using hk⟩
+
+/-- SF1 stated with the frequently-flavoured enablement premise (infinitely
+often enabled, matching `ωSequence.Temporal`/`InfOcc` conventions). The
+frequently premise is stronger than `sf1`'s pointwise one, so the theorem
+reduces to `sf1`. -/
+theorem sf1_frequently {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Action σ)
+    (v : σ → α)
+    (hstep : ∀ s s', p s → StutAction N v s s' → p s' ∨ q s')
+    (haq : ∀ s s', p s → AngleAction A v s s' → q s')
+    (henable : ∀ e : Behavior σ, ∀ k : Nat, p (e k) →
+      ∃ᶠ j in atTop, Enabled (AngleAction A v) (e (k + j))) :
+    Entails (tlaAnd (stutAlways N v) (SF_v A v)) (leadsTo (statePred p) (statePred q)) := by
+  refine sf1 p q N A v hstep haq ?_
+  intro e k hpk
+  have hfreq : ∃ᶠ j in atTop, Enabled (AngleAction A v) (e (k + j)) := henable e k hpk
+  have hf : ∃ j : Nat, Enabled (AngleAction A v) (e (k + j)) := by
+    rw [frequently_atTop] at hfreq
+    rcases hfreq 0 with ⟨j, _hj0, hj⟩
+    exact ⟨j, hj⟩
+  exact hf
 
 end Tla

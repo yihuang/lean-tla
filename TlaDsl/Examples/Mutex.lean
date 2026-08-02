@@ -79,13 +79,13 @@ theorem mutual_exclusion :
   have hmut : Tla.Entails (Tla.always (Tla.statePred Inv))
       (Tla.always (Tla.statePred (fun s : St => ¬ (s.pc0 = 2 ∧ s.pc1 = 2)))) := by
     intro e h n
-    have h' : Inv (e n) := by simpa [Tla.statePred, Tla.Behavior.drop] using h n
+    have h' : Inv (e n) := by simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h n
     intro hboth
     rcases h' with ⟨h01, hle⟩
     rcases h01 with ⟨h0, h1⟩
     rcases hboth with ⟨hpc0, hpc1⟩
-    have ht0 : (e n).turn = 0 := h0 hpc0
-    have ht1 : (e n).turn = 1 := h1 hpc1
+    have ht0 : (e n).turn = 0 := h0 (by simpa [Cslib.ωSequence.drop] using hpc0)
+    have ht1 : (e n).turn = 1 := h1 (by simpa [Cslib.ωSequence.drop] using hpc1)
     omega
   intro e h
   exact hmut e (inv_invariant e h)
@@ -287,7 +287,7 @@ theorem full_liveness :
   rcases hFair2 with ⟨hspec, hWF0⟩
   have hInvAlways : ∀ m, Inv (e m) := by
     intro m
-    simpa [Tla.always, Tla.statePred, Tla.Behavior.drop] using hInv m
+    simpa [Tla.always, Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hInv m
   have l0 : Tla.leadsTo (Tla.statePred P0) (Tla.statePred Q0) e :=
     turn0_liveness e ⟨hspec, hWF0⟩
   have lB : Tla.leadsTo (Tla.statePred PB) (Tla.statePred (fun s => s.pc0 = 1 ∧ s.turn = 0)) e :=
@@ -308,19 +308,19 @@ theorem full_liveness :
     intro e0 n hInv hp
     rcases hInv with ⟨h01, hle⟩
     rcases hle with ⟨hpc0le, hpc1le, hturnle⟩
-    have hp' : (e0 n).pc0 = 1 ∧ (e0 n).turn = 1 := by
-      simpa [Tla.statePred, Tla.Behavior.drop] using hp
+    have hp' : ((e0.drop n) 0).pc0 = 1 ∧ ((e0.drop n) 0).turn = 1 := by
+      simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hp
     by_cases h0 : (e0 n).pc1 = 0
     · right
-      exact ⟨hp'.1, hp'.2, h0⟩
+      exact ⟨hp'.1, hp'.2, by simpa [Cslib.ωSequence.drop] using h0⟩
     · by_cases h1 : (e0 n).pc1 = 1
       · left
         right
-        exact ⟨hp'.1, hp'.2, h1⟩
+        exact ⟨hp'.1, hp'.2, by simpa [Cslib.ωSequence.drop] using h1⟩
       · by_cases h2 : (e0 n).pc1 = 2
         · left
           left
-          exact ⟨hp'.1, hp'.2, h2⟩
+          exact ⟨hp'.1, hp'.2, by simpa [Cslib.ωSequence.drop] using h2⟩
         · exfalso
           omega
   have turn1Chain : ∀ n, Inv (e n) →
@@ -330,20 +330,20 @@ theorem full_liveness :
       (Tla.statePred (fun s : St => s.pc0 = 1 ∧ s.turn = 0))
       (Tla.statePred PB) (Tla.statePred PC) (Tla.statePred PD)
       (hcaseTurn1 e) lB lCq lDq
-  have hpe : (e n).pc0 = 1 := by simpa [Tla.statePred, Tla.Behavior.drop] using hp
+  have hpe : (e n).pc0 = 1 := by simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hp
   rcases hInvAlways n with ⟨h01, hle⟩
   rcases hle with ⟨hpc0le, hpc1le, hturnle⟩
   by_cases ht0 : (e n).turn = 0
-  · exact l0 n (by simpa [P0, Tla.statePred, Tla.Behavior.drop] using ⟨hpe, ht0⟩)
+  · exact l0 n (by simpa [P0, Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using ⟨hpe, ht0⟩)
   · by_cases ht1 : (e n).turn = 1
     · have hT1 : (Tla.statePred (fun s : St => s.pc0 = 1 ∧ s.turn = 1)) (e.drop n) := by
-        simpa [Tla.statePred, Tla.Behavior.drop] using ⟨hpe, ht1⟩
+        simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using ⟨hpe, ht1⟩
       rcases turn1Chain n (hInvAlways n) hT1 with ⟨m, hq'⟩
       have hP0' : Tla.statePred P0 (e.drop (n + m)) := by
-        simpa [P0, Tla.statePred, Tla.Behavior.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hq'
+        simpa [P0, Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hq'
       rcases l0 (n + m) hP0' with ⟨m2, hQ0⟩
       refine ⟨m + m2, ?_⟩
-      simpa [Q0, Tla.Behavior.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hQ0
+      simpa [Q0, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hQ0
     · exfalso
       omega
 

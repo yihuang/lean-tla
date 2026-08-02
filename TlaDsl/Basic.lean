@@ -1,12 +1,22 @@
+import Cslib.Foundations.Data.OmegaSequence.Defs
+import Cslib.Foundations.Data.OmegaSequence.Init
+
 /-! # TLA-flavored DSL: core semantics
 
-A minimal, mathlib-free semantics for a TLA-like specification language:
-behaviors, temporal predicates, actions, stuttering, fairness.
+A semantics for a TLA-like specification language: behaviors, temporal
+predicates, actions, stuttering, fairness.
+
+Behaviors are CSLib's `ωSequence` (a rich wrapper around `ℕ → σ`), so the
+library inherits its API (`drop`, `take`, `extract`, `const`, `map`, ...) and
+simp lemmas instead of hand-rolling them.
 -/
 
 namespace Tla
 
-abbrev Behavior (σ : Type u) := Nat → σ
+/-- An infinite behavior: the states at every time step. Alias of
+`Cslib.ωSequence`, so `e.drop n`, `e.take n`, `e.extract n m`, `e.map f`
+and friends come from CSLib. -/
+abbrev Behavior (σ : Type u) := Cslib.ωSequence σ
 abbrev Pred (σ : Type u) := Behavior σ → Prop
 abbrev StatePred (σ : Type u) := σ → Prop
 abbrev Action (σ : Type u) := σ → σ → Prop
@@ -35,22 +45,6 @@ def tlaForall {σ : Type u} {α : Type v} (f : α → Pred σ) : Pred σ := fun 
 def tlaExists {σ : Type u} {α : Type v} (f : α → Pred σ) : Pred σ := fun e => ∃ a, f a e
 
 /-! ## Temporal operators -/
-
-/-- Shift a behavior by `n` steps. -/
-def Behavior.drop {σ : Type u} (e : Behavior σ) (n : Nat) : Behavior σ := fun i => e (n + i)
-
-@[simp] theorem drop_zero {σ : Type u} (e : Behavior σ) : e.drop 0 = e := by
-  funext i
-  simp [Behavior.drop]
-
-@[simp] theorem drop_drop {σ : Type u} (e : Behavior σ) (n m : Nat) :
-    (e.drop n).drop m = e.drop (n + m) := by
-  funext i
-  simp [Behavior.drop, Nat.add_assoc]
-
-/-- Map a behavior through a state function. -/
-def Behavior.map {σ : Type u} {τ : Type v} (f : σ → τ) (e : Behavior σ) : Behavior τ :=
-  fun n => f (e n)
 
 /-- `□ F`: F holds at every suffix. -/
 def always {σ : Type u} (F : Pred σ) : Pred σ := fun e => ∀ n, F (e.drop n)
