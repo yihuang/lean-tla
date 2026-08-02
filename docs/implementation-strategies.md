@@ -190,6 +190,14 @@ task-level tactics:
    so arbitrarily long chains work; the left premise must be an assumption,
    which also bounds the search). The Mutex chains (`lB2`, `lCq`, `lDq`, the
    TwoProcess/TwoPhase finals) are now one tactic call each.
+   `tla_leads_to_cases` applies the invariant-guided case split
+   (`leads_to_cases`) — the Mutex `turn1Chain` case analysis is now a single
+   call.
+   `tla_sf1` is demoed on a strong-fairness example
+   (`TlaDsl/Examples/StrongFair.lean`): `SF_v(Set) ⊢ p ↝ q` where `Set`
+   marks a flag; the example documents why the enablement premise is
+   immediate under a stuttering semantics (the standard spec-relative
+   `p ∧ [N]_v ⇒ ◇ Enabled ⟨A⟩_v` SF1 is the tracked refinement).
 4. **Fallback**: `tla_unfold` + `grind` for anything structural.
 
 Lentil's full proof mode is a *second* UX layer; keep it as a candidate but

@@ -52,4 +52,10 @@ macro_rules
       | exact Tla.leadsTo_or _ _ _ _ ⟨by assumption, by assumption⟩
       | exact Tla.leadsTo_trans_entails _ _ _ _ ⟨by assumption, by tla_leads_to⟩))
 
+/-- Invariant-guided case split: apply `leads_to_cases` with the case
+hypothesis `hcase` (a `p → p1 ∨ p2 ∨ p3` split under the invariant) and the
+three case leads-to facts `h1 h2 h3`. -/
+macro "tla_leads_to_cases" h1:ident h2:ident h3:ident hcase:term : tactic =>
+  `(tactic| (exact Tla.leads_to_cases _ _ _ _ _ _ _ ($hcase) ($h1) ($h2) ($h3)))
+
 end Tla

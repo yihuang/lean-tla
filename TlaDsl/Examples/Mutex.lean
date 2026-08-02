@@ -329,11 +329,8 @@ theorem full_liveness :
           omega
   have turn1Chain : ∀ n, Inv (e n) →
       (Tla.statePred (fun s : St => s.pc0 = 1 ∧ s.turn = 1)) (e.drop n) →
-      Tla.eventually (Tla.statePred (fun s : St => s.pc0 = 1 ∧ s.turn = 0)) (e.drop n) :=
-    Tla.leads_to_cases e Inv (Tla.statePred (fun s : St => s.pc0 = 1 ∧ s.turn = 1))
-      (Tla.statePred (fun s : St => s.pc0 = 1 ∧ s.turn = 0))
-      (Tla.statePred PB) (Tla.statePred PC) (Tla.statePred PD)
-      (hcaseTurn1 e) lB lCq lDq
+      Tla.eventually (Tla.statePred (fun s : St => s.pc0 = 1 ∧ s.turn = 0)) (e.drop n) := by
+    tla_leads_to_cases lB lCq lDq (hcaseTurn1 e)
   have hpe : (e n).pc0 = 1 := by simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hp
   rcases hInvAlways n with ⟨h01, hle⟩
   rcases hle with ⟨hpc0le, hpc1le, hturnle⟩

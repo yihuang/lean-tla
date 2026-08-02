@@ -11,5 +11,6 @@ import TlaDsl.ModelCheck
 import TlaDsl.Examples.Counter
 import TlaDsl.Examples.Refinement
 import TlaDsl.Examples.TicketLock
+import TlaDsl.Examples.StrongFair
 import TlaDsl.Examples.Mutex
 import TlaDsl.Examples.ModelCheck
