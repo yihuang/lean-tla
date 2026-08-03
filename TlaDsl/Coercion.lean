@@ -11,6 +11,6 @@ surprises, drop this file and use explicit `⌜ p ⌝` lifts.
 -/
 
 instance {σ : Type u} : Coe (σ → Prop) (Behavior σ → Prop) :=
-  ⟨fun p e => p (e 0)⟩
+  ⟨statePred⟩
 
 end Tla

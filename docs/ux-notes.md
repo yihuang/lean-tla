@@ -17,7 +17,11 @@ UX actually felt like, what broke, and what to prototype next.*
   state predicate into a temporal formula automatically.
 - **Pseudocode brackets** (`TlaDsl/Prime.lean`): `[p| ...]` (state
   predicates), `[a| ...]` (actions with `x'` primes), `[t| ...]` (temporal
-  formulas), implemented by pointwise-lifting macros.
+  formulas). `[p|]/[a|]` are a **dedicated elaborator**: it introduces fresh
+  pre/post state variables and lifts every identifier of state-function
+  type (`σ → α`) to an application `x s` (type-directed, so anything Lean
+  elaborates works inside the brackets); `[t| ...]` stays a small macro that
+  rewrites propositional connectives to the temporal ones.
 - **Rules + tactics** (`TlaDsl/Rules.lean`, `TlaDsl/Tactic.lean`):
   `init_invariant` (plain and stuttering-aware), `leadsTo` transitivity,
   `tla_unfold`, `tla_inv`.
@@ -89,11 +93,13 @@ result: **the pseudocode notation layer works**, including `x'` primes and
    state functions), untyped `∀`/`∃` in `[p|]/[a|]`, temporal `∃`/`∀` in
    `[t| ...]`, `if-then-else`, state/action `→`/`⇒`, and the constants
    `∅ true false`. `Binders.lean` demonstrates the process-quantifier style.
-   Remaining gaps: typed binders (`∃ x : T, ...` — the quote pattern doesn't
-   parse), primed functions applied to arguments (`x'[i]`), qualified names,
-   and plain non-state variables inside brackets (treated as state
-   functions). Options: grow the macro further (fragile), or switch to a
-   small custom elaborator / dedicated syntax category with real grammar.
+   Remaining gaps: primed functions applied to arguments (`x'[i]`), qualified
+   names, and the expected-type heuristic for plain function applications
+   (`Even x` works when the state type is known; with no expected type a
+   bare `Nat → Prop` could be mistaken for a state function). **Resolved:
+   the brackets are now a dedicated elaborator** (type-directed lifting,
+   expected-type threading, real binder parsing), which replaced the
+   syntax-pattern macro wholesale.
 3. **Prime handling is purely syntactic** (strip the trailing `'`), so `x''`
    or qualified names misbehave; documented, acceptable for a prototype.
 4. **`tla_unfold` had to be `simp at *` under `try`**: this Lean version

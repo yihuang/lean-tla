@@ -4,21 +4,25 @@ import TlaDsl.Notation
 
 open scoped Tla
 
-open Lean Macro
+open Lean Elab Term Meta
 
 namespace Tla
 
 /-! # Pseudocode action/state syntax
 
 `[p| x = 0 ∧ y = 0]` elaborates to a `StatePred σ`, and
-`[a| x' = x + 1 ∧ y' = y]` elaborates to an `Action σ`, by lifting the body
-pointwise over a state (resp. pre/post state pair). `x'` denotes the post
-state value of state function `x`, `x` the pre state value.
+`[a| x' = x + 1 ∧ y' = y]` elaborates to an `Action σ`, via a dedicated
+elaborator: it introduces fresh state variables and lifts every identifier
+of state-function type (`σ → α`) to an application of the state variable.
+`x'` denotes the post state value of `x`, `x` the pre state value.
 
-Supported inside the brackets: identifiers (declared state functions),
-numerals, the operators `= ≠ < ≤ > ≥ + - * % ∧ ∨ ¬`, parentheses, and
-function applications (e.g. `Even n`, `f x`) — the arguments are lifted
-pointwise. Type ascriptions are ignored.
+Because lifting is type-directed rather than syntax-pattern-based, the
+brackets accept anything Lean elaborates: operators and function
+applications (`Even x`, `n % 2`), `if-then-else`, typed and bounded
+quantifiers (`∀ x : T, ...`, `∀ x ∈ S, ...` over set-valued state
+functions), constants, and plain non-state values (kept as-is).
+`[t| ...]` rewrites propositional connectives to the temporal ones and
+leaves everything else alone.
 -/
 
 /-! ## Pointwise operators at the state level -/
@@ -45,6 +49,7 @@ abbrev actNe {σ : Type u} {α : Type v} (f g : σ → σ → α) : σ → σ �
 abbrev actAnd {σ : Type u} (f g : σ → σ → Prop) : σ → σ → Prop := fun s t => f s t ∧ g s t
 abbrev actOr {σ : Type u} (f g : σ → σ → Prop) : σ → σ → Prop := fun s t => f s t ∨ g s t
 abbrev actNot {σ : Type u} (f : σ → σ → Prop) : σ → σ → Prop := fun s t => ¬ f s t
+abbrev actImp {σ : Type u} (f g : σ → σ → Prop) : σ → σ → Prop := fun s t => f s t → g s t
 abbrev actAdd {σ : Type u} {α : Type v} [Add α] (f g : σ → σ → α) : σ → σ → α := fun s t => f s t + g s t
 abbrev actSub {σ : Type u} {α : Type v} [Sub α] (f g : σ → σ → α) : σ → σ → α := fun s t => f s t - g s t
 abbrev actMul {σ : Type u} {α : Type v} [Mul α] (f g : σ → σ → α) : σ → σ → α := fun s t => f s t * g s t
@@ -54,207 +59,361 @@ abbrev actGt {σ : Type u} {α : Type v} [LT α] (f g : σ → σ → α) : σ �
 abbrev actGe {σ : Type u} {α : Type v} [LE α] (f g : σ → σ → α) : σ → σ → Prop := fun s t => f s t ≥ g s t
 abbrev actMod {σ : Type u} {α : Type v} [Mod α] (f g : σ → σ → α) : σ → σ → α := fun s t => f s t % g s t
 
-/-! ## The lifting macros -/
+/-! ## The lifting elaborators -/
 
-/-- Lift a `[p| ...]` body to a state predicate. `bound` tracks the
-identifiers bound by `∀`/`∃` inside the body (they are plain values, not
-state functions). -/
-partial def liftState (bound : Array Name) (stx : TSyntax `term) : MacroM (TSyntax `term) :=
-  match stx with
-  | `(($e)) => liftState bound e
-  | `(($e : $_)) => liftState bound e
-  | `(∃ $x:ident ∈ $S, $b) => do
-      let lS ← liftState bound S
-      let lb ← liftState (bound.push x.getId) b
-      `(fun s => ∃ $x:ident ∈ $lS s, $lb s)
-  | `(∃ $x:ident, $b) => do
-      let lb ← liftState (bound.push x.getId) b
-      `(fun s => ∃ $x:ident, $lb s)
-  | `(∀ $x:ident ∈ $S, $b) => do
-      let lS ← liftState bound S
-      let lb ← liftState (bound.push x.getId) b
-      `(fun s => ∀ $x:ident ∈ $lS s, $lb s)
-  | `(∀ $x:ident, $b) => do
-      let lb ← liftState (bound.push x.getId) b
-      `(fun s => ∀ $x:ident, $lb s)
-  | `(if $c then $a else $b) => do
-      let lc ← liftState bound c
-      let la ← liftState bound a
-      let lb ← liftState bound b
-      `(fun s => if $lc s then $la s else $lb s)
-  | `($a % $b) => do
-      let la ← liftState bound a
-      let lb ← liftState bound b
-      `(stMod $la $lb)
-  | `($a + $b) => do
-      let la ← liftState bound a
-      let lb ← liftState bound b
-      `(stAdd $la $lb)
-  | `($a - $b) => do
-      let la ← liftState bound a
-      let lb ← liftState bound b
-      `(stSub $la $lb)
-  | `($a * $b) => do
-      let la ← liftState bound a
-      let lb ← liftState bound b
-      `(stMul $la $lb)
-  | `($a = $b) => do
-      let la ← liftState bound a
-      let lb ← liftState bound b
-      `(stEq $la $lb)
-  | `($a < $b) => do
-      let la ← liftState bound a
-      let lb ← liftState bound b
-      `(stLt $la $lb)
-  | `($a ≤ $b) => do
-      let la ← liftState bound a
-      let lb ← liftState bound b
-      `(stLe $la $lb)
-  | `($a > $b) => do
-      let la ← liftState bound a
-      let lb ← liftState bound b
-      `(stGt $la $lb)
-  | `($a ≥ $b) => do
-      let la ← liftState bound a
-      let lb ← liftState bound b
-      `(stGe $la $lb)
-  | `($a ≠ $b) => do
-      let la ← liftState bound a
-      let lb ← liftState bound b
-      `(stNe $la $lb)
-  | `($a ∧ $b) => do
-      let la ← liftState bound a
-      let lb ← liftState bound b
-      `(stAnd $la $lb)
-  | `($a ∨ $b) => do
-      let la ← liftState bound a
-      let lb ← liftState bound b
-      `(stOr $la $lb)
-  | `($a → $b) => do
-      let la ← liftState bound a
-      let lb ← liftState bound b
-      `(stImp $la $lb)
-  | `($a ⇒ $b) => do
-      let la ← liftState bound a
-      let lb ← liftState bound b
-      `(stImp $la $lb)
-  | `(¬ $a) => do
-      let la ← liftState bound a
-      `(stNot $la)
-  | `($x:ident) =>
-      if bound.contains x.getId then
-        `(fun s => $x)
-      else
-        `(fun s => $x s)
-  | `($n:num) => `(fun s => $n)
-  | `(∅) => `(fun s => ∅)
-  | `(true) => `(fun s => true)
-  | `(false) => `(fun s => false)
-  | `($f $a) => do
-      let la ← liftState bound a
-      `(fun s => $f ($la s))
-  | _ => Macro.throwError s!"[p| ...]: unsupported syntax in state predicate: {stx}"
+/-- The element type of a set-valued term (`Finset α`, `Set α`, or
+`α → Prop`). -/
+def elabElemType (lS : Expr) : TermElabM Expr := do
+  let t ← whnf (← inferType lS)
+  match t with
+  | .forallE _ α β _ =>
+      if (← isDefEq β (mkSort Level.zero)) then pure α
+      else throwError s!"[p|]/[a| ...]: unsupported set type: {t}"
+  | .app f a =>
+      if f.isConst && f.constName == ``Finset then pure a
+      else throwError s!"[p|]/[a| ...]: unsupported set type: {t}"
+  | _ => throwError s!"[p|]/[a| ...]: unsupported set type: {t}"
 
-/-- Lift an `[a| ...]` body to an action. `x'` is the post value of `x`. -/
-partial def liftAction (bound : Array Name) (stx : TSyntax `term) : MacroM (TSyntax `term) :=
+/-- The `Prop` type, used as the expected type of formulas. -/
+def propType : Expr := mkSort Level.zero
+
+/--
+Build `constName xs` like `mkAppM`, but without `withNewMCtxDepth`.
+`mkAppM` bumps the metavariable depth and refuses to assign metavariables
+created outside that scope, which breaks elaboration of untyped binders
+(`∃ x, x = n` must assign the domain metavariable from inside `Eq`).
+Here the argument-type checks run at the caller's depth, so outer
+metavariables are assignable; instance arguments are synthesized after the
+argument checks, once the instance type is fully determined.
+-/
+partial def mkOpApp (constName : Name) (xs : Array Expr) : TermElabM Expr := do
+  let cinfo ← getConstInfo constName
+  let us ← cinfo.levelParams.mapM fun _ => mkFreshLevelMVar
+  let f := Lean.mkConst constName us
+  let fType ← instantiateTypeLevelParams cinfo.toConstantVal us
+  let rec loop (type : Expr) (i : Nat) (j : Nat) (args : Array Expr)
+      (insts : Array MVarId) : TermElabM Expr := do
+    if h : i >= xs.size then
+      for inst in insts do
+        let instType ← instantiateMVars (← inst.getType)
+        let val ← synthInstance instType
+        inst.assign val
+      pure (mkAppN f args)
+    else match type with
+      | .forallE _ d b bi =>
+          let d := d.instantiateRevRange j args.size args
+          match bi with
+          | .implicit | .strictImplicit =>
+              let mvar ← mkFreshExprMVar d
+              loop b i j (args.push mvar) insts
+          | .instImplicit =>
+              let mvar ← mkFreshExprMVar d MetavarKind.synthetic
+              loop b i j (args.push mvar) (insts.push mvar.mvarId!)
+          | _ =>
+              let x := xs[i]
+              let xType ← inferType x
+              if (← withAtLeastTransparency .default (isDefEq d xType)) then
+                loop b (i + 1) j (args.push x) insts
+              else
+                throwError "mkOpApp {constName}: argument type mismatch: {x} has type {xType} but {d} is expected"
+      | type =>
+          let type := type.instantiateRevRange j args.size args
+          let type ← whnfD type
+          if type.isForall then loop type i args.size args insts
+          else throwError "mkOpApp {constName}: too many explicit arguments"
+  loop fType 0 0 #[] #[]
+
+/-- Elaborate a term with the state variable `s` in scope, lifting
+identifiers of state-function type (`σ → α`) to applications `x s`. `bound`
+guards the identifiers bound by `∀`/`∃` inside the body. The expected type
+is threaded through so that untyped literals (`0`, `∅`) are pinned by their
+context, mirroring Lean's bidirectional elaboration. -/
+partial def elabStateLiftCore (bound : NameSet) (s : Expr) (expected? : Option Expr)
+    (stx : Syntax) : TermElabM Expr := do
   match stx with
-  | `(($e)) => liftAction bound e
-  | `(($e : $_)) => liftAction bound e
+  | `(($e)) => elabStateLiftCore bound s expected? e
+  | `(($e : $T)) => do
+      let t ← Term.elabType T
+      elabStateLiftCore bound s (some t) e
+  | `(∃ $x:ident : $T, $b) => do
+      let t ← Term.elabType T
+      withLocalDecl x.getId .default t fun xv => do
+        let lb ← elabStateLiftCore (bound.insert x.getId) s expected? b
+        let lam ← mkLambdaFVars #[xv] lb
+        mkOpApp ``Exists #[lam]
   | `(∃ $x:ident ∈ $S, $b) => do
-      let lS ← liftState bound S
-      let lb ← liftAction (bound.push x.getId) b
-      `(fun st0 st1 => ∃ $x:ident ∈ $lS st0, $lb st0 st1)
-  | `(∀ $x:ident ∈ $S, $b) => do
-      let lS ← liftState bound S
-      let lb ← liftAction (bound.push x.getId) b
-      `(fun st0 st1 => ∀ $x:ident ∈ $lS st0, $lb st0 st1)
+      let lS ← elabStateLiftCore bound s none S
+      let elemType ← elabElemType lS
+      withLocalDecl x.getId .default elemType fun xv => do
+        let lb ← elabStateLiftCore (bound.insert x.getId) s expected? b
+        let mem ← mkOpApp ``Membership.mem #[lS, xv]
+        let conj ← mkOpApp ``And #[mem, lb]
+        let lam ← mkLambdaFVars #[xv] conj
+        mkOpApp ``Exists #[lam]
   | `(∃ $x:ident, $b) => do
-      let lb ← liftAction (bound.push x.getId) b
-      `(fun st0 st1 => ∃ $x:ident, $lb st0 st1)
+      let t ← mkFreshExprMVar (some (mkSort (Level.succ Level.zero)))
+      withLocalDecl x.getId .default t fun xv => do
+        let lb ← elabStateLiftCore (bound.insert x.getId) s expected? b
+        let lam ← mkLambdaFVars #[xv] lb
+        mkOpApp ``Exists #[lam]
+  | `(∀ $x:ident : $T, $b) => do
+      let t ← Term.elabType T
+      withLocalDecl x.getId .default t fun xv => do
+        let lb ← elabStateLiftCore (bound.insert x.getId) s expected? b
+        mkForallFVars #[xv] lb
+  | `(∀ $x:ident ∈ $S, $b) => do
+      let lS ← elabStateLiftCore bound s none S
+      let elemType ← elabElemType lS
+      withLocalDecl x.getId .default elemType fun xv => do
+        let lb ← elabStateLiftCore (bound.insert x.getId) s expected? b
+        let mem ← mkOpApp ``Membership.mem #[lS, xv]
+        let imp ← withLocalDecl `_h .default mem fun h => mkForallFVars #[h] lb
+        mkForallFVars #[xv] imp
   | `(∀ $x:ident, $b) => do
-      let lb ← liftAction (bound.push x.getId) b
-      `(fun st0 st1 => ∀ $x:ident, $lb st0 st1)
+      let t ← mkFreshExprMVar (some (mkSort (Level.succ Level.zero)))
+      withLocalDecl x.getId .default t fun xv => do
+        let lb ← elabStateLiftCore (bound.insert x.getId) s expected? b
+        mkForallFVars #[xv] lb
   | `(if $c then $a else $b) => do
-      let lc ← liftState bound c
-      let la ← liftAction bound a
-      let lb ← liftAction bound b
-      `(fun st0 st1 => if $lc st0 then $la st0 st1 else $lb st0 st1)
+      let lc ← elabStateLiftCore bound s (some propType) c
+      let la ← elabStateLiftCore bound s expected? a
+      let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      mkOpApp ``ite #[lc, la, lb]
   | `($a % $b) => do
-      let la ← liftAction bound a
-      let lb ← liftAction bound b
-      `(actMod $la $lb)
+      let la ← elabStateLiftCore bound s expected? a
+      let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      mkOpApp ``HMod.hMod #[la, lb]
   | `($a + $b) => do
-      let la ← liftAction bound a
-      let lb ← liftAction bound b
-      `(actAdd $la $lb)
+      let la ← elabStateLiftCore bound s expected? a
+      let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      mkOpApp ``HAdd.hAdd #[la, lb]
   | `($a - $b) => do
-      let la ← liftAction bound a
-      let lb ← liftAction bound b
-      `(actSub $la $lb)
+      let la ← elabStateLiftCore bound s expected? a
+      let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      mkOpApp ``HSub.hSub #[la, lb]
   | `($a * $b) => do
-      let la ← liftAction bound a
-      let lb ← liftAction bound b
-      `(actMul $la $lb)
+      let la ← elabStateLiftCore bound s expected? a
+      let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      mkOpApp ``HMul.hMul #[la, lb]
   | `($a = $b) => do
-      let la ← liftAction bound a
-      let lb ← liftAction bound b
-      `(actEq $la $lb)
+      let la ← elabStateLiftCore bound s none a
+      let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      mkOpApp ``Eq #[la, lb]
   | `($a < $b) => do
-      let la ← liftAction bound a
-      let lb ← liftAction bound b
-      `(actLt $la $lb)
+      let la ← elabStateLiftCore bound s none a
+      let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      mkOpApp ``LT.lt #[la, lb]
   | `($a ≤ $b) => do
-      let la ← liftAction bound a
-      let lb ← liftAction bound b
-      `(actLe $la $lb)
+      let la ← elabStateLiftCore bound s none a
+      let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      mkOpApp ``LE.le #[la, lb]
   | `($a > $b) => do
-      let la ← liftAction bound a
-      let lb ← liftAction bound b
-      `(actGt $la $lb)
+      let la ← elabStateLiftCore bound s none a
+      let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      mkOpApp ``GT.gt #[la, lb]
   | `($a ≥ $b) => do
-      let la ← liftAction bound a
-      let lb ← liftAction bound b
-      `(actGe $la $lb)
+      let la ← elabStateLiftCore bound s none a
+      let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      mkOpApp ``GE.ge #[la, lb]
   | `($a ≠ $b) => do
-      let la ← liftAction bound a
-      let lb ← liftAction bound b
-      `(actNe $la $lb)
+      let la ← elabStateLiftCore bound s none a
+      let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      mkOpApp ``Ne #[la, lb]
   | `($a ∧ $b) => do
-      let la ← liftAction bound a
-      let lb ← liftAction bound b
-      `(actAnd $la $lb)
+      let la ← elabStateLiftCore bound s (some propType) a
+      let lb ← elabStateLiftCore bound s (some propType) b
+      mkOpApp ``And #[la, lb]
   | `($a ∨ $b) => do
-      let la ← liftAction bound a
-      let lb ← liftAction bound b
-      `(actOr $la $lb)
+      let la ← elabStateLiftCore bound s (some propType) a
+      let lb ← elabStateLiftCore bound s (some propType) b
+      mkOpApp ``Or #[la, lb]
   | `($a → $b) => do
-      let la ← liftAction bound a
-      let lb ← liftAction bound b
-      `(actImp $la $lb)
+      let la ← elabStateLiftCore bound s (some propType) a
+      let lb ← elabStateLiftCore bound s (some propType) b
+      withLocalDecl `_h .default la fun h => mkForallFVars #[h] lb
   | `($a ⇒ $b) => do
-      let la ← liftAction bound a
-      let lb ← liftAction bound b
-      `(actImp $la $lb)
+      let la ← elabStateLiftCore bound s (some propType) a
+      let lb ← elabStateLiftCore bound s (some propType) b
+      withLocalDecl `_h .default la fun h => mkForallFVars #[h] lb
   | `(¬ $a) => do
-      let la ← liftAction bound a
-      `(actNot $la)
-  | `($x:ident) =>
-      let n := x.getId.toString
-      if n.endsWith "'" then
-        let base : TSyntax `ident := ⟨mkIdent (n.dropEnd 1).toName⟩
-        `(fun st0 st1 => $base st1)
-      else if bound.contains x.getId then
-        `(fun st0 st1 => $x)
-      else
-        `(fun st0 st1 => $x st0)
-  | `($n:num) => `(fun st0 st1 => $n)
-  | `(∅) => `(fun st0 st1 => ∅)
-  | `(true) => `(fun st0 st1 => true)
-  | `(false) => `(fun st0 st1 => false)
-  | `($f $a) => do
-      let la ← liftAction bound a
-      `(fun st0 st1 => $f ($la st0 st1))
-  | _ => Macro.throwError s!"[a| ...]: unsupported syntax in action: {stx}"
+      let la ← elabStateLiftCore bound s (some propType) a
+      mkOpApp ``Not #[la]
+  | stx =>
+      if stx.isIdent then do
+        let id := stx.getId
+        if bound.contains id then
+          Term.elabIdent stx none
+        else
+          let e ← Term.elabIdent stx none
+          let t ← whnf (← inferType e)
+          match t with
+          | .forallE _ d _ _ =>
+              if (← isDefEq d (← inferType s)) then pure (mkApp e s) else pure e
+          | _ => pure e
+      else if stx.isOfKind ``Lean.Parser.Term.app then do
+        let args := (stx.getArg 1).getArgs
+        let eas ← args.mapM fun a => elabStateLiftCore bound s none a
+        let ef ← elabStateLiftCore bound s expected? stx[0]
+        pure (eas.foldl (fun acc e => mkApp acc e) ef)
+      else do
+        let t ← match expected? with
+          | some t => pure t
+          | none => mkFreshExprMVar (some (mkSort (Level.succ Level.zero)))
+        Term.elabTerm stx (some t)
+
+/-- Entry point: elaborate with no expected type. -/
+partial def elabStateLift (bound : NameSet) (s : Expr) (stx : Syntax) : TermElabM Expr :=
+  elabStateLiftCore bound s none stx
+
+/-- Elaborate an `[a| ...]` body with pre/post state variables `st0 st1` in
+scope: unprimed state functions apply to `st0`, primed ones to `st1`. -/
+partial def elabActionLiftCore (bound : NameSet) (st0 st1 : Expr) (expected? : Option Expr)
+    (stx : Syntax) : TermElabM Expr := do
+  match stx with
+  | `(($e)) => elabActionLiftCore bound st0 st1 expected? e
+  | `(($e : $T)) => do
+      let t ← Term.elabType T
+      elabActionLiftCore bound st0 st1 (some t) e
+  | `(∃ $x:ident : $T, $b) => do
+      let t ← Term.elabType T
+      withLocalDecl x.getId .default t fun xv => do
+        let lb ← elabActionLiftCore (bound.insert x.getId) st0 st1 expected? b
+        let lam ← mkLambdaFVars #[xv] lb
+        mkOpApp ``Exists #[lam]
+  | `(∃ $x:ident ∈ $S, $b) => do
+      let lS ← elabStateLiftCore bound st0 none S
+      let elemType ← elabElemType lS
+      withLocalDecl x.getId .default elemType fun xv => do
+        let lb ← elabActionLiftCore (bound.insert x.getId) st0 st1 expected? b
+        let mem ← mkOpApp ``Membership.mem #[lS, xv]
+        let conj ← mkOpApp ``And #[mem, lb]
+        let lam ← mkLambdaFVars #[xv] conj
+        mkOpApp ``Exists #[lam]
+  | `(∃ $x:ident, $b) => do
+      let t ← mkFreshExprMVar (some (mkSort (Level.succ Level.zero)))
+      withLocalDecl x.getId .default t fun xv => do
+        let lb ← elabActionLiftCore (bound.insert x.getId) st0 st1 expected? b
+        let lam ← mkLambdaFVars #[xv] lb
+        mkOpApp ``Exists #[lam]
+  | `(∀ $x:ident : $T, $b) => do
+      let t ← Term.elabType T
+      withLocalDecl x.getId .default t fun xv => do
+        let lb ← elabActionLiftCore (bound.insert x.getId) st0 st1 expected? b
+        mkForallFVars #[xv] lb
+  | `(∀ $x:ident ∈ $S, $b) => do
+      let lS ← elabStateLiftCore bound st0 none S
+      let elemType ← elabElemType lS
+      withLocalDecl x.getId .default elemType fun xv => do
+        let lb ← elabActionLiftCore (bound.insert x.getId) st0 st1 expected? b
+        let mem ← mkOpApp ``Membership.mem #[lS, xv]
+        let imp ← withLocalDecl `_h .default mem fun h => mkForallFVars #[h] lb
+        mkForallFVars #[xv] imp
+  | `(∀ $x:ident, $b) => do
+      let t ← mkFreshExprMVar (some (mkSort (Level.succ Level.zero)))
+      withLocalDecl x.getId .default t fun xv => do
+        let lb ← elabActionLiftCore (bound.insert x.getId) st0 st1 expected? b
+        mkForallFVars #[xv] lb
+  | `(if $c then $a else $b) => do
+      let lc ← elabStateLiftCore bound st0 (some propType) c
+      let la ← elabActionLiftCore bound st0 st1 expected? a
+      let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      mkOpApp ``ite #[lc, la, lb]
+  | `($a % $b) => do
+      let la ← elabActionLiftCore bound st0 st1 expected? a
+      let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      mkOpApp ``HMod.hMod #[la, lb]
+  | `($a + $b) => do
+      let la ← elabActionLiftCore bound st0 st1 expected? a
+      let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      mkOpApp ``HAdd.hAdd #[la, lb]
+  | `($a - $b) => do
+      let la ← elabActionLiftCore bound st0 st1 expected? a
+      let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      mkOpApp ``HSub.hSub #[la, lb]
+  | `($a * $b) => do
+      let la ← elabActionLiftCore bound st0 st1 expected? a
+      let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      mkOpApp ``HMul.hMul #[la, lb]
+  | `($a = $b) => do
+      let la ← elabActionLiftCore bound st0 st1 none a
+      let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      mkOpApp ``Eq #[la, lb]
+  | `($a < $b) => do
+      let la ← elabActionLiftCore bound st0 st1 none a
+      let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      mkOpApp ``LT.lt #[la, lb]
+  | `($a ≤ $b) => do
+      let la ← elabActionLiftCore bound st0 st1 none a
+      let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      mkOpApp ``LE.le #[la, lb]
+  | `($a > $b) => do
+      let la ← elabActionLiftCore bound st0 st1 none a
+      let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      mkOpApp ``GT.gt #[la, lb]
+  | `($a ≥ $b) => do
+      let la ← elabActionLiftCore bound st0 st1 none a
+      let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      mkOpApp ``GE.ge #[la, lb]
+  | `($a ≠ $b) => do
+      let la ← elabActionLiftCore bound st0 st1 none a
+      let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      mkOpApp ``Ne #[la, lb]
+  | `($a ∧ $b) => do
+      let la ← elabActionLiftCore bound st0 st1 (some propType) a
+      let lb ← elabActionLiftCore bound st0 st1 (some propType) b
+      mkOpApp ``And #[la, lb]
+  | `($a ∨ $b) => do
+      let la ← elabActionLiftCore bound st0 st1 (some propType) a
+      let lb ← elabActionLiftCore bound st0 st1 (some propType) b
+      mkOpApp ``Or #[la, lb]
+  | `($a → $b) => do
+      let la ← elabActionLiftCore bound st0 st1 (some propType) a
+      let lb ← elabActionLiftCore bound st0 st1 (some propType) b
+      withLocalDecl `_h .default la fun h => mkForallFVars #[h] lb
+  | `($a ⇒ $b) => do
+      let la ← elabActionLiftCore bound st0 st1 (some propType) a
+      let lb ← elabActionLiftCore bound st0 st1 (some propType) b
+      withLocalDecl `_h .default la fun h => mkForallFVars #[h] lb
+  | `(¬ $a) => do
+      let la ← elabActionLiftCore bound st0 st1 (some propType) a
+      mkOpApp ``Not #[la]
+  | stx =>
+      if stx.isIdent then do
+        let n := stx.getId.toString
+        if n.endsWith "'" then
+          let base : Syntax := mkIdent (n.dropEnd 1).toName
+          let e ← Term.elabIdent base none
+          let t ← whnf (← inferType e)
+          match t with
+          | .forallE _ d _ _ =>
+              if (← isDefEq d (← inferType st0)) then pure (mkApp e st1)
+              else throwError s!"[a| ...]: primed identifier '{base}' is not a state function"
+          | _ => throwError s!"[a| ...]: primed identifier '{base}' is not a state function"
+        else if bound.contains stx.getId then
+          Term.elabIdent stx none
+        else
+          let e ← Term.elabIdent stx none
+          let t ← whnf (← inferType e)
+          match t with
+          | .forallE _ d _ _ =>
+              if (← isDefEq d (← inferType st0)) then pure (mkApp e st0) else pure e
+          | _ => pure e
+      else if stx.isOfKind ``Lean.Parser.Term.app then do
+        let args := (stx.getArg 1).getArgs
+        let eas ← args.mapM fun a => elabActionLiftCore bound st0 st1 none a
+        let ef ← elabActionLiftCore bound st0 st1 expected? stx[0]
+        pure (eas.foldl (fun acc e => mkApp acc e) ef)
+      else do
+        let t ← match expected? with
+          | some t => pure t
+          | none => mkFreshExprMVar (some (mkSort (Level.succ Level.zero)))
+        Term.elabTerm stx (some t)
+
+/-- Entry point: elaborate with no expected type. -/
+partial def elabActionLift (bound : NameSet) (st0 st1 : Expr) (stx : Syntax) : TermElabM Expr :=
+  elabActionLiftCore bound st0 st1 none stx
+
+/-! ## The formula-level lift -/
 
 /-- Rewrite propositional connectives in `[t| ...]` bodies to the lifted ones,
 leaving everything else (lifts, temporal notations, named formulas) alone. -/
@@ -279,10 +438,6 @@ partial def liftFormula (stx : TSyntax `term) : MacroM (TSyntax `term) :=
       let la ← liftFormula a
       let lb ← liftFormula b
       `(tlaImp $la $lb)
-  | `($a ⇒ $b) => do
-      let la ← liftFormula a
-      let lb ← liftFormula b
-      `(tlaImp $la $lb)
   | `(¬ $a) => do
       let la ← liftFormula a
       `(tlaNot $la)
@@ -296,16 +451,27 @@ partial def liftFormula (stx : TSyntax `term) : MacroM (TSyntax `term) :=
   | _ => pure stx
 
 syntax "[p| " term "]" : term
-macro_rules
-  | `([p| $body]) => do
-      let t ← liftState #[] body
-      pure t.raw
+elab "[p| " body:term "]" : term <= expectedType => do
+  let σ ← mkFreshExprMVar (some (mkSort (Level.succ Level.zero)))
+  let t ← whnf expectedType
+  match t with
+  | .forallE _ d _ _ => let _ ← isDefEq σ d
+  | _ => pure ()
+  withLocalDecl `_s .default σ fun s => do
+    let eb ← elabStateLift NameSet.empty s body
+    mkLambdaFVars #[s] eb
 
 syntax "[a| " term "]" : term
-macro_rules
-  | `([a| $body]) => do
-      let t ← liftAction #[] body
-      pure t.raw
+elab "[a| " body:term "]" : term <= expectedType => do
+  let σ ← mkFreshExprMVar (some (mkSort (Level.succ Level.zero)))
+  let t ← whnf expectedType
+  match t with
+  | .forallE _ d _ _ => let _ ← isDefEq σ d
+  | _ => pure ()
+  withLocalDecl `_st0 .default σ fun st0 => do
+    withLocalDecl `_st1 .default σ fun st1 => do
+      let eb ← elabActionLift NameSet.empty st0 st1 body
+      mkLambdaFVars #[st0, st1] eb
 
 syntax "[t| " term "]" : term
 macro_rules
