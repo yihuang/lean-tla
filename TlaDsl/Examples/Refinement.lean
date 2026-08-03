@@ -65,4 +65,32 @@ theorem conc_refines_abs : Tla.RefinesVia f SpecConc SpecAbs := by
   exact Tla.refinement_mapping InitAbs NextAbs VarsAbs InitConc NextConc VarsConc f
     init_refines step_refines
 
+/-! ## Refinement with liveness
+
+The same mapping also refines the *full* canonical forms
+`(Init ∧ □[Next]_v) ∧ L` when the liveness conjunct is preserved by the
+mapping — the Abadi–Lamport theorem with liveness. -/
+
+/-- Liveness conjunct: eventually the visible counter reaches 3. -/
+def LConc : Tla.Pred StConc := [t| ◇ ⌜ (fun s : StConc => s.x = 3) ⌝]
+def LAbs : Tla.Pred StAbs := [t| ◇ ⌜ (fun s : StAbs => s.x = 3) ⌝]
+
+def SpecAbsL : Tla.Pred StAbs := [t| (InitAbs ∧ □[NextAbs]_VarsAbs) ∧ LAbs]
+def SpecConcL : Tla.Pred StConc := [t| (InitConc ∧ □[NextConc]_VarsConc) ∧ LConc]
+
+/-- The liveness conjunct is preserved by the projection mapping. -/
+theorem liveness_refines : ∀ e : Tla.Behavior StConc,
+    LConc e → LAbs (Cslib.ωSequence.map f e) := by
+  intro e hL
+  rcases hL with ⟨n, hp⟩
+  exact ⟨n, by
+    simp [Tla.statePred, f, Cslib.ωSequence.drop] at hp ⊢
+    exact hp⟩
+
+theorem conc_refines_abs_liveness :
+    Tla.RefinesVia f SpecConcL SpecAbsL := by
+  unfold SpecConcL SpecAbsL
+  exact Tla.refinement_mapping_liveness InitAbs NextAbs VarsAbs InitConc NextConc VarsConc
+    LConc LAbs f init_refines step_refines liveness_refines
+
 end TlaDsl.Examples.CounterRefinement

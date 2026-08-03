@@ -12,9 +12,10 @@ formulas (formulas = well-defined predicates on `Behavior / ≈`).
 
 Scope note: `Sim` here is the *finite-stuttering* relation (delete or
 duplicate finitely many equal-state runs). Full TLA also identifies
-behaviors differing in infinitely many stuttering steps; that needs a
-coinductive or block-based definition and is future work (likely with
-mathlib). The finite case already captures the essential meta-theory.
+behaviors differing in infinitely many stuttering steps; that is handled by
+`SimFull` (`TlaDsl/SimFull.lean`, run-compression based) with its own
+preservation theorems. The finite case captures the essential meta-theory;
+the full case lives in the second half of this file and in `SimFull`.
 -/
 
 /-- Stuttering equivalence (finite version): behaviors are equivalent up to
@@ -475,6 +476,25 @@ theorem refinement_mapping {σ τ : Type u} {α β : Type v}
       simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h2 n
     simpa [StutAction, actionPred, Cslib.ωSequence.drop, Cslib.ωSequence.map, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (hstep (e n) (e (n + 1)) hstepC)
 
+/-- Abadi–Lamport refinement with liveness: if the initial/step mapping
+conditions hold and the liveness conjunct `LC` is preserved by the mapping
+(`hL`), then the canonical-form specs refine. This is the full
+`Init ∧ □[Next]_v ∧ L` refinement theorem (Theorem 1 of Abadi–Lamport,
+including the liveness part). -/
+theorem refinement_mapping_liveness {σ τ : Type u} {α β : Type v}
+    (initA : StatePred σ) (nextA : Action σ) (u : σ → α)
+    (initC : StatePred τ) (nextC : Action τ) (v : τ → β)
+    (LC : Pred τ) (LA : Pred σ) (f : τ → σ)
+    (hinit : ∀ s, initC s → initA (f s))
+    (hstep : ∀ s s', (nextC s s' ∨ v s' = v s) →
+      (nextA (f s) (f s') ∨ u (f s') = u (f s)))
+    (hL : ∀ e : Behavior τ, LC e → LA (Cslib.ωSequence.map f e)) :
+    RefinesVia f
+      (tlaAnd (tlaAnd (statePred initC) (stutAlways nextC v)) LC)
+      (tlaAnd (tlaAnd (statePred initA) (stutAlways nextA u)) LA) := by
+  intro e he
+  exact ⟨refinement_mapping initA nextA u initC nextC v f hinit hstep e ⟨he.1.1, he.1.2⟩, hL e he.2⟩
+
 /-- Refinement is transitive. -/
 theorem refines_via_trans {σ τ υ : Type u} (f : τ → σ) (g : υ → τ)
     (conc : Pred υ) (mid : Pred τ) (abs : Pred σ)
@@ -534,6 +554,20 @@ theorem eex_mono {σ : Type u} {τ : Type v} {F G : Pred (σ × τ)} (h : Entail
   intro e hE
   rcases hE with ⟨x, hFx⟩
   exact ⟨x, h (Extend x e) hFx⟩
+
+/-- Hiding internal variables is refinement-sound: if the concrete spec
+(with internal state `ι` visible) refines the abstract one by projecting
+away the internal state, then the hidden spec still refines the abstract
+one. This is the `\EE`/internal-variable half of Abadi–Lamport. -/
+theorem hiding_refines {σ ι : Type u} (conc : Pred (σ × ι)) (abs : Pred σ)
+    (h : RefinesVia (fun st : σ × ι => st.1) conc abs) :
+    Entails (EEx conc) abs := by
+  intro e hE
+  rcases hE with ⟨x, hFx⟩
+  have hmap : Cslib.ωSequence.map (fun st : σ × ι => st.1) (Extend x e) = e := by
+    ext n
+    simp [Cslib.ωSequence.map, Extend]
+  exact (hmap ▸ h (Extend x e) hFx)
 
 /-! ## Canonical-form lemmas -/
 
@@ -788,5 +822,16 @@ theorem map {σ : Type u} {τ : Type v} (x : σ → τ) {e f : Behavior σ} (h :
   simp [Extend, hc]
 
 end SimFull
+
+/-- Hiding preserves full stuttering invariance: if `F` is invariant under
+the full equivalence, so is `\EE x : F`. -/
+theorem stutinv_full_eex {σ : Type u} {τ : Type v} {F : Pred (σ × τ)} (hF : StutInvFull F) :
+    StutInvFull (EEx F) := by
+  intro e f hsim
+  constructor <;> intro hE
+  · rcases hE with ⟨x, hFx⟩
+    exact ⟨x, (hF (Extend x e) (Extend x f) (SimFull.map x hsim)).1 hFx⟩
+  · rcases hE with ⟨x, hFx⟩
+    exact ⟨x, (hF (Extend x e) (Extend x f) (SimFull.map x hsim)).2 hFx⟩
 
 end Tla

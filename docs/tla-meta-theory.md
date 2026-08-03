@@ -83,13 +83,17 @@ DSL as the user-facing layer on top.
 | Theorem | Notes |
 |---|---|
 | refinement mapping soundness | done — `RefinesVia` + `refinement_mapping` (Abadi–Lamport safety part), transitivity and reflexivity |
+| refinement with liveness (full Abadi–Lamport Thm 1) | done — `refinement_mapping_liveness` refines the whole canonical form `Init ∧ □[N]_v ∧ L` given the safety mapping conditions plus a liveness-conjunct preservation premise |
+| `\EE`-hiding is refinement-sound (internal variables) | done — `hiding_refines`: if the concrete spec (with internal state visible) refines the abstract one by projection, the hidden spec still refines it |
 | `\EE` (hiding) laws | done — `EEx`/`Extend` with `stutinv_eex` (hiding preserves stuttering invariance via `Sim.map`), monotonicity |
 | canonical form: `Spec = Init ∧ □[Next]_v ∧ L` decomposition lemmas | done — `spec_init`, `spec_stutAlways`, `spec_fair`, plus `□`/`∧` and `◇`/`∨` distribution |
 
-**Status: slices 1–4 complete.** The semantic core now covers stuttering
-equivalence and the quotient, operator preservation (including fairness),
-the liveness rules (`WF1`/`SF1`), and refinement/hiding — all proved from
-the semantics, kernel-checked, mathlib-free.
+**Status: slices 1–5 complete.** The semantic core now covers stuttering
+equivalence (finite `Sim` and the full `SimFull` run-compression relation),
+the quotient characterization, operator preservation (including fairness
+and `\EE`-hiding under both equivalences), the liveness rules
+(`WF1`/`SF1`), and Abadi–Lamport refinement with liveness and internal
+variables — all proved from the semantics, kernel-checked, zero `sorry`s.
 
 ## Examples putting the meta-theory to work
 

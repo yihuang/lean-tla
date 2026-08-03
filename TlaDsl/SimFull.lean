@@ -670,8 +670,9 @@ abbrev StutQuotFull (σ : Type u) := Quot (SimFull : Behavior σ → Behavior σ
 The preservation theorems of `TlaDsl/Meta.lean`, re-proved for the full
 stuttering equivalence. The `always`/`eventually`/`leadsTo` cases use the
 suffix-matching lemmas above; the action-level (`NstutInv`, `WF_v`, `SF_v`)
-cases still need a step-matching lemma for `SimFull` and are tracked as the
-remaining migration work.
+cases use `sim_step` and live in `TlaDsl/Meta.lean` (`NstutInvFull`,
+`stutinv_full_WF_v`, `stutinv_full_SF_v`, ...), with `SimFull.map`
+completing the refinement-side migration.
 -/
 
 /-- A formula is invariant under full stuttering equivalence. -/
