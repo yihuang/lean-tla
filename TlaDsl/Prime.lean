@@ -178,46 +178,57 @@ partial def elabStateLiftCore (bound : NameSet) (s : Expr) (expected? : Option E
       let lc ← elabStateLiftCore bound s (some propType) c
       let la ← elabStateLiftCore bound s expected? a
       let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``ite #[lc, la, lb]
   | `($a % $b) => do
       let la ← elabStateLiftCore bound s expected? a
       let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``HMod.hMod #[la, lb]
   | `($a + $b) => do
       let la ← elabStateLiftCore bound s expected? a
       let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``HAdd.hAdd #[la, lb]
   | `($a - $b) => do
       let la ← elabStateLiftCore bound s expected? a
       let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``HSub.hSub #[la, lb]
   | `($a * $b) => do
       let la ← elabStateLiftCore bound s expected? a
       let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``HMul.hMul #[la, lb]
   | `($a = $b) => do
       let la ← elabStateLiftCore bound s none a
       let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``Eq #[la, lb]
   | `($a < $b) => do
       let la ← elabStateLiftCore bound s none a
       let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``LT.lt #[la, lb]
   | `($a ≤ $b) => do
       let la ← elabStateLiftCore bound s none a
       let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``LE.le #[la, lb]
   | `($a > $b) => do
       let la ← elabStateLiftCore bound s none a
       let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``GT.gt #[la, lb]
   | `($a ≥ $b) => do
       let la ← elabStateLiftCore bound s none a
       let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``GE.ge #[la, lb]
   | `($a ≠ $b) => do
       let la ← elabStateLiftCore bound s none a
       let lb ← elabStateLiftCore bound s (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``Ne #[la, lb]
   | `($a ∧ $b) => do
       let la ← elabStateLiftCore bound s (some propType) a
@@ -241,7 +252,9 @@ partial def elabStateLiftCore (bound : NameSet) (s : Expr) (expected? : Option E
   | stx =>
       if stx.isIdent then do
         let id := stx.getId
-        if bound.contains id then
+        if id == `true then pure (mkConst ``True)
+        else if id == `false then pure (mkConst ``False)
+        else if bound.contains id then
           Term.elabIdent stx none
         else
           let e ← Term.elabIdent stx none
@@ -317,46 +330,57 @@ partial def elabActionLiftCore (bound : NameSet) (st0 st1 : Expr) (expected? : O
       let lc ← elabStateLiftCore bound st0 (some propType) c
       let la ← elabActionLiftCore bound st0 st1 expected? a
       let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``ite #[lc, la, lb]
   | `($a % $b) => do
       let la ← elabActionLiftCore bound st0 st1 expected? a
       let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``HMod.hMod #[la, lb]
   | `($a + $b) => do
       let la ← elabActionLiftCore bound st0 st1 expected? a
       let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``HAdd.hAdd #[la, lb]
   | `($a - $b) => do
       let la ← elabActionLiftCore bound st0 st1 expected? a
       let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``HSub.hSub #[la, lb]
   | `($a * $b) => do
       let la ← elabActionLiftCore bound st0 st1 expected? a
       let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``HMul.hMul #[la, lb]
   | `($a = $b) => do
       let la ← elabActionLiftCore bound st0 st1 none a
       let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``Eq #[la, lb]
   | `($a < $b) => do
       let la ← elabActionLiftCore bound st0 st1 none a
       let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``LT.lt #[la, lb]
   | `($a ≤ $b) => do
       let la ← elabActionLiftCore bound st0 st1 none a
       let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``LE.le #[la, lb]
   | `($a > $b) => do
       let la ← elabActionLiftCore bound st0 st1 none a
       let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``GT.gt #[la, lb]
   | `($a ≥ $b) => do
       let la ← elabActionLiftCore bound st0 st1 none a
       let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``GE.ge #[la, lb]
   | `($a ≠ $b) => do
       let la ← elabActionLiftCore bound st0 st1 none a
       let lb ← elabActionLiftCore bound st0 st1 (some (← inferType la)) b
+      let _ ← isDefEq (← inferType la) (← inferType lb)
       mkOpApp ``Ne #[la, lb]
   | `($a ∧ $b) => do
       let la ← elabActionLiftCore bound st0 st1 (some propType) a
@@ -380,7 +404,9 @@ partial def elabActionLiftCore (bound : NameSet) (st0 st1 : Expr) (expected? : O
   | stx =>
       if stx.isIdent then do
         let n := stx.getId.toString
-        if n.endsWith "'" then
+        if n == "true" then pure (mkConst ``True)
+        else if n == "false" then pure (mkConst ``False)
+        else if n.endsWith "'" then
           let base : Syntax := mkIdent (n.dropEnd 1).toName
           let e ← Term.elabIdent base none
           let t ← whnf (← inferType e)

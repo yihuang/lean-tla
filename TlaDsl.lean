@@ -15,3 +15,4 @@ import TlaDsl.Examples.StrongFair
 import TlaDsl.Examples.Binders
 import TlaDsl.Examples.Mutex
 import TlaDsl.Examples.ModelCheck
+import TlaDsl.Examples.Brackets
