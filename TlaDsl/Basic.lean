@@ -21,6 +21,17 @@ abbrev Pred (σ : Type u) := Behavior σ → Prop
 abbrev StatePred (σ : Type u) := σ → Prop
 abbrev Action (σ : Type u) := σ → σ → Prop
 
+/-! ## Function indexing (`f[i]`)
+
+TLA stores per-process state as functions (`proc : St → Nat → ProcState`)
+and reads it as `proc[i]`. Lean has no `GetElem` instance for function
+types, so we provide the total one: `f[i]` is definitionally `f i`.
+-/
+
+instance instGetElemFunction {α : Type u} {β : Type v} :
+    GetElem (α → β) α β (fun _ _ => True) where
+  getElem f i _ := f i
+
 /-! ## Lifting between the three levels -/
 
 /-- A state predicate seen as a temporal formula (only the first state matters). -/

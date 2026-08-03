@@ -86,11 +86,8 @@ Here the argument-type checks run at the caller's depth, so outer
 metavariables are assignable; instance arguments are synthesized after the
 argument checks, once the instance type is fully determined.
 -/
-partial def mkOpApp (constName : Name) (xs : Array Expr) : TermElabM Expr := do
-  let cinfo ← getConstInfo constName
-  let us ← cinfo.levelParams.mapM fun _ => mkFreshLevelMVar
-  let f := Lean.mkConst constName us
-  let fType ← instantiateTypeLevelParams cinfo.toConstantVal us
+partial def mkOpAppExpr (f : Expr) (xs : Array Expr) : TermElabM Expr := do
+  let fType ← inferType f
   let rec loop (type : Expr) (i : Nat) (j : Nat) (args : Array Expr)
       (insts : Array MVarId) : TermElabM Expr := do
     if h : i >= xs.size then
@@ -115,13 +112,16 @@ partial def mkOpApp (constName : Name) (xs : Array Expr) : TermElabM Expr := do
               if (← withAtLeastTransparency .default (isDefEq d xType)) then
                 loop b (i + 1) j (args.push x) insts
               else
-                throwError "mkOpApp {constName}: argument type mismatch: {x} has type {xType} but {d} is expected"
+                throwError "mkOpAppExpr: argument type mismatch: {x} has type {xType} but {d} is expected"
       | type =>
           let type := type.instantiateRevRange j args.size args
           let type ← whnfD type
           if type.isForall then loop type i args.size args insts
-          else throwError "mkOpApp {constName}: too many explicit arguments"
+          else throwError "mkOpAppExpr: too many explicit arguments"
   loop fType 0 0 #[] #[]
+
+partial def mkOpApp (constName : Name) (xs : Array Expr) : TermElabM Expr := do
+  mkOpAppExpr (← mkConstWithFreshMVarLevels constName) xs
 
 /-- Elaborate a term with the state variable `s` in scope, lifting
 identifiers of state-function type (`σ → α`) to applications `x s`. `bound`
@@ -250,7 +250,40 @@ partial def elabStateLiftCore (bound : NameSet) (s : Expr) (expected? : Option E
       let la ← elabStateLiftCore bound s (some propType) a
       mkOpApp ``Not #[la]
   | stx =>
-      if stx.isIdent then do
+      if stx.isOfKind ``«term__[_]» then do
+        let la ← elabStateLiftCore bound s expected? stx[0]
+        let li ← elabStateLiftCore bound s none stx[2]
+        let ty ← whnf (← inferType la)
+        if ty.isForall then do
+          let liTy ← inferType li
+          match ty with
+          | .forallE _ d _ _ =>
+              unless (← isDefEq liTy d) do
+                throwError "[p|]/[a| ...]: index type mismatch: {li} : {liTy} but the collection expects {d}"
+          | _ => pure ()
+          pure (mkApp la li)
+        else do
+          let laSyn ← Term.exprToSyntax la
+          let liSyn ← Term.exprToSyntax li
+          let t ← match expected? with
+            | some t => pure t
+            | none => mkFreshExprMVar (some (mkSort (Level.succ Level.zero)))
+          Term.elabTerm (← `($laSyn[$liSyn])) (some t)
+      else if stx.isOfKind ``Lean.Parser.Term.proj then do
+        let la ← elabStateLiftCore bound s expected? stx[0]
+        let ty ← whnf (← inferType la)
+        match ty with
+        | .const s _ =>
+            let proj ← mkConstWithFreshMVarLevels (s ++ stx[2].getId)
+            pure (mkApp proj la)
+        | _ =>
+            let laSyn ← Term.exprToSyntax la
+            let field := mkIdent (stx[2].getId)
+            let t ← match expected? with
+              | some t => pure t
+              | none => mkFreshExprMVar (some (mkSort (Level.succ Level.zero)))
+            Term.elabTerm (← `($laSyn.$field:ident)) (some t)
+      else if stx.isIdent then do
         let id := stx.getId
         if id == `true then pure (mkConst ``True)
         else if id == `false then pure (mkConst ``False)
@@ -267,7 +300,7 @@ partial def elabStateLiftCore (bound : NameSet) (s : Expr) (expected? : Option E
         let args := (stx.getArg 1).getArgs
         let eas ← args.mapM fun a => elabStateLiftCore bound s none a
         let ef ← elabStateLiftCore bound s expected? stx[0]
-        pure (eas.foldl (fun acc e => mkApp acc e) ef)
+        mkOpAppExpr ef eas
       else do
         let t ← match expected? with
           | some t => pure t
@@ -402,7 +435,40 @@ partial def elabActionLiftCore (bound : NameSet) (st0 st1 : Expr) (expected? : O
       let la ← elabActionLiftCore bound st0 st1 (some propType) a
       mkOpApp ``Not #[la]
   | stx =>
-      if stx.isIdent then do
+      if stx.isOfKind ``«term__[_]» then do
+        let la ← elabActionLiftCore bound st0 st1 expected? stx[0]
+        let li ← elabActionLiftCore bound st0 st1 none stx[2]
+        let ty ← whnf (← inferType la)
+        if ty.isForall then do
+          let liTy ← inferType li
+          match ty with
+          | .forallE _ d _ _ =>
+              unless (← isDefEq liTy d) do
+                throwError "[p|]/[a| ...]: index type mismatch: {li} : {liTy} but the collection expects {d}"
+          | _ => pure ()
+          pure (mkApp la li)
+        else do
+          let laSyn ← Term.exprToSyntax la
+          let liSyn ← Term.exprToSyntax li
+          let t ← match expected? with
+            | some t => pure t
+            | none => mkFreshExprMVar (some (mkSort (Level.succ Level.zero)))
+          Term.elabTerm (← `($laSyn[$liSyn])) (some t)
+      else if stx.isOfKind ``Lean.Parser.Term.proj then do
+        let la ← elabActionLiftCore bound st0 st1 expected? stx[0]
+        let ty ← whnf (← inferType la)
+        match ty with
+        | .const s _ =>
+            let proj ← mkConstWithFreshMVarLevels (s ++ stx[2].getId)
+            pure (mkApp proj la)
+        | _ =>
+            let laSyn ← Term.exprToSyntax la
+            let field := mkIdent (stx[2].getId)
+            let t ← match expected? with
+              | some t => pure t
+              | none => mkFreshExprMVar (some (mkSort (Level.succ Level.zero)))
+            Term.elabTerm (← `($laSyn.$field:ident)) (some t)
+      else if stx.isIdent then do
         let n := stx.getId.toString
         if n == "true" then pure (mkConst ``True)
         else if n == "false" then pure (mkConst ``False)
@@ -428,7 +494,7 @@ partial def elabActionLiftCore (bound : NameSet) (st0 st1 : Expr) (expected? : O
         let args := (stx.getArg 1).getArgs
         let eas ← args.mapM fun a => elabActionLiftCore bound st0 st1 none a
         let ef ← elabActionLiftCore bound st0 st1 expected? stx[0]
-        pure (eas.foldl (fun acc e => mkApp acc e) ef)
+        mkOpAppExpr ef eas
       else do
         let t ← match expected? with
           | some t => pure t

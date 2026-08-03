@@ -142,6 +142,40 @@ example : [a| x = 0 → x' = x + 1] =
     fun s s' : St => x s = 0 → x s' = x s + 1 := by
   rfl
 
+/-! ## TLA functions: indexing and projection
+
+The TLA idiom `proc : St → Nat → ProcState` with reads `proc[i]`, primed
+reads `proc'[i]`, and field projection `proc[i].pc`.
+-/
+
+structure ProcState where
+  pc : Nat
+  done : Bool
+
+namespace TlaFn
+
+structure St2 where
+  proc : Nat → ProcState
+  ticket : Nat
+
+tla_var St2 proc ticket
+
+example : [p| proc[i] = proc[j]] = fun s : St2 => proc s i = proc s j := by
+  rfl
+
+example : [p| proc[i].pc = 0] = fun s : St2 => (proc s i).pc = 0 := by
+  rfl
+
+example : [a| proc'[i].pc = proc[i].pc + 1] =
+    fun s s' : St2 => (proc s' i).pc = (proc s i).pc + 1 := by
+  rfl
+
+example : [p| ∀ p, proc[p].pc = 0 ∨ proc[p].pc = 1] =
+    fun s : St2 => ∀ p, (proc s p).pc = 0 ∨ (proc s p).pc = 1 := by
+  rfl
+
+end TlaFn
+
 /-! ## Temporal formulas -/
 
 example (F G : Tla.Pred St) : [t| F → G] = Tla.tlaImp F G := by
