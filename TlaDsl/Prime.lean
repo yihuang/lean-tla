@@ -294,7 +294,9 @@ partial def elabStateLiftCore (bound : NameSet) (s : Expr) (expected? : Option E
           let t ← whnf (← inferType e)
           match t with
           | .forallE _ d _ _ =>
-              if (← isDefEq d (← inferType s)) then pure (mkApp e s) else pure e
+              let dW ← whnf d
+              if dW.isSort then pure e
+              else if (← isDefEq d (← inferType s)) then pure (mkApp e s) else pure e
           | _ => pure e
       else if stx.isOfKind ``Lean.Parser.Term.app then do
         let args := (stx.getArg 1).getArgs
@@ -310,6 +312,26 @@ partial def elabStateLiftCore (bound : NameSet) (s : Expr) (expected? : Option E
 /-- Entry point: elaborate with no expected type. -/
 partial def elabStateLift (bound : NameSet) (s : Expr) (stx : Syntax) : TermElabM Expr :=
   elabStateLiftCore bound s none stx
+
+/--
+If `e` is an action formula (`σ → σ → Prop`), apply it to the two state
+variables; otherwise return it unchanged. Used by `elabActionLiftCore` so
+named actions (`[a| RmPrepare i ∨ ...]`) compose inside brackets. Functions
+whose first two domains are sorts (polymorphic functions like
+`Function.update`) are left alone.
+-/
+private def applyIfAction (st0 st1 : Expr) (e : Expr) : TermElabM Expr := do
+  let t ← whnf (← inferType e)
+  match t with
+  | .forallE _ d (.forallE _ d2 (.sort _) _) _ =>
+      let dW ← whnf d
+      let d2W ← whnf d2
+      if dW.isSort || d2W.isSort then pure e
+      else do
+        let h1 ← isDefEq d (← inferType st0)
+        let h2 ← isDefEq d2 (← inferType st1)
+        if h1 && h2 then pure (mkApp (mkApp e st0) st1) else pure e
+  | _ => pure e
 
 /-- Elaborate an `[a| ...]` body with pre/post state variables `st0 st1` in
 scope: unprimed state functions apply to `st0`, primed ones to `st1`. -/
@@ -485,16 +507,19 @@ partial def elabActionLiftCore (bound : NameSet) (st0 st1 : Expr) (expected? : O
           Term.elabIdent stx none
         else
           let e ← Term.elabIdent stx none
+          let e ← applyIfAction st0 st1 e
           let t ← whnf (← inferType e)
           match t with
           | .forallE _ d _ _ =>
-              if (← isDefEq d (← inferType st0)) then pure (mkApp e st0) else pure e
+              let dW ← whnf d
+              if dW.isSort then pure e
+              else if (← isDefEq d (← inferType st0)) then pure (mkApp e st0) else pure e
           | _ => pure e
       else if stx.isOfKind ``Lean.Parser.Term.app then do
         let args := (stx.getArg 1).getArgs
         let eas ← args.mapM fun a => elabActionLiftCore bound st0 st1 none a
         let ef ← elabActionLiftCore bound st0 st1 expected? stx[0]
-        mkOpAppExpr ef eas
+        applyIfAction st0 st1 (← mkOpAppExpr ef eas)
       else do
         let t ← match expected? with
           | some t => pure t

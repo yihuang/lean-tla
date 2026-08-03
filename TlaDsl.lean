@@ -18,3 +18,4 @@ import TlaDsl.Examples.Processes
 import TlaDsl.Examples.Mutex
 import TlaDsl.Examples.ModelCheck
 import TlaDsl.Examples.Brackets
+import TlaDsl.Examples.TwoPhaseCommit
