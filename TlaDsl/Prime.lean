@@ -56,135 +56,203 @@ abbrev actMod {σ : Type u} {α : Type v} [Mod α] (f g : σ → σ → α) : σ
 
 /-! ## The lifting macros -/
 
-/-- Lift a `[p| ...]` body to a state predicate. -/
-partial def liftState (stx : TSyntax `term) : MacroM (TSyntax `term) :=
+/-- Lift a `[p| ...]` body to a state predicate. `bound` tracks the
+identifiers bound by `∀`/`∃` inside the body (they are plain values, not
+state functions). -/
+partial def liftState (bound : Array Name) (stx : TSyntax `term) : MacroM (TSyntax `term) :=
   match stx with
-  | `(($e)) => liftState e
-  | `(($e : $_)) => liftState e
+  | `(($e)) => liftState bound e
+  | `(($e : $_)) => liftState bound e
+  | `(∃ $x:ident ∈ $S, $b) => do
+      let lS ← liftState bound S
+      let lb ← liftState (bound.push x.getId) b
+      `(fun s => ∃ $x:ident ∈ $lS s, $lb s)
+  | `(∃ $x:ident, $b) => do
+      let lb ← liftState (bound.push x.getId) b
+      `(fun s => ∃ $x:ident, $lb s)
+  | `(∀ $x:ident ∈ $S, $b) => do
+      let lS ← liftState bound S
+      let lb ← liftState (bound.push x.getId) b
+      `(fun s => ∀ $x:ident ∈ $lS s, $lb s)
+  | `(∀ $x:ident, $b) => do
+      let lb ← liftState (bound.push x.getId) b
+      `(fun s => ∀ $x:ident, $lb s)
+  | `(if $c then $a else $b) => do
+      let lc ← liftState bound c
+      let la ← liftState bound a
+      let lb ← liftState bound b
+      `(fun s => if $lc s then $la s else $lb s)
   | `($a % $b) => do
-      let la ← liftState a
-      let lb ← liftState b
+      let la ← liftState bound a
+      let lb ← liftState bound b
       `(stMod $la $lb)
   | `($a + $b) => do
-      let la ← liftState a
-      let lb ← liftState b
+      let la ← liftState bound a
+      let lb ← liftState bound b
       `(stAdd $la $lb)
   | `($a - $b) => do
-      let la ← liftState a
-      let lb ← liftState b
+      let la ← liftState bound a
+      let lb ← liftState bound b
       `(stSub $la $lb)
   | `($a * $b) => do
-      let la ← liftState a
-      let lb ← liftState b
+      let la ← liftState bound a
+      let lb ← liftState bound b
       `(stMul $la $lb)
   | `($a = $b) => do
-      let la ← liftState a
-      let lb ← liftState b
+      let la ← liftState bound a
+      let lb ← liftState bound b
       `(stEq $la $lb)
   | `($a < $b) => do
-      let la ← liftState a
-      let lb ← liftState b
+      let la ← liftState bound a
+      let lb ← liftState bound b
       `(stLt $la $lb)
   | `($a ≤ $b) => do
-      let la ← liftState a
-      let lb ← liftState b
+      let la ← liftState bound a
+      let lb ← liftState bound b
       `(stLe $la $lb)
   | `($a > $b) => do
-      let la ← liftState a
-      let lb ← liftState b
+      let la ← liftState bound a
+      let lb ← liftState bound b
       `(stGt $la $lb)
   | `($a ≥ $b) => do
-      let la ← liftState a
-      let lb ← liftState b
+      let la ← liftState bound a
+      let lb ← liftState bound b
       `(stGe $la $lb)
   | `($a ≠ $b) => do
-      let la ← liftState a
-      let lb ← liftState b
+      let la ← liftState bound a
+      let lb ← liftState bound b
       `(stNe $la $lb)
   | `($a ∧ $b) => do
-      let la ← liftState a
-      let lb ← liftState b
+      let la ← liftState bound a
+      let lb ← liftState bound b
       `(stAnd $la $lb)
   | `($a ∨ $b) => do
-      let la ← liftState a
-      let lb ← liftState b
+      let la ← liftState bound a
+      let lb ← liftState bound b
       `(stOr $la $lb)
+  | `($a → $b) => do
+      let la ← liftState bound a
+      let lb ← liftState bound b
+      `(stImp $la $lb)
+  | `($a ⇒ $b) => do
+      let la ← liftState bound a
+      let lb ← liftState bound b
+      `(stImp $la $lb)
   | `(¬ $a) => do
-      let la ← liftState a
+      let la ← liftState bound a
       `(stNot $la)
-  | `($x:ident) => `(fun s => $x s)
+  | `($x:ident) =>
+      if bound.contains x.getId then
+        `(fun s => $x)
+      else
+        `(fun s => $x s)
   | `($n:num) => `(fun s => $n)
+  | `(∅) => `(fun s => ∅)
+  | `(true) => `(fun s => true)
+  | `(false) => `(fun s => false)
   | `($f $a) => do
-      let la ← liftState a
+      let la ← liftState bound a
       `(fun s => $f ($la s))
   | _ => Macro.throwError s!"[p| ...]: unsupported syntax in state predicate: {stx}"
 
 /-- Lift an `[a| ...]` body to an action. `x'` is the post value of `x`. -/
-partial def liftAction (stx : TSyntax `term) : MacroM (TSyntax `term) :=
+partial def liftAction (bound : Array Name) (stx : TSyntax `term) : MacroM (TSyntax `term) :=
   match stx with
-  | `(($e)) => liftAction e
-  | `(($e : $_)) => liftAction e
+  | `(($e)) => liftAction bound e
+  | `(($e : $_)) => liftAction bound e
+  | `(∃ $x:ident ∈ $S, $b) => do
+      let lS ← liftState bound S
+      let lb ← liftAction (bound.push x.getId) b
+      `(fun st0 st1 => ∃ $x:ident ∈ $lS st0, $lb st0 st1)
+  | `(∀ $x:ident ∈ $S, $b) => do
+      let lS ← liftState bound S
+      let lb ← liftAction (bound.push x.getId) b
+      `(fun st0 st1 => ∀ $x:ident ∈ $lS st0, $lb st0 st1)
+  | `(∃ $x:ident, $b) => do
+      let lb ← liftAction (bound.push x.getId) b
+      `(fun st0 st1 => ∃ $x:ident, $lb st0 st1)
+  | `(∀ $x:ident, $b) => do
+      let lb ← liftAction (bound.push x.getId) b
+      `(fun st0 st1 => ∀ $x:ident, $lb st0 st1)
+  | `(if $c then $a else $b) => do
+      let lc ← liftState bound c
+      let la ← liftAction bound a
+      let lb ← liftAction bound b
+      `(fun st0 st1 => if $lc st0 then $la st0 st1 else $lb st0 st1)
   | `($a % $b) => do
-      let la ← liftAction a
-      let lb ← liftAction b
+      let la ← liftAction bound a
+      let lb ← liftAction bound b
       `(actMod $la $lb)
   | `($a + $b) => do
-      let la ← liftAction a
-      let lb ← liftAction b
+      let la ← liftAction bound a
+      let lb ← liftAction bound b
       `(actAdd $la $lb)
   | `($a - $b) => do
-      let la ← liftAction a
-      let lb ← liftAction b
+      let la ← liftAction bound a
+      let lb ← liftAction bound b
       `(actSub $la $lb)
   | `($a * $b) => do
-      let la ← liftAction a
-      let lb ← liftAction b
+      let la ← liftAction bound a
+      let lb ← liftAction bound b
       `(actMul $la $lb)
   | `($a = $b) => do
-      let la ← liftAction a
-      let lb ← liftAction b
+      let la ← liftAction bound a
+      let lb ← liftAction bound b
       `(actEq $la $lb)
   | `($a < $b) => do
-      let la ← liftAction a
-      let lb ← liftAction b
+      let la ← liftAction bound a
+      let lb ← liftAction bound b
       `(actLt $la $lb)
   | `($a ≤ $b) => do
-      let la ← liftAction a
-      let lb ← liftAction b
+      let la ← liftAction bound a
+      let lb ← liftAction bound b
       `(actLe $la $lb)
   | `($a > $b) => do
-      let la ← liftAction a
-      let lb ← liftAction b
+      let la ← liftAction bound a
+      let lb ← liftAction bound b
       `(actGt $la $lb)
   | `($a ≥ $b) => do
-      let la ← liftAction a
-      let lb ← liftAction b
+      let la ← liftAction bound a
+      let lb ← liftAction bound b
       `(actGe $la $lb)
   | `($a ≠ $b) => do
-      let la ← liftAction a
-      let lb ← liftAction b
+      let la ← liftAction bound a
+      let lb ← liftAction bound b
       `(actNe $la $lb)
   | `($a ∧ $b) => do
-      let la ← liftAction a
-      let lb ← liftAction b
+      let la ← liftAction bound a
+      let lb ← liftAction bound b
       `(actAnd $la $lb)
   | `($a ∨ $b) => do
-      let la ← liftAction a
-      let lb ← liftAction b
+      let la ← liftAction bound a
+      let lb ← liftAction bound b
       `(actOr $la $lb)
+  | `($a → $b) => do
+      let la ← liftAction bound a
+      let lb ← liftAction bound b
+      `(actImp $la $lb)
+  | `($a ⇒ $b) => do
+      let la ← liftAction bound a
+      let lb ← liftAction bound b
+      `(actImp $la $lb)
   | `(¬ $a) => do
-      let la ← liftAction a
+      let la ← liftAction bound a
       `(actNot $la)
   | `($x:ident) =>
       let n := x.getId.toString
       if n.endsWith "'" then
         let base : TSyntax `ident := ⟨mkIdent (n.dropEnd 1).toName⟩
         `(fun st0 st1 => $base st1)
+      else if bound.contains x.getId then
+        `(fun st0 st1 => $x)
       else
         `(fun st0 st1 => $x st0)
   | `($n:num) => `(fun st0 st1 => $n)
+  | `(∅) => `(fun st0 st1 => ∅)
+  | `(true) => `(fun st0 st1 => true)
+  | `(false) => `(fun st0 st1 => false)
   | `($f $a) => do
-      let la ← liftAction a
+      let la ← liftAction bound a
       `(fun st0 st1 => $f ($la st0 st1))
   | _ => Macro.throwError s!"[a| ...]: unsupported syntax in action: {stx}"
 
@@ -193,6 +261,12 @@ leaving everything else (lifts, temporal notations, named formulas) alone. -/
 partial def liftFormula (stx : TSyntax `term) : MacroM (TSyntax `term) :=
   match stx with
   | `(($e)) => liftFormula e
+  | `(∃ $x:ident, $b) => do
+      let lb ← liftFormula b
+      `(tlaExists (fun $x:ident => $lb))
+  | `(∀ $x:ident, $b) => do
+      let lb ← liftFormula b
+      `(tlaForall (fun $x:ident => $lb))
   | `($a ∧ $b) => do
       let la ← liftFormula a
       let lb ← liftFormula b
@@ -224,13 +298,13 @@ partial def liftFormula (stx : TSyntax `term) : MacroM (TSyntax `term) :=
 syntax "[p| " term "]" : term
 macro_rules
   | `([p| $body]) => do
-      let t ← liftState body
+      let t ← liftState #[] body
       pure t.raw
 
 syntax "[a| " term "]" : term
 macro_rules
   | `([a| $body]) => do
-      let t ← liftAction body
+      let t ← liftAction #[] body
       pure t.raw
 
 syntax "[t| " term "]" : term

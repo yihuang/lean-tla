@@ -83,10 +83,17 @@ result: **the pseudocode notation layer works**, including `x'` primes and
    immediately. **Progress (2026-08-03):** function applications (arguments
    lifted pointwise — `Even x`, `n % 2`), `≠ > ≥ %`, `→` in `[t| ...]`, and
    type ascriptions are now supported; the parity-based SF1 example
-   (`StrongFair.lean`) is back in bracket syntax. Remaining gaps: binders
-   (`∃ x ∈ S, ...`), `if-then-else`, qualified names. Options: grow the macro
-   further (fragile), or switch to a small custom elaborator / dedicated
-   syntax category with real grammar.
+   (`StrongFair.lean`) is back in bracket syntax. **More (2026-08-03):**
+   bounded quantifiers `∀ x ∈ S, ...` / `∃ x ∈ S, ...` over set-valued state
+   functions (bound variables are tracked and treated as plain values, not
+   state functions), untyped `∀`/`∃` in `[p|]/[a|]`, temporal `∃`/`∀` in
+   `[t| ...]`, `if-then-else`, state/action `→`/`⇒`, and the constants
+   `∅ true false`. `Binders.lean` demonstrates the process-quantifier style.
+   Remaining gaps: typed binders (`∃ x : T, ...` — the quote pattern doesn't
+   parse), primed functions applied to arguments (`x'[i]`), qualified names,
+   and plain non-state variables inside brackets (treated as state
+   functions). Options: grow the macro further (fragile), or switch to a
+   small custom elaborator / dedicated syntax category with real grammar.
 3. **Prime handling is purely syntactic** (strip the trailing `'`), so `x''`
    or qualified names misbehave; documented, acceptable for a prototype.
 4. **`tla_unfold` had to be `simp at *` under `try`**: this Lean version
