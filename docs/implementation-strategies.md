@@ -274,11 +274,19 @@ can write a spec and prove its invariants in one session without reading the
 library source; the same examples as Leslie with fewer lines and correct
 stuttering.
 
-**Phase 2 — Liveness (months)**
+**Phase 2 — Liveness (months) — complete**
 `tla_wf1`/`tla_sf1` with rank functions; leads-to automation; ticket-lock and
 mutex liveness; `stutinv`/`StutQuot` refinement layer. *Accept:* textbook
 liveness proofs (mutex progress, ticket lock) with rank functions as the only
-human input beyond the spec.
+human input beyond the spec. Done: WF1/SF1/SF1-standard tactics with the
+enabledness witness as the human input; leads-to choreography
+(`tla_leads_to`, `tla_leads_to_cases`); rank-function pattern in
+`TlaDsl/Examples/Countdown.lean` (unbounded counter) and
+`TlaDsl/Examples/TicketLock.lean` (unbounded `t - served` rank, WF1 at each
+level + strong induction, spec-level `◇ pc = 2`); mutex full-liveness chain
+in `TlaDsl/Examples/Mutex.lean`; the `stutinv`/`StutQuot` refinement layer in
+`TlaDsl/Meta.lean` + `TlaDsl/SimFull.lean` (slices 1-5, see
+`docs/tla-meta-theory.md`).
 
 **Phase 3 — Composition and refinement (months)**
 Refinement over `[A]_v`; `\EE` hiding; 2PC refinement; assume-guarantee.
