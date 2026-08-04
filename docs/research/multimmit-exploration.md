@@ -2,10 +2,11 @@
 
 Status: exploration slices complete (2026-08-04). The consensus-core slice
 is formalized in [`../../TlaDsl/Examples/Minimmit.lean`](../../TlaDsl/Examples/Minimmit.lean),
-and the extraction-core slice (Lemma 7, positions) in
-[`../../TlaDsl/Examples/Multimmit.lean`](../../TlaDsl/Examples/Multimmit.lean).
-The extension-carry rules, the settledness equality, and the time-based
-no-nullification argument remain scoped below.
+the extraction-core slice (Lemma 7, positions) in
+[`../../TlaDsl/Examples/Multimmit.lean`](../../TlaDsl/Examples/Multimmit.lean),
+and the timed slice (Lemma 5) in
+[`../../TlaDsl/Examples/MinimmitTimed.lean`](../../TlaDsl/Examples/MinimmitTimed.lean).
+The extension-carry rules and the settledness equality remain scoped below.
 
 ## The protocol
 
@@ -79,15 +80,19 @@ library), zero `sorry`, zero warnings. The example is wired into
 
 ## What was not formalized, and why
 
-1. **Lemma 5 (no nullification for a notarised view)**. The paper's proof
-   picks the *earliest* timeslot at which a member of the correct voter set
-   nullifies and uses the fact that its `2f+1` evidence messages were sent
-   strictly earlier. The abstract history model has no message-send times,
-   so the invariant "a correct voter never nullifies" is simply not
-   derivable statically (a voter may legitimately nullify when no
-   L-notarisation exists). Formalizing it needs a time component
-   (`sentAt : Proc → View → MsgKind → Nat`, monotone in state) and a
-   minimal-time induction.
+1. **Lemma 5 (no nullification for a notarised view)** — **done** in
+   `TlaDsl/Examples/MinimmitTimed.lean`. The model adds message send times:
+   a message log `sent : Msg → Option Nat` plus a clock `time : Nat` that
+   advances by one per action and stamps each sent message; "sent strictly
+   before" is `<` on the stamps. The proof runs the paper's least-timeslot
+   argument as strong induction on the nullify time: a correct voter's
+   evidence set must all be stamped strictly earlier (`EvidenceBefore`,
+   made inductive by folding the strict-before stamp into the evidence
+   disjunction), and its correct senders are all non-voters (≤ `f`) plus at
+   most `f` faulty — fewer than `2f+1`. The protocol also gains the
+   faithful rules it needs: `Vote` blocks novoted/nullified processors, and
+   the evidence-based `NullifyEvidence` (lines 16-19) is separate from the
+   timeout nullify.
 2. **Lemma 6 / Theorem 1 (leader chain, cross-view consistency)**. Needs
    proposals anchored on V-QCs, nullifications for the skipped interval,
    and the parent relation between leader blocks — i.e. Lemma 5 first.
@@ -154,6 +159,25 @@ that the library layer is pleasant for protocol combinatorics: the whole
 Byzantine overlap argument is two `Finset` cardinality lemmas plus `omega`,
 and the rank rules state cleanly as counting predicates. A reusable
 `two_quorums_meet` lemma (item 3 above) would shorten it further.
+
+**The timed slice's feedback** (what modelling send times taught us):
+* The `sent : Msg → Option Nat` + `time` clock idiom is exactly TLA+'s
+  `SendTime ∈ [Msg → Nat ∪ {⊥}]` and fits the bracket DSL well; the
+  message kind becomes an inductive `Msg`, which the elaborator handles.
+* Two genuine modelling gotchas surfaced, both instructive:
+  (a) `tla_unfold`'s `simp` rewrites `¬ ∃ b, P b` into `∀ b, ¬ P b`
+  (`not_exists`), silently changing what `intro` binds — action guards and
+  invariants should be stated in the `∀` form from the start;
+  (b) the "evidence sent strictly before the nullify" fact is **not**
+  recoverable from a single state by timestamps alone — it must be made an
+  inductive invariant, and it only stays inductive if the strict-before
+  stamp lives *inside* the evidence disjunction (a separate stamp clause
+  breaks when an unrelated later message re-stamps an E-member).
+* The paper's within-timeslot execution (evidence arrives and the nullify
+  fires in the same timeslot) is modelled faithfully by a step-based
+  system where the evidence is in the pre-state pool; the least-time
+  minimality becomes plain strong induction on `Nat`, with
+  `Nat.strong_induction_on` doing the well-founded work.
 
 ## Protocol insights worth keeping
 
