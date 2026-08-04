@@ -71,9 +71,9 @@ models the abstract message-history core of the consensus layer:
   * temporal statements `spec_entails_agree`, `spec_entails_designation`
     under `ValidParams`.
 
-Build status: `lake build TlaDsl.Examples.Minimmit` green, zero `sorry`,
-zero warnings. (At the time of writing the example is not yet wired into
-`TlaDsl.lean`; the mainline integration commit does that.)
+Build status: full `lake build` green (including the whole `TlaDsl`
+library), zero `sorry`, zero warnings. The example is wired into
+`TlaDsl.lean` alongside the other examples.
 
 ## What was not formalized, and why
 
