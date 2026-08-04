@@ -1,5 +1,6 @@
 import TlaDsl.Basic
 import TlaDsl.SimFull
+import TlaDsl.Prime
 
 namespace Tla
 
@@ -290,6 +291,28 @@ full TLA formulas (stuttering invariant).
 def NstutInv {σ : Type u} (A : Action σ) : Prop :=
   ∀ e f : Behavior σ, e 0 = f 0 → Sim (e.drop 1) (f.drop 1) →
     (A (e 0) (e 1) ↔ A (f 0) (f 1))
+
+/-- Near-stuttering invariance is preserved by action conjunction. -/
+theorem nstutinv_and {σ : Type u} {A B : Action σ} (hA : NstutInv A) (hB : NstutInv B) :
+    NstutInv (actAnd A B) := by
+  intro e f he hsim
+  constructor
+  · rintro ⟨hAe, hBe⟩
+    exact ⟨(hA e f he hsim).1 hAe, (hB e f he hsim).1 hBe⟩
+  · rintro ⟨hAf, hBf⟩
+    exact ⟨(hA e f he hsim).2 hAf, (hB e f he hsim).2 hBf⟩
+
+/-- Near-stuttering invariance is preserved by action disjunction. -/
+theorem nstutinv_or {σ : Type u} {A B : Action σ} (hA : NstutInv A) (hB : NstutInv B) :
+    NstutInv (actOr A B) := by
+  intro e f he hsim
+  constructor
+  · rintro (hAe | hBe)
+    · exact Or.inl ((hA e f he hsim).1 hAe)
+    · exact Or.inr ((hB e f he hsim).1 hBe)
+  · rintro (hAf | hBf)
+    · exact Or.inl ((hA e f he hsim).2 hAf)
+    · exact Or.inr ((hB e f he hsim).2 hBf)
 
 /-- Step-level suffix matching: for each index there is a matching index such
 that either the next steps also match, or the left next step matches the same

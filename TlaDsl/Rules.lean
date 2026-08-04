@@ -1,5 +1,7 @@
 import Mathlib.Order.Filter.AtTopBot.Basic
 import TlaDsl.Basic
+import TlaDsl.Prime
+import Cslib.Foundations.Data.OmegaSequence.Temporal
 
 namespace Tla
 
@@ -215,6 +217,171 @@ theorem sf1_standard {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Act
   have hB' : AngleAction A v (e (k + j)) (e (k + j + 1)) := by
     simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hB
   exact False.elim (hqall (j + 1) (by simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using haq (e (k + j)) (e (k + j + 1)) (hp j) hB'))
+
+/-! ## The rank-function leads-to rule -/
+
+/-- The rank-function leads-to rule: if, at every rank `n`, the spec makes
+`p ∧ f = n` lead to `q ∨ (p ∧ f < n)`, then `p` leads to `q`. This packages
+the well-founded (strong) induction on the `Nat` rank, so each WF1/SF1 step
+only has to show the rank strictly decreases — the engine for protocols
+whose progress is a chain of *different* actions (ticket locks, BFT view
+advance, ...). -/
+theorem leads_to_via_nat {σ : Type u} (p q : StatePred σ) (f : σ → Nat) (H : Pred σ)
+    (hstep : ∀ n : Nat, Entails H (leadsTo
+      (statePred (fun s => p s ∧ f s = n))
+      (statePred (fun s => q s ∨ (p s ∧ f s < n))))) :
+    Entails H (leadsTo (statePred p) (statePred q)) := by
+  intro e hH
+  have hmain : ∀ n k : Nat, f (e k) = n → p (e k) →
+      eventually (statePred q) (e.drop k) := by
+    intro n
+    refine Nat.strong_induction_on n ?_
+    intro n ih k hfn hp
+    have hl : leadsTo (statePred (fun s => p s ∧ f s = n))
+        (statePred (fun s => q s ∨ (p s ∧ f s < n))) e := hstep n e hH
+    have hp' : (statePred (fun s => p s ∧ f s = n)) (e.drop k) := by
+      simpa [statePred, Cslib.ωSequence.drop, Nat.add_comm] using ⟨hp, hfn⟩
+    rcases hl k hp' with ⟨j, hj⟩
+    rcases hj with hq | hp_lt
+    · -- reached `q` now
+      refine ⟨j, ?_⟩
+      simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hq
+    · -- the rank strictly decreased: apply the hypothesis at the new rank
+      have hlt : f (e (k + j)) < n := by
+        simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hp_lt.2
+      have hpj : p (e (k + j)) := by
+        simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hp_lt.1
+      have hih : eventually (statePred q) (e.drop (k + j)) :=
+        ih (f (e (k + j))) hlt (k + j) rfl hpj
+      rcases hih with ⟨m, hm⟩
+      refine ⟨j + m, ?_⟩
+      simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hm
+  intro k hp
+  have hp' : p (e k) := by simpa [statePred, Cslib.ωSequence.drop, Nat.add_comm] using hp
+  exact hmain (f (e k)) k rfl hp'
+
+/-! ## Action algebra -/
+
+/-- `Enabled` distributes over action disjunction. -/
+theorem enabled_or {σ : Type u} (A B : Action σ) (s : σ) :
+    Enabled (actOr A B) s ↔ Enabled A s ∨ Enabled B s := by
+  constructor
+  · rintro ⟨s', hA | hB⟩
+    · exact Or.inl ⟨s', hA⟩
+    · exact Or.inr ⟨s', hB⟩
+  · rintro (hA | hB)
+    · rcases hA with ⟨s', hA'⟩
+      exact ⟨s', Or.inl hA'⟩
+    · rcases hB with ⟨s', hB'⟩
+      exact ⟨s', Or.inr hB'⟩
+
+/-- `Enabled` over action conjunction implies both conjuncts are enabled
+(the converse would need a common witness). -/
+theorem enabled_and {σ : Type u} (A B : Action σ) (s : σ) :
+    Enabled (actAnd A B) s → Enabled A s ∧ Enabled B s := by
+  rintro ⟨s', hA, hB⟩
+  exact ⟨⟨s', hA⟩, ⟨s', hB⟩⟩
+
+/-- `Enabled ⟨A ∨ B⟩` is the disjunction of the angle-enablements. -/
+theorem enabled_angle_or {σ : Type u} {α : Type v} (A B : Action σ) (v : σ → α) (s : σ) :
+    Enabled (AngleAction (actOr A B) v) s ↔
+      Enabled (AngleAction A v) s ∨ Enabled (AngleAction B v) s := by
+  constructor
+  · rintro ⟨s', hAB, hchg⟩
+    rcases hAB with hA' | hB'
+    · exact Or.inl ⟨s', hA', hchg⟩
+    · exact Or.inr ⟨s', hB', hchg⟩
+  · rintro (hA | hB)
+    · rcases hA with ⟨s', hA', hchg⟩
+      exact ⟨s', Or.inl hA', hchg⟩
+    · rcases hB with ⟨s', hB', hchg⟩
+      exact ⟨s', Or.inr hB', hchg⟩
+
+/-- Fairness of a disjunction from one component: if `A` is weakly fair and
+`A ∨ B`'s enablement always implies `A`'s, then `A ∨ B` is weakly fair.
+(The plain `WF(A) ∧ WF(B) ⊢ WF(A ∨ B)` is *not* valid: the components can
+alternate enablement while the union stays enabled, so neither is ever
+eventually-always enabled and no fairness applies.) -/
+theorem wf_or_of_wf {σ : Type u} {α : Type v} (A B : Action σ) (v : σ → α) :
+    Entails
+      (tlaAnd (WF_v A v)
+        (always (tlaImp
+          (statePred (Enabled (AngleAction (actOr A B) v)))
+          (statePred (Enabled (AngleAction A v))))))
+      (WF_v (actOr A B) v) := by
+  intro e h k hEn
+  -- hEn : always (statePred (Enabled ⟨A ∨ B⟩)) (e.drop k)
+  have hEnA : always (statePred (Enabled (AngleAction A v))) (e.drop k) := by
+    intro n
+    -- dominance: Enabled ⟨A ∨ B⟩ at position k + n implies Enabled ⟨A⟩
+    have hdom : ∀ m, Enabled (AngleAction (actOr A B) v) (e (k + m)) →
+        Enabled (AngleAction A v) (e (k + m)) := by
+      intro m hm
+      have hd := h.2 (k + m)
+      have hm' : statePred (Enabled (AngleAction (actOr A B) v)) (e.drop (k + m)) := by
+        simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hm
+      have hA : statePred (Enabled (AngleAction A v)) (e.drop (k + m)) := by
+        simpa [tlaImp] using hd hm'
+      simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hA
+    have hEn' : statePred (Enabled (AngleAction (actOr A B) v)) (e.drop (k + n)) := by
+      have he := hEn n
+      simpa [always, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using he
+    have hEn'' : Enabled (AngleAction (actOr A B) v) (e (k + n)) := by
+      simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hEn'
+    exact (by
+      simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hdom n hEn'')
+  -- WF(A) fires an A-step, which is also an (A ∨ B)-step
+  have hWF : always (tlaImp (always (statePred (Enabled (AngleAction A v))))
+      (eventually (actionPred (AngleAction A v)))) (e.drop k) := by
+    intro n
+    have h1 := h.1 (n + k)
+    simpa [always, tlaImp, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h1
+  have hAstep : eventually (actionPred (AngleAction A v)) (e.drop k) := hWF 0 hEnA
+  rcases hAstep with ⟨j, hj⟩
+  refine ⟨j, ?_⟩
+  -- an A-angle-step is an (A ∨ B)-angle-step
+  have hj' : actionPred (AngleAction (actOr A B) v) (e.drop (k + j)) := by
+    have hh : AngleAction (actOr A B) v (e (k + j)) (e (k + j + 1)) := by
+      have hAA : AngleAction A v (e (k + j)) (e (k + j + 1)) := by
+        simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hj
+      rcases hAA with ⟨hA', hchg⟩
+      exact ⟨Or.inl hA', hchg⟩
+    simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hh
+  simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hj'
+
+/-! ## Bridge to CSLib's `LeadsTo` -/
+
+/-- The bridge: TlaDsl's leads-to over state predicates is exactly CSLib's
+`LeadsTo` on the same behavior, so CSLib's grind-native `LeadsTo` lemmas
+(`leadsTo_trans`, `leadsTo_cases_or`, ...) apply to the fragment that
+`wf1`/`sf1` conclude in. -/
+theorem leads_to_state_iff {σ : Type u} (p q : StatePred σ) (e : Behavior σ) :
+    leadsTo (statePred p) (statePred q) e ↔
+      e.LeadsTo {s | p s} {s | q s} := by
+  constructor
+  · intro h k hp
+    have hev : eventually (statePred q) (e.drop k) :=
+      h k (by simpa [statePred, Cslib.ωSequence.drop, Nat.add_comm] using hp)
+    rcases hev with ⟨m, hm⟩
+    refine ⟨k + m, Nat.le_add_right k m, ?_⟩
+    simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hm
+  · intro h k hp
+    have hp' : e k ∈ {s | p s} := by
+      simpa [statePred, Cslib.ωSequence.drop, Nat.add_comm] using hp
+    rcases h k hp' with ⟨k', hk', hq⟩
+    rcases Nat.exists_eq_add_of_le hk' with ⟨m, hm⟩
+    refine ⟨m, ?_⟩
+    simpa [statePred, Cslib.ωSequence.drop, hm, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hq
+
+/-- Leads-to transitivity for state predicates, re-proved through CSLib's
+grind-native `LeadsTo` (no manual proof). -/
+theorem leads_to_trans_state {σ : Type u} (p q r : StatePred σ) (e : Behavior σ) :
+    leadsTo (statePred p) (statePred q) e →
+    leadsTo (statePred q) (statePred r) e →
+    leadsTo (statePred p) (statePred r) e := by
+  intro h1 h2
+  exact (leads_to_state_iff p r e).2 (Cslib.ωSequence.leadsTo_trans
+    ((leads_to_state_iff p q e).1 h1) ((leads_to_state_iff q r e).1 h2))
 
 /-! ## CSLib bridges: enabled-infinitely-often in filter vocabulary -/
 

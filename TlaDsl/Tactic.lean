@@ -52,6 +52,12 @@ case). -/
 macro "tla_sf1_standard" : tactic =>
   `(tactic| (apply Tla.sf1_standard <;> try tla_grind))
 
+/-- Apply the rank-function leads-to rule (`leads_to_via_nat`), leaving the
+per-rank obligation: each WF1/SF1 application only needs to show the rank
+strictly decreases (or the goal is reached). -/
+macro "tla_leads_to_via_nat " f:term : tactic =>
+  `(tactic| (apply Tla.leads_to_via_nat _ _ $f <;> try tla_grind))
+
 /-- Leads-to choreography: solve a `P ↝ Q` goal by assumption, disjunction
 on the left, or transitivity through a chain of leads-to facts in context. -/
 macro "tla_leads_to" : tactic => `(tactic| assumption)

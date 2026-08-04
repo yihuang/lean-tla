@@ -119,6 +119,73 @@ variables — all proved from the semantics, kernel-checked, zero `sorry`s.
 
 Both compile with zero `sorry`s and zero dependencies.
 
+## Reviewer points (2026-08-04): status and next steps
+
+### 1. Sim ↔ SimFull bridge — **in progress, blocker identified**
+
+`SimFull e f := Compress e = Compress f`, so the bridge is
+`Sim e f → Compress e = Compress f`, i.e. the leading-stutter lemma
+`e 0 = e 1 → Compress e = Compress (e.drop 1)`. The naive proof via block
+*indices* fails on the eventually-constant behaviors: `nextBlock e 0 = 0`
+but `nextBlock e 1 = 1` for a constant `e`, so the index-shift lemma
+`BlockStart e (k+1) = 1 + BlockStart (e.drop 1) (k+1)` is simply false there
+(`nextBlock_stutter` was written, found unsound, and removed). The correct
+statement is the *value-level* lemma `∀ k, e (BlockStart e k) =
+(e.drop 1) (BlockStart (e.drop 1) k)` (both sides are the `k`-th run value;
+when the index shift fails, both reduce to the absorbed first value via
+`e 0 = e 1`). The characterization of the difference is: `SimFull` identifies
+exactly the pairs that differ by **infinitely many** stutters — `Sim` on the
+finitely-stuttering behaviors, with the infinite-stuttering ones collapsed
+(a concrete pair: `doubled n = n / 2` vs `single n = n`, same compression,
+not `Sim`). A unified quotient would then be `Quot SimFull` with
+`StutInvFull` formulas descending; the two theories stay separate until the
+value-level lemma lands.
+
+### 2. Canonical form / representation theorem — **not started (scoped)**
+
+Lamport's representation theorem (every stuttering-invariant formula ≅
+`∃ x, Init ∧ □[N]_x ∧ L`) needs a constructive encoding of the formula's
+behavior into a hidden variable. Tractable slice: prove the theorem for the
+DSL's operator closure — `□⌜p⌝`, `◇⌜p⌝`, boolean and temporal combinations —
+with the canonical spec built per operator, then state the general
+quotient-based version. This is the largest remaining meta-theory item.
+
+### 3. Rank-function leads-to — **done**
+
+`leads_to_via_nat` in `TlaDsl/Rules.lean` (packages the strong induction on a
+`Nat` rank; each WF1/SF1 step only needs `p ∧ f = n ↝ q ∨ (p ∧ f < n)`),
+plus the `tla_leads_to_via_nat f` tactic. This is the BFT-liveness engine
+the chained-WF1 approach lacked.
+
+### 4. Action algebra — **done (with one correction)**
+
+`enabled_or`, `enabled_and`, `enabled_angle_or`; `nstutinv_and`, `nstutinv_or`
+(near-stuttering invariance is preserved by `∧`/`∨`); and the valid
+disjunction-fairness rule `wf_or_of_wf` (WF of `A` plus `Enabled ⟨A∨B⟩ ⇒
+Enabled ⟨A⟩` gives WF of `A∨B`). The reviewer's suggested
+`WF(A) ∧ WF(B) ⊢ WF(A ∨ B)` is **not** valid: the components can alternate
+enablement while the union stays enabled, so neither is ever
+eventually-always enabled and no fairness fires — documented in the lemma.
+
+### 5. Deep Abadi–Lamport liveness with structural hypotheses — **planned via CSLib**
+
+The current `refinement_mapping_liveness` is the composition form. The
+structural version (image-finite hypotheses) is the natural CSLib reuse:
+`Next : σ → σ → Prop` is an LTS transition, `imageFinite`/`finiteState`/
+`deterministic` are CSLib's LTS classes, and refinement becomes a forward
+simulation between saturated LTSs (stutter-v plays τ's role via `HasTau`).
+
+### CSLib reuse (reviewer table) — **bridge started**
+
+`leads_to_state_iff` in `TlaDsl/Rules.lean` proves the exact bridge the
+reviewer stated — `Tla.leadsTo ⌜p⌝ ⌜q⌝ e ⟺ e.LeadsTo {s | p s} {s | q s}` —
+and `leads_to_trans_state` re-proves leads-to transitivity through CSLib's
+grind-native `LeadsTo` (no manual proof). Planned next: migrate the rest of
+the leads-to lattice (`leadsTo_or`, `leads_to_cases`) through the same
+bridge; use `InfOcc.frequently_in_finite_type` (pigeonhole) for the
+finite-state "enabled infinitely often" ingredient of `sf1`; then the LTS
+refinement layer (point 5) and the FLP vocabulary for the BFT target.
+
 ## 4. Honest scope notes
 
 - `Sim` (in `Meta.lean`) is the **finite-stuttering** relation (inductive:
