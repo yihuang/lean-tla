@@ -476,6 +476,42 @@ theorem refinement_mapping {σ τ : Type u} {α β : Type v}
       simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h2 n
     simpa [StutAction, actionPred, Cslib.ωSequence.drop, Cslib.ωSequence.map, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using (hstep (e n) (e (n + 1)) hstepC)
 
+/-- Abadi–Lamport refinement with an auxiliary invariant: when the step
+correspondence only holds on *reachable* states, thread a concrete invariant
+`inv` — implied by `initC`, preserved by every step — into the step case.
+This is the form needed for refinements like Paxos → Consensus, where the
+mapping's behavior (e.g. "at most one value chosen") is itself an invariant. -/
+theorem refinement_mapping_inv {σ τ : Type u} {α β : Type v}
+    (initA : StatePred σ) (nextA : Action σ) (u : σ → α)
+    (initC : StatePred τ) (nextC : Action τ) (v : τ → β)
+    (inv : StatePred τ) (f : τ → σ)
+    (hinit : ∀ s, initC s → initA (f s))
+    (hinitinv : ∀ s, initC s → inv s)
+    (hinv : ∀ s s', (nextC s s' ∨ v s' = v s) → inv s → inv s')
+    (hstep : ∀ s s', inv s → (nextC s s' ∨ v s' = v s) →
+      (nextA (f s) (f s') ∨ u (f s') = u (f s))) :
+    RefinesVia f (tlaAnd (statePred initC) (stutAlways nextC v))
+      (tlaAnd (statePred initA) (stutAlways nextA u)) := by
+  intro e he
+  have h2 : ∀ n, actionPred (StutAction nextC v) (e.drop n) := by
+    simpa [stutAlways, always] using he.2
+  have hinvAll : ∀ k : Nat, inv (e k) := by
+    intro k
+    induction k with
+    | zero => exact hinitinv (e 0) (by simpa [statePred] using he.1)
+    | succ k ih =>
+        have hstepC : StutAction nextC v (e k) (e (k + 1)) := by
+          simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h2 k
+        exact hinv (e k) (e (k + 1)) hstepC ih
+  constructor
+  · exact hinit (e 0) (by simpa [statePred] using he.1)
+  · intro n
+    have hstepC : StutAction nextC v (e n) (e (n + 1)) := by
+      simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h2 n
+    have hmap : StutAction nextA u (f (e n)) (f (e (n + 1))) :=
+      hstep (e n) (e (n + 1)) (hinvAll n) hstepC
+    simpa [StutAction, actionPred, Cslib.ωSequence.drop, Cslib.ωSequence.map, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hmap
+
 /-- Abadi–Lamport refinement with liveness: if the initial/step mapping
 conditions hold and the liveness conjunct `LC` is preserved by the mapping
 (`hL`), then the canonical-form specs refine. This is the full

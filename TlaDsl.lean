@@ -20,3 +20,4 @@ import TlaDsl.Examples.ModelCheck
 import TlaDsl.Examples.Brackets
 import TlaDsl.Examples.TwoPhaseCommit
 import TlaDsl.Examples.Paxos
+import TlaDsl.Examples.PaxosConsensus
