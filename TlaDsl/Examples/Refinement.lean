@@ -62,8 +62,9 @@ theorem step_refines : ∀ s s', (NextConc s s' ∨ VarsConc s' = VarsConc s) �
 
 theorem conc_refines_abs : Tla.RefinesVia f SpecConc SpecAbs := by
   unfold SpecConc SpecAbs
-  exact Tla.refinement_mapping InitAbs NextAbs VarsAbs InitConc NextConc VarsConc f
-    init_refines step_refines
+  refine_via f
+  · exact init_refines
+  · exact step_refines
 
 /-! ## Refinement with liveness
 

@@ -30,6 +30,7 @@ inductive Phase : Type where
   | working | prepared | committed | aborted
   deriving DecidableEq, Repr
 
+@[ext]
 structure St where
   coord : Phase
   part : Nat → Phase

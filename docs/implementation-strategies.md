@@ -288,10 +288,19 @@ in `TlaDsl/Examples/Mutex.lean`; the `stutinv`/`StutQuot` refinement layer in
 `TlaDsl/Meta.lean` + `TlaDsl/SimFull.lean` (slices 1-5, see
 `docs/tla-meta-theory.md`).
 
-**Phase 3 — Composition and refinement (months)**
+**Phase 3 — Composition and refinement (months) — complete**
 Refinement over `[A]_v`; `\EE` hiding; 2PC refinement; assume-guarantee.
 *Accept:* counter→abstract refinement and 2PC concrete→abstract proved with
-`refine_via`-style tactics.
+`refine_via`-style tactics. Done: `refine_via` / `refine_via_inv` tactics in
+`TlaDsl/Tactic.lean` (apply the Abadi–Lamport mapping theorems and discharge
+the algebraic obligations with `tla_grind`); counter→abstract refinement
+refactored onto `refine_via` (`TlaDsl/Examples/Refinement.lean`);
+**2PC refines atomic 2PC** (`TlaDsl/Examples/TwoPhaseCommitRefinement.lean`:
+the `prepared ↦ working` mapping, every concrete step maps to an abstract
+step or stutter, proved with `refine_via`); `\EE`-hiding refinement-soundness
+and the full liveness refinement theorem were already in `TlaDsl/Meta.lean`
+(slices 4-5). Remaining roadmap item: assume-guarantee reasoning (the
+compositional layer on top of `\EE`).
 
 **Phase 4 — Productization**
 Tutorials/manual, error-message polish, CI with example regression tests,

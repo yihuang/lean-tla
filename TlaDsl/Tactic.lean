@@ -1,4 +1,5 @@
 import TlaDsl.Rules
+import TlaDsl.Meta
 import TlaDsl.Prime
 
 namespace Tla
@@ -66,5 +67,19 @@ hypothesis `hcase` (a `p → p1 ∨ p2 ∨ p3` split under the invariant) and th
 three case leads-to facts `h1 h2 h3`. -/
 macro "tla_leads_to_cases" h1:ident h2:ident h3:ident hcase:term : tactic =>
   `(tactic| (exact Tla.leads_to_cases _ _ _ _ _ _ _ ($hcase) ($h1) ($h2) ($h3)))
+
+/-- Apply the Abadi–Lamport refinement-mapping theorem to a
+`RefinesVia f conc abs` goal (with `conc`/`abs` in canonical
+`Init ∧ □[Next]_v` form), leaving the initial-state and step mapping
+obligations; `tla_grind` discharges the purely algebraic ones. -/
+macro "refine_via " f:term : tactic =>
+  `(tactic| (apply Tla.refinement_mapping _ _ _ _ _ _ $f <;> try tla_grind))
+
+/-- The invariant-threaded variant of `refine_via`: applies
+`refinement_mapping_inv`, additionally requiring the concrete invariant
+`inv` to hold initially and be preserved (the step correspondence is then
+only checked on reachable states). -/
+macro "refine_via_inv " inv:term f:term : tactic =>
+  `(tactic| (apply Tla.refinement_mapping_inv _ _ _ _ _ _ $inv $f <;> try tla_grind))
 
 end Tla
