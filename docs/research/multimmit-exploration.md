@@ -6,7 +6,9 @@ the extraction-core slice (Lemma 7, positions) in
 [`../../TlaDsl/Examples/Multimmit.lean`](../../TlaDsl/Examples/Multimmit.lean),
 and the timed slice (Lemma 5) in
 [`../../TlaDsl/Examples/MinimmitTimed.lean`](../../TlaDsl/Examples/MinimmitTimed.lean).
-The extension-carry rules and the settledness equality remain scoped below.
+The extension-carry and settledness slice (Lemma 7, heights) is also in
+`TlaDsl/Examples/Multimmit.lean`. What remains scoped below is the
+DA-certificate chain layer itself.
 
 ## The protocol
 
@@ -105,11 +107,19 @@ library), zero `sorry`, zero warnings. The example is wired into
    votes, at least `f+1` correct ones appear in the V-notarisation tally),
    `rank_ge` (V-QC rank ≥ L-QC rank), and `safe_extension_positions` (the
    V-QC tip extends the L-QC tip), together with the `Chain`/`Extends`
-   block-level machinery. **Remaining**: the extension-carry (deepest block
-   with `2f+1`/unanimity support, the exact-threshold theorem
-   `⌈(n+3f)/2⌉`), the settledness equality (Lemma 7(b)), and the
-   `Ord`/`Emit` total ordering. This part is *pure combinatorics over
-   finite vote sets* — no time, only Finset/cardinality reasoning.
+   block-level machinery. **Extension carry and settledness done** at the
+   height level: `CountsForHeight`/`Supported`/`IsDeepest` (downward-closed
+   endorsed heights, deepest supported height), `carry_reaches_final`
+   (Lemma 7a's extension half: unanimity-deepened `F` is reached by the
+   V-QC's `2f+1` carry — the `n−3f ≥ 2f+1` overlap again),
+   `carry_bounded_settled` (Lemma 7b: under settledness
+   `β + (n−|P|) ≤ f`, no height above `F` is `2f+1`-supported: correct
+   votes above `F` number at most `f`), and `safe_extension_settled`
+   (`Tips(W) = F`). **Remaining**: the `Ord`/`Emit` total ordering, the
+   exact-threshold theorem `⌈(n+3f)/2⌉`, and the chain-layer facts the
+   height abstraction elides (certified blocks compatible; DA-vote at most
+   once per height). This part is *pure combinatorics over finite vote
+   sets* — no time, only Finset/cardinality reasoning.
 4. **Liveness** (view synchronization, `2Δ` timeouts, GST). A larger
    temporal/real-time step, orthogonal to the safety core.
 

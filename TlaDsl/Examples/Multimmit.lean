@@ -202,4 +202,210 @@ theorem safe_extension_positions {n f : Nat} {Byz Pv Wset Wv : Finset Proc} {π 
     Extends c (c.prop k) (c.prop kStar) := by
   exact extend_prop (rank_ge hByz hPv hWset hWsetCard hAppear hRankL hRankV)
 
+/-! ## Extension carry and settledness (Lemma 7, heights)
+
+The rank rules fix each chain's tip *position*; the extension rules then
+deepen the tip if enough votes count for blocks above the proposal. In
+height terms (all on one chain, blocks comparable by height):
+
+* a vote with endorsed height `endorse p` counts for every height `≤ endorse p`
+  (`CountsForHeight`/`Supported`, downward-closed);
+* the **extension carry** of a V-QC is the deepest height at least the
+  position height that `2f+1` votes in the V-tally support (`IsDeepest` at
+  threshold `2f+1`);
+* the **finalised tip** `F` of an L-QC is the deepest height at least the
+  position height that *every* vote in the pool `P` supports (threshold
+  `P.card`, i.e. unanimity), applied only in the `k* = m` case.
+
+Lemma 7's two remaining parts, at the height level:
+
+* `carry_reaches_final` (7a, extension half): if `F` is unanimity-deepened
+  from `h0`, the V-QC carry from the same `h0` reaches `F` — of the
+  `n−f−|Byz|` correct voters counting for `F`, at most `f` are missing from
+  the V-notarisation's `n−f`-message set, leaving `≥ n−3f ≥ 2f+1` votes in
+  the V-tally counting for `F`.
+* `carry_bounded_settled` (7b): if the chain is *settled* (`β + (n−|P|) ≤ f`,
+  where `β` is the number of pool votes endorsing strictly above `F`), no
+  height above `F` can be `2f+1`-supported in the V-tally: correct votes
+  above `F` number at most `β + (n−|P|) ≤ f` and faulty at most `f`.
+
+Together they give `safe_extension_settled`: under settledness the V-QC tip
+height equals the L-QC tip height, i.e. `Tips(W) = F` (Lemma 7b). The
+abstraction elides two chain-layer facts that the paper uses at this point —
+certified blocks on a chain are compatible (so "extends" is height
+comparison), and correct processors DA-vote at most once per height — which
+are the subject of the DA-certificate slice.
+-/
+
+/-- The number of votes in `V` endorsing height at least `h`. -/
+def CountsForHeight (endorse : Proc → Nat) (V : Finset Proc) (h : Nat) : Nat :=
+  (V.filter (fun p => h ≤ endorse p)).card
+
+/-- `h` is supported by at least `thr` votes in `V`. -/
+def Supported (endorse : Proc → Nat) (V : Finset Proc) (thr : Nat) (h : Nat) : Prop :=
+  thr ≤ CountsForHeight endorse V h
+
+/-- `hF` is the deepest height at least `h0` supported by `V` at threshold
+`thr` (the extension carry at `2f+1`, or the unanimity deepening at
+`V.card`). -/
+def IsDeepest (endorse : Proc → Nat) (V : Finset Proc) (thr : Nat) (h0 hF : Nat) : Prop :=
+  h0 ≤ hF ∧ Supported endorse V thr hF ∧
+    ∀ h : Nat, h0 ≤ h → Supported endorse V thr h → h ≤ hF
+
+/-- `CountsForHeight` is antitone in the height. -/
+theorem counts_mono {endorse : Proc → Nat} {V : Finset Proc} {h h' : Nat} (hle : h ≤ h') :
+    CountsForHeight endorse V h' ≤ CountsForHeight endorse V h := by
+  unfold CountsForHeight
+  exact Finset.card_le_card (by
+    intro p hp
+    exact Finset.mem_filter.mpr ⟨(Finset.mem_filter.mp hp).1, le_trans hle (Finset.mem_filter.mp hp).2⟩)
+
+/-- Maximality of the deepest supported height. -/
+theorem deepest_le_of_supported {endorse : Proc → Nat} {V : Finset Proc} {thr h0 h hF : Nat}
+    (hD : IsDeepest endorse V thr h0 hF) (hh0 : h0 ≤ h) (hh : Supported endorse V thr h) :
+    h ≤ hF := hD.2.2 h hh0 hh
+
+/-- Unanimity support: if `V.card` votes support `h`, every vote in `V`
+endorses at least `h`. -/
+theorem counts_all {endorse : Proc → Nat} {V : Finset Proc} {h : Nat}
+    (hS : Supported endorse V V.card h) : ∀ p : Proc, p ∈ V → h ≤ endorse p := by
+  intro p hp
+  by_contra hnot
+  have hlt : endorse p < h := Nat.lt_of_not_ge hnot
+  have hle : (V.filter (fun p => h ≤ endorse p)).card ≤ V.card - 1 := by
+    have hsub : V.filter (fun p => h ≤ endorse p) ⊆ V.erase p := by
+      intro q hq
+      have hqV : q ∈ V := (Finset.mem_filter.mp hq).1
+      have hqh : h ≤ endorse q := (Finset.mem_filter.mp hq).2
+      exact Finset.mem_erase.mpr ⟨(by intro hqp; subst q; exact (not_lt_of_ge hqh) hlt), hqV⟩
+    have hcard : (V.erase p).card = V.card - 1 := Finset.card_erase_of_mem hp
+    simpa [hcard] using Finset.card_le_card hsub
+  have hS' : V.card ≤ (V.filter (fun p => h ≤ endorse p)).card := hS
+  have hVpos : 0 < V.card := Finset.card_pos.mpr ⟨p, hp⟩
+  omega
+
+/-- **Lemma 7a (extension half).** If the L-QC tip `F` is the deepest height
+`≥ h0` supported by the whole pool `P` (unanimity), then the V-QC extension
+carry from the same `h0` reaches `F`. -/
+theorem carry_reaches_final {n f : Nat} {Byz P Wset Wv : Finset Proc} {endorse : Proc → Nat}
+    {h0 hF hW : Nat}
+    (hByz : Byz.card ≤ f)
+    (hP : P ⊆ Finset.range n) (hPcard : n - f ≤ P.card)
+    (hWset : Wset ⊆ Finset.range n) (hWsetCard : n - f ≤ Wset.card)
+    (hAppear : ∀ p : Proc, p ∈ P → p ∉ Byz → p ∈ Wset → p ∈ Wv)
+    (hFdeep : IsDeepest endorse P P.card h0 hF)
+    (hWdeep : IsDeepest endorse Wv (2 * f + 1) h0 hW)
+    (hn : 5 * f + 1 ≤ n) :
+    hF ≤ hW := by
+  have hPall : ∀ p : Proc, p ∈ P → hF ≤ endorse p := counts_all hFdeep.2.1
+  let C := P.filter (fun p => p ∉ Byz)
+  have hC_ge : n - f - Byz.card ≤ C.card := by
+    have hsum : C.card + (P.filter (fun p => p ∈ Byz)).card = P.card := by
+      simpa [C] using (Finset.card_filter_add_card_filter_not (s := P) (p := fun p => p ∉ Byz))
+    have hbyz : (P.filter (fun p => p ∈ Byz)).card ≤ Byz.card := by
+      exact Finset.card_le_card (by intro p hp; exact (Finset.mem_filter.mp hp).2)
+    omega
+  have hC_sub : C ⊆ Finset.range n := by
+    intro p hp
+    exact hP (Finset.mem_filter.mp hp).1
+  have hC_out : (C \ Wset).card ≤ f := by
+    have hsub : C \ Wset ⊆ Finset.range n \ Wset := by
+      intro p hp
+      exact Finset.mem_sdiff.mpr ⟨hC_sub (Finset.mem_sdiff.mp hp).1, (Finset.mem_sdiff.mp hp).2⟩
+    have hcard : (Finset.range n \ Wset).card = n - Wset.card := by
+      simpa [Finset.card_range] using Finset.card_sdiff_of_subset hWset
+    calc
+      (C \ Wset).card ≤ (Finset.range n \ Wset).card := Finset.card_le_card hsub
+      _ = n - Wset.card := hcard
+      _ ≤ f := by omega
+  have hC_in : 2 * f + 1 ≤ (C ∩ Wset).card := by
+    have hsum : (C ∩ Wset).card + (C \ Wset).card = C.card :=
+      Finset.card_inter_add_card_sdiff C Wset
+    omega
+  have hSupp : Supported endorse Wv (2 * f + 1) hF := by
+    unfold Supported CountsForHeight
+    have hsub : C ∩ Wset ⊆ Wv.filter (fun p => hF ≤ endorse p) := by
+      intro p hp
+      have hpC : p ∈ C := (Finset.mem_inter.mp hp).1
+      have hpW : p ∈ Wset := (Finset.mem_inter.mp hp).2
+      have hpP : p ∈ P := (Finset.mem_filter.mp hpC).1
+      have hpNot : p ∉ Byz := (Finset.mem_filter.mp hpC).2
+      exact Finset.mem_filter.mpr ⟨hAppear p hpP hpNot hpW, hPall p hpP⟩
+    have hle : (C ∩ Wset).card ≤ (Wv.filter (fun p => hF ≤ endorse p)).card :=
+      Finset.card_le_card hsub
+    omega
+  exact deepest_le_of_supported hWdeep hFdeep.1 hSupp
+
+/-- **Lemma 7b (settledness).** If the chain is settled (`β + (n−|P|) ≤ f`),
+no height above the finalised tip `F` is `2f+1`-supported in the V-tally, so
+the V-QC carry does not exceed `F`. -/
+theorem carry_bounded_settled {n f : Nat} {Byz P Wv : Finset Proc} {endorse : Proc → Nat}
+    {h0 hF hW : Nat}
+    (hByz : Byz.card ≤ f)
+    (hP : P ⊆ Finset.range n)
+    (hWv : Wv ⊆ Finset.range n)
+    (hWdeep : IsDeepest endorse Wv (2 * f + 1) h0 hW)
+    (hSettled : (P.filter (fun p => hF < endorse p)).card + (n - P.card) ≤ f) :
+    hW ≤ hF := by
+  by_contra hgt
+  have hFlt : hF < hW := Nat.lt_of_not_ge hgt
+  let E := Wv.filter (fun p => hW ≤ endorse p)
+  have hCorr : (E.filter (fun p => p ∉ Byz)).card ≤ f := by
+    have hsum : ((E.filter (fun p => p ∉ Byz)).filter (fun p => p ∈ P)).card +
+                ((E.filter (fun p => p ∉ Byz)).filter (fun p => p ∉ P)).card =
+                (E.filter (fun p => p ∉ Byz)).card := by
+      simpa using (Finset.card_filter_add_card_filter_not
+        (s := E.filter (fun p => p ∉ Byz)) (p := fun p => p ∈ P))
+    have h1 : ((E.filter (fun p => p ∉ Byz)).filter (fun p => p ∈ P)).card ≤
+        (P.filter (fun p => hF < endorse p)).card := by
+      exact Finset.card_le_card (by
+        intro p hp
+        have hpP : p ∈ P := (Finset.mem_filter.mp hp).2
+        have hpH : hW ≤ endorse p := (Finset.mem_filter.mp (Finset.mem_filter.mp (Finset.mem_filter.mp hp).1).1).2
+        exact Finset.mem_filter.mpr ⟨hpP, by omega⟩)
+    have h2 : ((E.filter (fun p => p ∉ Byz)).filter (fun p => p ∉ P)).card ≤ n - P.card := by
+      have hsub : (E.filter (fun p => p ∉ Byz)).filter (fun p => p ∉ P) ⊆ Finset.range n \ P := by
+        intro p hp
+        have hpWv : p ∈ Wv := (Finset.mem_filter.mp (Finset.mem_filter.mp (Finset.mem_filter.mp hp).1).1).1
+        have hpNotP : p ∉ P := (Finset.mem_filter.mp hp).2
+        exact Finset.mem_sdiff.mpr ⟨hWv hpWv, hpNotP⟩
+      have hcard : (Finset.range n \ P).card = n - P.card := by
+        simpa [Finset.card_range] using Finset.card_sdiff_of_subset hP
+      calc
+        ((E.filter (fun p => p ∉ Byz)).filter (fun p => p ∉ P)).card ≤
+          (Finset.range n \ P).card := Finset.card_le_card hsub
+        _ = n - P.card := hcard
+    omega
+  have hFaulty : (E.filter (fun p => p ∈ Byz)).card ≤ f := by
+    have hsub : E.filter (fun p => p ∈ Byz) ⊆ Byz := by
+      intro p hp
+      exact (Finset.mem_filter.mp hp).2
+    exact le_trans (Finset.card_le_card hsub) hByz
+  have hTotal : E.card ≤ 2 * f := by
+    have hsum : (E.filter (fun p => p ∉ Byz)).card + (E.filter (fun p => p ∈ Byz)).card = E.card := by
+      simpa using (Finset.card_filter_add_card_filter_not (s := E) (p := fun p => p ∉ Byz))
+    omega
+  have hSuppW : Supported endorse Wv (2 * f + 1) hW := hWdeep.2.1
+  have hSuppE : 2 * f + 1 ≤ E.card := by
+    simpa [E, Supported, CountsForHeight] using hSuppW
+  omega
+
+/-- **Lemma 7b.** Under settledness the V-QC tip height equals the L-QC tip
+height: `Tips(W) = F`. -/
+theorem safe_extension_settled {n f : Nat} {Byz P Wset Wv : Finset Proc} {endorse : Proc → Nat}
+    {h0 hF hW : Nat}
+    (hByz : Byz.card ≤ f)
+    (hP : P ⊆ Finset.range n) (hPcard : n - f ≤ P.card)
+    (hWset : Wset ⊆ Finset.range n) (hWsetCard : n - f ≤ Wset.card)
+    (hWv : Wv ⊆ Finset.range n)
+    (hAppear : ∀ p : Proc, p ∈ P → p ∉ Byz → p ∈ Wset → p ∈ Wv)
+    (hFdeep : IsDeepest endorse P P.card h0 hF)
+    (hWdeep : IsDeepest endorse Wv (2 * f + 1) h0 hW)
+    (hn : 5 * f + 1 ≤ n)
+    (hSettled : (P.filter (fun p => hF < endorse p)).card + (n - P.card) ≤ f) :
+    hW = hF := by
+  have h1 : hF ≤ hW := carry_reaches_final hByz hP hPcard hWset hWsetCard hAppear hFdeep hWdeep hn
+  have h2 : hW ≤ hF := carry_bounded_settled hByz hP hWv hWdeep hSettled
+  omega
+
 end TlaDsl.Examples.Multimmit
