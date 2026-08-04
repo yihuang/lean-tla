@@ -131,20 +131,20 @@ def byz (s : St) (p : Proc) (v : View) (B : Finset Block) : St :=
 /-- A correct processor votes for `b` in view `v`: not Byzantine, has not yet
 voted or novoted in that view. -/
 @[simp] def Vote (Byz : Finset Proc) (p : Proc) (v : View) (b : Block) : Tla.Action St :=
-  [a| p ∉ Byz ∧ (votes[p][v] : Finset Block) = ∅ ∧ ¬ novotes[p][v] ∧
+  [c| Byz, p | (votes[p][v] : Finset Block) = ∅ ∧ ¬ novotes[p][v] ∧
       votes' = Function.update votes p (Function.update (votes p) v ({b} : Finset Block)) ∧
       novotes' = novotes ∧ nullifies' = nullifies]
 
 /-- A correct processor that times out in view `v` without voting sends a
 novote. -/
 @[simp] def Novote (Byz : Finset Proc) (p : Proc) (v : View) : Tla.Action St :=
-  [a| p ∉ Byz ∧ (votes[p][v] : Finset Block) = ∅ ∧ ¬ novotes[p][v] ∧
+  [c| Byz, p | (votes[p][v] : Finset Block) = ∅ ∧ ¬ novotes[p][v] ∧
       novotes' = Function.update novotes p (fun w : View => novotes[p][w] ∨ w = v) ∧
       votes' = votes ∧ nullifies' = nullifies]
 
 /-- A correct processor sends a nullify share for view `v` (at most once). -/
 @[simp] def Nullify (Byz : Finset Proc) (p : Proc) (v : View) : Tla.Action St :=
-  [a| p ∉ Byz ∧ ¬ nullifies[p][v] ∧
+  [c| Byz, p | ¬ nullifies[p][v] ∧
       nullifies' = Function.update nullifies p (fun w : View => nullifies[p][w] ∨ w = v) ∧
       votes' = votes ∧ novotes' = novotes]
 

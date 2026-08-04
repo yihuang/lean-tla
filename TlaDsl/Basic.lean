@@ -91,6 +91,15 @@ def Unchanged {σ : Type u} {α : Type v} (v : σ → α) : Action σ := fun s s
 def StutAction {σ : Type u} {α : Type v} (a : Action σ) (v : σ → α) : Action σ :=
   fun s s' => a s s' ∨ v s' = v s
 
+/-- The honest-processor guard for Byzantine specs: the action `a` of
+processor `p` (with Byzantine set `Byz`), i.e. `p ∉ Byz ∧ a`. Every
+correct-processor action in a Byzantine protocol starts with this guard, so
+the bracket notation `[c| Byz, p | body]` (defined in `TlaDsl/Prime.lean`)
+expands to `CorrectAct Byz p [a| body]`. -/
+def CorrectAct {σ : Type u} {α : Type v} [DecidableEq α] (Byz : Finset α) (p : α)
+    (a : Action σ) : Action σ :=
+  fun s s' => p ∉ Byz ∧ a s s'
+
 /-- `⟨A⟩_v = A ∧ v' ≠ v`. -/
 def AngleAction {σ : Type u} {α : Type v} (a : Action σ) (v : σ → α) : Action σ :=
   fun s s' => a s s' ∧ v s' ≠ v s

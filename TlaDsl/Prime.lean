@@ -179,15 +179,17 @@ partial def elabStateLiftCore (bound : NameSet) (s : Expr) (expected? : Option E
       withLocalDecl x.getId .default t fun xv => do
         let lb ← elabStateLiftCore (bound.insert x.getId) s expected? b
         mkForallFVars #[xv] lb
-  | `(fun $x:ident : $T => $b) => do
+  | `(fun $x:ident $ys:ident* : $T => $b) => do
       let t ← Term.elabType T
       withLocalDecl x.getId .default t fun xv => do
-        let lb ← elabStateLiftCore (bound.insert x.getId) s expected? b
+        let rest ← if ys.isEmpty then pure b else `(fun $ys:ident* : $T => $b)
+        let lb ← elabStateLiftCore (bound.insert x.getId) s expected? rest
         mkLambdaFVars #[xv] lb
-  | `(fun $x:ident => $b) => do
+  | `(fun $x:ident $ys:ident* => $b) => do
       let t ← mkFreshExprMVar (some (mkSort (Level.succ Level.zero)))
       withLocalDecl x.getId .default t fun xv => do
-        let lb ← elabStateLiftCore (bound.insert x.getId) s expected? b
+        let rest ← if ys.isEmpty then pure b else `(fun $ys:ident* => $b)
+        let lb ← elabStateLiftCore (bound.insert x.getId) s expected? rest
         mkLambdaFVars #[xv] lb
   | `(if $c then $a else $b) => do
       let lc ← elabStateLiftCore bound s (some propType) c
@@ -403,15 +405,17 @@ partial def elabActionLiftCore (bound : NameSet) (st0 st1 : Expr) (expected? : O
       withLocalDecl x.getId .default t fun xv => do
         let lb ← elabActionLiftCore (bound.insert x.getId) st0 st1 expected? b
         mkForallFVars #[xv] lb
-  | `(fun $x:ident : $T => $b) => do
+  | `(fun $x:ident $ys:ident* : $T => $b) => do
       let t ← Term.elabType T
       withLocalDecl x.getId .default t fun xv => do
-        let lb ← elabActionLiftCore (bound.insert x.getId) st0 st1 expected? b
+        let rest ← if ys.isEmpty then pure b else `(fun $ys:ident* : $T => $b)
+        let lb ← elabActionLiftCore (bound.insert x.getId) st0 st1 expected? rest
         mkLambdaFVars #[xv] lb
-  | `(fun $x:ident => $b) => do
+  | `(fun $x:ident $ys:ident* => $b) => do
       let t ← mkFreshExprMVar (some (mkSort (Level.succ Level.zero)))
       withLocalDecl x.getId .default t fun xv => do
-        let lb ← elabActionLiftCore (bound.insert x.getId) st0 st1 expected? b
+        let rest ← if ys.isEmpty then pure b else `(fun $ys:ident* => $b)
+        let lb ← elabActionLiftCore (bound.insert x.getId) st0 st1 expected? rest
         mkLambdaFVars #[xv] lb
   | `(if $c then $a else $b) => do
       let lc ← elabStateLiftCore bound st0 (some propType) c
@@ -631,5 +635,12 @@ macro_rules
   | `([t| $body]) => do
       let t ← liftFormula body
       pure t.raw
+
+/-- `[c| Byz, p | body]`: the action `body` guarded by the honest-processor
+condition `p ∉ Byz` — sugar for `CorrectAct Byz p [a| body]`, the standard
+guard every correct-processor action in a Byzantine spec repeats. -/
+syntax "[c| " term ", " term " | " term "]" : term
+macro_rules
+  | `([c| $Byz, $p | $body]) => `(CorrectAct $Byz $p [a| $body])
 
 end Tla

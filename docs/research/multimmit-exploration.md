@@ -146,11 +146,15 @@ def` matcher. Remaining: multi-binder `fun x y => ...` and binder patterns.
   the three overlap lemmas are short and reusable.
 
 **What could be better (candidate DSL features):**
-1. **Multi-binder `fun` support** in the brackets (the natural next
-   elaborator step).
-2. **A `correct`-guarded action macro**, e.g. `[c| ...]` meaning
-   `[a| p ∉ Byz ∧ ...]`, since every honest-processor action in a Byzantine
-   spec repeats that guard.
+1. **Multi-binder `fun` support** in the brackets — **done**: the
+   elaborator now handles `fun x y : T => ...` / `fun x y => ...` (and
+   beyond, by recursing on the remaining binders) in both `[p|]` and `[a|]`,
+   pinned by regression tests in `TlaDsl/Examples/Brackets.lean`.
+2. **A `correct`-guarded action macro** — **done**: `[c| Byz, p | body]`
+   expands to `CorrectAct Byz p [a| body]` (`p ∉ Byz ∧ body`), and the
+   Minimmit example's honest actions (`Vote`, `Novote`, `Nullify`) now use
+   it, dropping the repeated guard from the spec text while the proofs are
+   unchanged.
 3. **A quorum-intersection theorem/simp library**: one lemma
    `two_quorums_meet (h1 : a ≤ Q1.card) (h2 : b ≤ Q2.card)
    (h : Q1 ∪ Q2 ⊆ range n) : a + b - n ≤ (Q1 ∩ Q2).card` would collapse the

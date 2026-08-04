@@ -193,6 +193,28 @@ example : [p| ∀ p : Nat, marks[p] = (fun w : Nat => marks[p][w])] =
     fun s : St2 => ∀ p : Nat, marks s p = (fun w : Nat => marks s p w) := by
   rfl
 
+example : [p| (fun w z : Nat => marks[p][w] ∨ w = z) = (fun w z : Nat => marks[p][w] ∨ w = z)] =
+    fun s : St2 => (fun w z : Nat => marks s p w ∨ w = z) = (fun w z : Nat => marks s p w ∨ w = z) := by
+  rfl
+
+example : [a| marks' = (fun a b : Nat => marks[a][b])] =
+    fun s s' : St2 => marks s' = (fun a b : Nat => marks s a b) := by
+  rfl
+
+example : [a| marks' = (fun a b => marks[a][b])] =
+    fun s s' : St2 => marks s' = (fun a b => marks s a b) := by
+  rfl
+
+/-! ## Byzantine specs: the honest-processor guard -/
+
+example (Byz : Finset Nat) (p : Nat) : [c| Byz, p | x' = x + 1] =
+    fun s s' : St => p ∉ Byz ∧ x s' = x s + 1 := by
+  rfl
+
+example (Byz : Finset Nat) (p : Nat) : [c| Byz, p | marks' = Function.update marks p (fun w : Nat => marks[p][w] ∨ w = p)] =
+    fun s s' : St2 => p ∉ Byz ∧ marks s' = Function.update (marks s) p (fun w : Nat => marks s p w ∨ w = p) := by
+  rfl
+
 end TlaFn
 
 /-! ## Temporal formulas -/
