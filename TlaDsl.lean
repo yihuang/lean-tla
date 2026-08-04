@@ -24,3 +24,4 @@ import TlaDsl.Examples.PaxosConsensus
 import TlaDsl.Examples.Minimmit
 import TlaDsl.Examples.Multimmit
 import TlaDsl.Examples.MinimmitTimed
+import TlaDsl.Examples.Countdown

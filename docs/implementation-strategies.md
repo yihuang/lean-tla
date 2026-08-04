@@ -252,7 +252,7 @@ case.
 | 4 | Record-state action notation with primes (`x'`, `Unchanged x`, `[Next]_vars`) | medium (prototype-driven) | 1, 2 |
 | 5 | Scoped temporal notation + ASCII aliases + improved delaborators/errors | medium | 4 |
 | 6 | `tla_inv` invariant tactic | easy | 1 |
-| 7 | `tla_wf1`/`tla_sf1` liveness tactics with rank functions | medium | 2, 6 |
+| 7 | `tla_wf1`/`tla_sf1` liveness tactics with rank functions | `tla_wf1`/`tla_sf1`/`tla_sf1_standard` done (WF1/SF1 proved from semantics, enabledness left as the human input); rank-function pattern done (`TlaDsl/Examples/Countdown.lean`: `i = k ↝ i = 0` via WF1 + strong induction on the counter, plus a spec-level `◇ i = 0`); mutex/ticket-lock/two-phase liveness examples in `TlaDsl/Examples/Mutex.lean` | 2, 6 |
 | 8 | `tla_leads_to` choreography automation | easy–medium | 1 |
 | 9 | `native_decide` finite model-check tactic + trace sim with counterexamples | medium | 1, decidability instances |
 | 10 | Refinement over `[A]_v` semantics (Abadi–Lamport), re-proved | medium | 2, 3 |
