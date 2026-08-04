@@ -1,9 +1,11 @@
 # Multimmit exploration: one-round Byzantine voting in TlaDsl
 
-Status: exploration slice complete (2026-08-04). The consensus-core slice is
-formalized in [`../../TlaDsl/Examples/Minimmit.lean`](../../TlaDsl/Examples/Minimmit.lean);
-the Multimmit-specific chain layer and extraction functions are scoped for
-the next slice below.
+Status: exploration slices complete (2026-08-04). The consensus-core slice
+is formalized in [`../../TlaDsl/Examples/Minimmit.lean`](../../TlaDsl/Examples/Minimmit.lean),
+and the extraction-core slice (Lemma 7, positions) in
+[`../../TlaDsl/Examples/Multimmit.lean`](../../TlaDsl/Examples/Multimmit.lean).
+The extension-carry rules, the settledness equality, and the time-based
+no-nullification argument remain scoped below.
 
 ## The protocol
 
@@ -92,9 +94,17 @@ library), zero `sorry`, zero warnings. The example is wired into
 3. **Chain layer (Multimmit-specific)**. DA-votes/DA-certificates with
    pipelining (`Lemma 1`: certified blocks are compatible), chain proposals,
    vote vectors, and the `Tips`/`Tips*`/`Ord`/`Emit` extraction functions
-   (`Lemma 7`: safe extension). This part is *pure combinatorics over
-   finite vote sets* — extremely Lean-friendly and the recommended next
-   slice; it needs no time, only Finset/cardinality reasoning.
+   (`Lemma 7`: safe extension). **Position part done** in
+   `TlaDsl/Examples/Multimmit.lean`: `RankAt` (the `(j+1)`-th largest
+   position), the Byzantine overlap `rank_transfer` (of the `3f+1` pool
+   votes, at least `f+1` correct ones appear in the V-notarisation tally),
+   `rank_ge` (V-QC rank ≥ L-QC rank), and `safe_extension_positions` (the
+   V-QC tip extends the L-QC tip), together with the `Chain`/`Extends`
+   block-level machinery. **Remaining**: the extension-carry (deepest block
+   with `2f+1`/unanimity support, the exact-threshold theorem
+   `⌈(n+3f)/2⌉`), the settledness equality (Lemma 7(b)), and the
+   `Ord`/`Emit` total ordering. This part is *pure combinatorics over
+   finite vote sets* — no time, only Finset/cardinality reasoning.
 4. **Liveness** (view synchronization, `2Δ` timeouts, GST). A larger
    temporal/real-time step, orthogonal to the safety core.
 
@@ -138,6 +148,12 @@ def` matcher. Remaining: multi-binder `fun x y => ...` and binder patterns.
 5. The `Inv`-threading (`init_inv`/`next_inv`/`stutter_inv` +
    `init_invariant_stut`) is already convenient via `tla_inv`; no change
    needed for this slice.
+
+The extraction slice (pure mathlib, no DSL brackets) additionally showed
+that the library layer is pleasant for protocol combinatorics: the whole
+Byzantine overlap argument is two `Finset` cardinality lemmas plus `omega`,
+and the rank rules state cleanly as counting predicates. A reusable
+`two_quorums_meet` lemma (item 3 above) would shorten it further.
 
 ## Protocol insights worth keeping
 
