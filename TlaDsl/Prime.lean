@@ -296,7 +296,13 @@ partial def elabStateLiftCore (bound : NameSet) (s : Expr) (expected? : Option E
           | .forallE _ d _ _ =>
               let dW ← whnf d
               if dW.isSort then pure e
-              else if (← isDefEq d (← inferType s)) then pure (mkApp e s) else pure e
+              else if ¬ d.hasMVar then
+                -- NB: guard the `isDefEq` behind a plain `if`. Writing
+                -- `(¬ d.hasMVar) && (← isDefEq d (inferType s))` would run the
+                -- monadic bind unconditionally, assigning polymorphic implicit
+                -- metavariables (e.g. `id ?α`, `some ?α`) to the state type.
+                if (← isDefEq d (← inferType s)) then pure (mkApp e s) else pure e
+              else pure e
           | _ => pure e
       else if stx.isOfKind ``Lean.Parser.Term.app then do
         let args := (stx.getArg 1).getArgs
@@ -327,6 +333,7 @@ private def applyIfAction (st0 st1 : Expr) (e : Expr) : TermElabM Expr := do
       let dW ← whnf d
       let d2W ← whnf d2
       if dW.isSort || d2W.isSort then pure e
+      else if d.hasMVar || d2.hasMVar then pure e
       else do
         let h1 ← isDefEq d (← inferType st0)
         let h2 ← isDefEq d2 (← inferType st1)
@@ -513,7 +520,11 @@ partial def elabActionLiftCore (bound : NameSet) (st0 st1 : Expr) (expected? : O
           | .forallE _ d _ _ =>
               let dW ← whnf d
               if dW.isSort then pure e
-              else if (← isDefEq d (← inferType st0)) then pure (mkApp e st0) else pure e
+              else if ¬ d.hasMVar then
+                -- see the state elaborator: never run `isDefEq` inside a `&&`
+                -- with a `←` bind — the bind executes unconditionally.
+                if (← isDefEq d (← inferType st0)) then pure (mkApp e st0) else pure e
+              else pure e
           | _ => pure e
       else if stx.isOfKind ``Lean.Parser.Term.app then do
         let args := (stx.getArg 1).getArgs

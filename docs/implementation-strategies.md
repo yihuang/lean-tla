@@ -257,7 +257,7 @@ case.
 | 9 | `native_decide` finite model-check tactic + trace sim with counterexamples | medium | 1, decidability instances |
 | 10 | Refinement over `[A]_v` semantics (Abadi–Lamport), re-proved | medium | 2, 3 |
 | 11 | `\EE` hiding for composition | hard (typed design) | 10 |
-| 12 | Pattern library + tutorials (counter → mutex → 2PC → Paxos-safety) | counter, mutex, ticket lock, 2PC safety done (`TlaDsl/Examples/TwoPhaseCommit.lean`); Paxos-safety next | all |
+| 12 | Pattern library + tutorials (counter → mutex → 2PC → Paxos-safety) | counter, mutex, ticket lock, 2PC, Paxos-safety done (`TlaDsl/Examples/Paxos.lean`: Voting-spec port, `ShowsSafety` theorem, agreement invariant); elaborator fix for `some v`/polymorphic apps in brackets | all |
 | 13 | Toolchain policy (pinned mathlib, CI, lints), optional cslib LTS bridge | easy–medium | 1 |
 
 ## 4. Roadmap (phases with acceptance criteria)
