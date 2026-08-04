@@ -18,6 +18,8 @@ status. PDFs are the authors' online versions unless noted.
 | `merz-the-specification-language-tla+2008.pdf` | S. Merz, *The Specification Language TLA+*, in *Logics of Specification Languages*, Springer, 2008 | https://homepages.loria.fr/SMerz/papers/tla+logic2008.pdf |
 | `afp-tla-definitional-encoding.pdf` | G. Grov, S. Merz, *A Definitional Encoding of TLA\* in Isabelle/HOL*, Archive of Formal Proofs, 2011 (entry PDF) | https://www.isa-afp.org/browser_info/current/AFP/TLA/document.pdf |
 | `cslib-spine-henson-montesi.pdf` | C. Henson, F. Montesi, *Computer Science as Infrastructure: the Spine of the Lean Computer Science Library (CSLib)* (arXiv:2602.15078) | https://arxiv.org/pdf/2602.15078v1 |
+| `multimmit-extending-blocks-faster-finality.pdf` | A. Lewis-Pye, P. O'Grady, *Multimmit: Extending Blocks for Faster Finality* (arXiv:2607.21021v2, draft 2026-08-02) | https://arxiv.org/pdf/2607.21021v2 |
+| `minimmit-fast-finality-even-faster-blocks.pdf` | B. Kobayashi Chou, A. Lewis-Pye, P. O'Grady, *Minimmit: Fast Finality with Even Faster Blocks* (arXiv:2508.10862, 2025) | https://arxiv.org/pdf/2508.10862 |
 
 ## Web pages (web/)
 
@@ -32,6 +34,7 @@ status. PDFs are the authors' online versions unless noted.
 | `tlaplus-constant-lean-zulip.html` | Zulip thread: Lean's equivalence of TLA+'s CONSTANT | https://leanprover-community.github.io/archive/stream/236449-Program-verification/topic/Lean's.20equivalence.20of.20TLA.2B's.20CONSTANT.html |
 | `lamport-science-of-concurrent-programs.html` | Lamport's *A Science of Concurrent Programs* book page (final draft, 2024/25) | https://lamport.azurewebsites.net/tla/science-book.html |
 | `tlaplus-afp-embedding-discussion.html` | tlaplus list, Dec 2023: Merz on the AFP TLA\* shallow embedding (why it was little used; TLAPS recommended) | https://discuss.tlapl.us/msg05769.html |
+| `multimmit-extending-blocks-faster-finality.html` | arXiv HTML rendering of the Multimmit paper (with `multimmit-extending-blocks-faster-finality.txt` plain-text extraction) | https://arxiv.org/abs/2607.21021 |
 
 ## Vendored sources (vendor/)
 

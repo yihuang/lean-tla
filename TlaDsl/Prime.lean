@@ -8,6 +8,11 @@ open Lean Elab Term Meta
 
 namespace Tla
 
+/- The bracket-lifting elaborators are large `partial def`s; their pattern
+matches grow with each supported binder form (∀, ∃, fun), and the LCNF
+compiler needs a larger heartbeat budget than the elaboration default. -/
+set_option maxHeartbeats 800000
+
 /-! # Pseudocode action/state syntax
 
 `[p| x = 0 ∧ y = 0]` elaborates to a `StatePred σ`, and
@@ -174,6 +179,16 @@ partial def elabStateLiftCore (bound : NameSet) (s : Expr) (expected? : Option E
       withLocalDecl x.getId .default t fun xv => do
         let lb ← elabStateLiftCore (bound.insert x.getId) s expected? b
         mkForallFVars #[xv] lb
+  | `(fun $x:ident : $T => $b) => do
+      let t ← Term.elabType T
+      withLocalDecl x.getId .default t fun xv => do
+        let lb ← elabStateLiftCore (bound.insert x.getId) s expected? b
+        mkLambdaFVars #[xv] lb
+  | `(fun $x:ident => $b) => do
+      let t ← mkFreshExprMVar (some (mkSort (Level.succ Level.zero)))
+      withLocalDecl x.getId .default t fun xv => do
+        let lb ← elabStateLiftCore (bound.insert x.getId) s expected? b
+        mkLambdaFVars #[xv] lb
   | `(if $c then $a else $b) => do
       let lc ← elabStateLiftCore bound s (some propType) c
       let la ← elabStateLiftCore bound s expected? a
@@ -388,6 +403,16 @@ partial def elabActionLiftCore (bound : NameSet) (st0 st1 : Expr) (expected? : O
       withLocalDecl x.getId .default t fun xv => do
         let lb ← elabActionLiftCore (bound.insert x.getId) st0 st1 expected? b
         mkForallFVars #[xv] lb
+  | `(fun $x:ident : $T => $b) => do
+      let t ← Term.elabType T
+      withLocalDecl x.getId .default t fun xv => do
+        let lb ← elabActionLiftCore (bound.insert x.getId) st0 st1 expected? b
+        mkLambdaFVars #[xv] lb
+  | `(fun $x:ident => $b) => do
+      let t ← mkFreshExprMVar (some (mkSort (Level.succ Level.zero)))
+      withLocalDecl x.getId .default t fun xv => do
+        let lb ← elabActionLiftCore (bound.insert x.getId) st0 st1 expected? b
+        mkLambdaFVars #[xv] lb
   | `(if $c then $a else $b) => do
       let lc ← elabStateLiftCore bound st0 (some propType) c
       let la ← elabActionLiftCore bound st0 st1 expected? a

@@ -21,3 +21,4 @@ import TlaDsl.Examples.Brackets
 import TlaDsl.Examples.TwoPhaseCommit
 import TlaDsl.Examples.Paxos
 import TlaDsl.Examples.PaxosConsensus
+import TlaDsl.Examples.Minimmit

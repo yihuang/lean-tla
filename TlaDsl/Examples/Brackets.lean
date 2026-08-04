@@ -157,8 +157,9 @@ namespace TlaFn
 structure St2 where
   proc : Nat → ProcState
   ticket : Nat
+  marks : Nat → Nat → Prop
 
-tla_var St2 proc ticket
+tla_var St2 proc ticket marks
 
 example : [p| proc[i] = proc[j]] = fun s : St2 => proc s i = proc s j := by
   rfl
@@ -172,6 +173,24 @@ example : [a| proc'[i].pc = proc[i].pc + 1] =
 
 example : [p| ∀ p, proc[p].pc = 0 ∨ proc[p].pc = 1] =
     fun s : St2 => ∀ p, (proc s p).pc = 0 ∨ (proc s p).pc = 1 := by
+  rfl
+
+/-! ## Lambdas inside brackets: `fun` binders
+
+`Function.update`-style per-coordinate updates take a `fun` binder whose
+body reads the (pre-)state function; the elaborator must lift state reads
+inside the lambda. -/
+
+example : [a| marks' = Function.update marks p (fun w : Nat => marks[p][w] ∨ w = v)] =
+    fun s s' : St2 => marks s' = Function.update (marks s) p (fun w : Nat => marks s p w ∨ w = v) := by
+  rfl
+
+example : [a| marks' = Function.update marks p (fun w => marks[p][w] ∨ w = v)] =
+    fun s s' : St2 => marks s' = Function.update (marks s) p (fun w => marks s p w ∨ w = v) := by
+  rfl
+
+example : [p| ∀ p : Nat, marks[p] = (fun w : Nat => marks[p][w])] =
+    fun s : St2 => ∀ p : Nat, marks s p = (fun w : Nat => marks s p w) := by
   rfl
 
 end TlaFn
