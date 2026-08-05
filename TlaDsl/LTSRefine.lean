@@ -4,8 +4,11 @@ import Cslib.Foundations.Semantics.LTS.Relation
 import Cslib.Foundations.Semantics.LTS.OmegaExecution
 import Cslib.Foundations.Semantics.LTS.Simulation
 import Cslib.Foundations.Semantics.LTS.HasTau
+import Cslib.Foundations.Data.OmegaSequence.InfOcc
 
 namespace Tla
+
+open Filter
 
 /-! # LTS refinement layer
 
@@ -162,5 +165,79 @@ finiteness hypothesis of the deep A-L liveness theorem (CSLib
 theorem specLTS_imageFinite {σ : Type u} {α : Type v} [Finite σ]
     (next : Action σ) (v : σ → α) : (SpecLTS next v).ImageFinite :=
   inferInstance
+
+/-! ## Deep A-L liveness: liveness preservation under refinement -/
+
+/-- Liveness refinement in the leads-to form: if the concrete spec proves
+the *lifted* abstract leads-to `p∘f ↝ q∘f`, then every mapped concrete
+behavior satisfies the abstract leads-to `p ↝ q` — the abstract liveness
+conjunct is *derived*, not assumed. -/
+theorem leads_to_refines {τ : Type u} {β : Type v}
+    (initC : StatePred τ) (nextC : Action τ) (v : τ → β)
+    {σ : Type w} (f : τ → σ) (p q : StatePred σ)
+    (hlt : ∀ e : Behavior τ, tlaAnd (statePred initC) (stutAlways nextC v) e →
+      leadsTo (statePred (fun s => p (f s))) (statePred (fun s => q (f s))) e) :
+    ∀ e : Behavior τ, tlaAnd (statePred initC) (stutAlways nextC v) e →
+      leadsTo (statePred p) (statePred q) (Cslib.ωSequence.map f e) := by
+  intro e he i hp
+  have hp' : p (f (e i)) := by
+    simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_comm, Cslib.ωSequence.map] using hp
+  rcases hlt e he i (by
+    simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_comm] using hp') with ⟨n, hq⟩
+  refine ⟨n, ?_⟩
+  simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+    Nat.add_left_comm, Cslib.ωSequence.map] using hq
+
+/-- Deep Abadi–Lamport refinement with liveness: the canonical-form
+refinement `Init ∧ □[N]_v ∧ (p∘f ↝ q∘f)` refines
+`Init ∧ □[N]_u ∧ (p ↝ q)`, with the abstract leads-to conjunct derived from
+the concrete one via `leads_to_refines` — no hand-given liveness
+preservation premise. -/
+theorem refinement_mapping_liveness_deep {σ τ : Type u} {α β : Type v}
+    (initA : StatePred σ) (nextA : Action σ) (u : σ → α)
+    (initC : StatePred τ) (nextC : Action τ) (v : τ → β)
+    (f : τ → σ) (p q : StatePred σ)
+    (hinit : ∀ s, initC s → initA (f s))
+    (hstep : ∀ s s', StutAction nextC v s s' → StutAction nextA u (f s) (f s'))
+    (hlt : ∀ e : Behavior τ, tlaAnd (statePred initC) (stutAlways nextC v) e →
+      leadsTo (statePred (fun s => p (f s))) (statePred (fun s => q (f s))) e) :
+    RefinesVia f
+      (tlaAnd (tlaAnd (statePred initC) (stutAlways nextC v))
+        (leadsTo (statePred (fun s => p (f s))) (statePred (fun s => q (f s)))))
+      (tlaAnd (tlaAnd (statePred initA) (stutAlways nextA u))
+        (leadsTo (statePred p) (statePred q))) := by
+  intro e he
+  exact ⟨refinement_mapping_lts initA nextA u initC nextC v f hinit hstep e ⟨he.1.1, he.1.2⟩,
+    leads_to_refines initC nextC v f p q hlt e ⟨he.1.1, he.1.2⟩⟩
+
+/-- Finite-state liveness transfer (the structural-hypothesis ingredient):
+with a finite concrete state space, a concrete state property holding
+infinitely often transfers to the abstract behavior — some `p`-state recurs
+infinitely often (CSLib's pigeonhole `frequently_in_finite_type`), and its
+image is a `q`-state. -/
+theorem frequently_refines_finite {σ τ : Type u} [Finite τ]
+    (f : τ → σ) (p : τ → Prop) (q : σ → Prop) (e : Behavior τ)
+    (hpq : ∀ s, p s → q (f s))
+    (hp : ∃ᶠ i in atTop, p (e i)) :
+    ∃ᶠ i in atTop, q ((Cslib.ωSequence.map f e) i) := by
+  have hp' : ∃ᶠ i in atTop, e i ∈ {x : τ | p x} := by
+    simpa using hp
+  rcases (Cslib.ωSequence.frequently_in_finite_type (α := τ) (xs := e)
+    (s := {x : τ | p x})).1 hp' with ⟨s, hps, hfreq⟩
+  apply Frequently.mono hfreq
+  intro i hi
+  simpa [Cslib.ωSequence.map, hi] using hpq s (by simpa using hps)
+
+/-- Fairness transfer: if concrete `A` fires infinitely often and every
+`A`-step maps to an `A'`-step (through `f`), then the mapped behavior has
+`A'` firing infinitely often. -/
+theorem action_frequently_refines {σ τ : Type u}
+    (f : τ → σ) (A : Action τ) (A' : Action σ) (e : Behavior τ)
+    (hmap : ∀ s s', A s s' → A' (f s) (f s'))
+    (hA : ∃ᶠ i in atTop, A (e i) (e (i + 1))) :
+    ∃ᶠ i in atTop, A' ((Cslib.ωSequence.map f e) i) ((Cslib.ωSequence.map f e) (i + 1)) := by
+  apply Frequently.mono hA
+  intro i hi
+  simpa [Cslib.ωSequence.map] using hmap (e i) (e (i + 1)) hi
 
 end Tla

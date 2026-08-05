@@ -227,9 +227,14 @@ re-derived as trace inclusion of ω-executions (`refinement_mapping_lts`),
 with the liveness composition form restated in the same vocabulary
 (`refinement_mapping_liveness_lts`). A finite state space makes `SpecLTS`
 image-finite (`specLTS_imageFinite`), the structural hypothesis the deep
-A-L liveness theorem needs — that theorem (deriving `LA` from the
-simulation plus `imageFinite`/`finiteState` instead of a hand-given `hL`)
-is the remaining slice.
+A-L liveness theorem needs. The deep liveness refinement is now in:
+`leads_to_refines` derives the abstract leads-to `p ↝ q` from the concrete
+`p∘f ↝ q∘f` (no hand-given liveness-preservation premise), giving the
+canonical-form `refinement_mapping_liveness_deep`; `frequently_refines_finite`
+is the finite-state transfer (CSLib's `frequently_in_finite_type` pigeonhole:
+an infinitely-often concrete state property transfers to the mapped abstract
+behavior), and `action_frequently_refines` transfers "fires infinitely
+often" across an action mapping (the fairness ingredient).
 
 ### CSLib reuse (reviewer table) — **bridge done, lattice complete**
 
