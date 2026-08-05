@@ -127,17 +127,25 @@ SLOC Ivy, 14 justice assumptions, lexicographic ranking, lemma-free proof in
 - remaining: a Rule-10 example — the paper's §3.4 reordering queue (two
   message classes, lexicographic rank, preempted lower component growing
   while a higher one is scheduled). *Exploration note (2026-08-05):* a
-  first attempt at this example exposed a genuine model-design subtlety the
-  paper glosses over — in a flat timestamp model, a class-`B` message may
-  share the tracked timestamp `t` with a class-`A` message, and moving it
-  to queue 2 adds a second arrival of `t`, which breaks conservation of
-  `δ₁ = arrivals ≤ ta(t)`. The paper's scenario implicitly assumes
-  per-message unique timestamps. The fix is to make the model timestamps
-  globally unique (a single shared, strictly-increasing `last` for both
-  classes, with `sentA ∩ sentB = ∅` as an invariant) or to define
-  `ArrT` as the *minimum* arrival of `t` (so a later duplicate arrival is
-  outside `δ₁`). Either fix is a clean next slice; the Rule 10 soundness
-  engine itself is unaffected.
+  two-pass attempt at this example pinned down both the model fix and the
+  remaining proof-design issue:
+
+  1. **Unique timestamps (validated).** The paper implicitly assumes
+     per-message unique timestamps; a class-`B` message sharing the tracked
+     class-`A` timestamp `t` breaks `δ₁` conservation. The fix — a single
+     shared, strictly-increasing `last` for both classes, with invariants
+     `∀τ ∈ pendB, τ ∉ sentA` and `∀τ ∈ sentA, τ ≤ last` — makes the model
+     correct. The reordering model, the 6-clause inductive invariant, and
+     its preservation proof were completed in Lean against this design.
+  2. **`ArrT` needs a dedicated helper (open).** `ArrT` (the arrival of
+     `t` in queue 2) must be the deterministic *minimum* arrival, but the
+     min-based definition makes `ArrT s' t = ArrT s t` proofs (needed by
+     the `δ₁` conserve clauses when `poll₁B`/`poll₂` change queue 2)
+     expensive — `rw [ArrT]` repeatedly hits whnf heartbeat limits. The
+     clean fix is a `minArrival` helper with ready-made lemmas
+     (`minArrival_insert_ne`, `minArrival_erase_ne`, `minArrival_iff_mem`),
+     then the conserve proofs become one-line rewrites. The Rule 10
+     soundness engine is unaffected.
 
 ### M5 — Parameterized justice (Rule 11) and case-study scale
 
