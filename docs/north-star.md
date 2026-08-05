@@ -126,7 +126,18 @@ SLOC Ivy, 14 justice assumptions, lexicographic ranking, lemma-free proof in
   fires);
 - remaining: a Rule-10 example — the paper's §3.4 reordering queue (two
   message classes, lexicographic rank, preempted lower component growing
-  while a higher one is scheduled).
+  while a higher one is scheduled). *Exploration note (2026-08-05):* a
+  first attempt at this example exposed a genuine model-design subtlety the
+  paper glosses over — in a flat timestamp model, a class-`B` message may
+  share the tracked timestamp `t` with a class-`A` message, and moving it
+  to queue 2 adds a second arrival of `t`, which breaks conservation of
+  `δ₁ = arrivals ≤ ta(t)`. The paper's scenario implicitly assumes
+  per-message unique timestamps. The fix is to make the model timestamps
+  globally unique (a single shared, strictly-increasing `last` for both
+  classes, with `sentA ∩ sentB = ∅` as an invariant) or to define
+  `ArrT` as the *minimum* arrival of `t` (so a later duplicate arrival is
+  outside `δ₁`). Either fix is a clean next slice; the Rule 10 soundness
+  engine itself is unaffected.
 
 ### M5 — Parameterized justice (Rule 11) and case-study scale
 
