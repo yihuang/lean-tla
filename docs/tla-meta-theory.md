@@ -183,6 +183,20 @@ The cascaded-queue example
 Rule-6 lemmas, handing off through the coupling invariant
 `recv₁ t → sent₂ t` when a poll₁ removes `t` — the paper's §3.2.
 
+### 3d. Relational rankings — **M4 done (lexicographic, Rule 10)**
+
+`rel_rank_lex` (Theorem 2) formalizes the lexicographic rule with stable
+schedulers: `Pre`/`Req` (preempted/required components), per-component
+conservation/reduction/stability clauses under `φ`, scheduled-justice and
+nonempty-scheduler premises. Soundness runs well-founded induction on a
+monotone lex order (`VecLexLess`) over the component-cardinality vector:
+the least-ever-scheduled index is required forever, so higher-priority
+components are conserved and it strictly shrinks when its justice fires.
+The vector order's well-foundedness embeds into the strict lex order on
+`Fin n → ℕ` (itself well-founded by induction on `n`). Rankings are
+`Finset`-valued, so the paper's S5/S6 (finiteness) premises are
+automatic. A reordering-queue example (§3.4) is the remaining slice.
+
 ### 4. Action algebra — **done (with one correction)**
 
 `enabled_or`, `enabled_and`, `enabled_angle_or`; `nstutinv_and`, `nstutinv_or`

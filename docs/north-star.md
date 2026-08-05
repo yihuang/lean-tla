@@ -116,8 +116,17 @@ SLOC Ivy, 14 justice assumptions, lexicographic ranking, lemma-free proof in
   induction on `n` with `WellFounded.prod_lex` +
   `Finset.ssubset_wf`;
 - `rel_rank_lex` soundness (Theorem 2) with `preᵢ`/`reqᵢ` and the
-  preemption clauses;
-- reordering-queue example (two message classes, lexicographic rank).
+  preemption clauses, in
+  [`TlaDsl/RelRank.lean`](../TlaDsl/RelRank.lean): the descent produces a
+  *monotone* lex order on component-cardinality vectors (`VecLexLess`),
+  whose well-foundedness follows by embedding into the strict lex order on
+  `Fin n → ℕ`; soundness is well-founded induction on that order, with the
+  least-ever-scheduled index required forever (so higher-priority
+  components are conserved and it strictly shrinks when its justice
+  fires);
+- remaining: a Rule-10 example — the paper's §3.4 reordering queue (two
+  message classes, lexicographic rank, preempted lower component growing
+  while a higher one is scheduled).
 
 ### M5 — Parameterized justice (Rule 11) and case-study scale
 
