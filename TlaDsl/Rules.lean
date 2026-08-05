@@ -2,6 +2,7 @@ import Mathlib.Order.Filter.AtTopBot.Basic
 import TlaDsl.Basic
 import TlaDsl.Prime
 import Cslib.Foundations.Data.OmegaSequence.Temporal
+import Cslib.Foundations.Data.OmegaSequence.InfOcc
 
 namespace Tla
 
@@ -383,6 +384,57 @@ theorem leads_to_trans_state {σ : Type u} (p q r : StatePred σ) (e : Behavior 
   exact (leads_to_state_iff p r e).2 (Cslib.ωSequence.leadsTo_trans
     ((leads_to_state_iff p q e).1 h1) ((leads_to_state_iff q r e).1 h2))
 
+/-- Leads-to distributes over disjunction on the left, in the
+state-predicate fragment, re-proved through CSLib's grind-native
+`leadsTo_cases_or` (no manual behavior-level case analysis). -/
+theorem leads_to_or_state {σ : Type u} (p1 p2 q : StatePred σ) (e : Behavior σ)
+    (h1 : leadsTo (statePred p1) (statePred q) e)
+    (h2 : leadsTo (statePred p2) (statePred q) e) :
+    leadsTo (statePred (fun s => p1 s ∨ p2 s)) (statePred q) e := by
+  rw [leads_to_state_iff]
+  have h1' : e.LeadsTo {s | p1 s} {s | q s} := (leads_to_state_iff p1 q e).1 h1
+  have h2' : e.LeadsTo {s | p2 s} {s | q s} := (leads_to_state_iff p2 q e).1 h2
+  simpa using
+    (Cslib.ωSequence.leadsTo_cases_or
+      (p := {s | p1 s ∨ p2 s}) (q := {s | p1 s})
+      (r := {s | q s}) (s := {s | q s})
+      (by
+        intro k hk
+        have hk' : e k ∈ {s | p1 s ∨ p2 s} ∧ e k ∈ {s | p1 s} := by
+          simpa using hk
+        exact h1' k hk'.2)
+      (by
+        intro k hk
+        have hk' : e k ∈ {s | p1 s ∨ p2 s} ∧ e k ∈ {s | p1 s}ᶜ := by
+          simpa using hk
+        have hk1 : p1 (e k) ∨ p2 (e k) := by
+          simpa using hk'.1
+        have hk2 : ¬ p1 (e k) := by
+          simpa using hk'.2
+        exact h2' k (by simpa using hk1.resolve_left hk2)))
+
+/-- Invariant-guided 3-way case split in the state-predicate fragment,
+routed through the CSLib bridge (`leads_to_or_state` + transitivity). -/
+theorem leads_to_cases_state {σ : Type u} (e : Behavior σ) (inv : σ → Prop)
+    (p q p1 p2 p3 : StatePred σ)
+    (hcase : ∀ n, inv (e n) → p (e n) → p1 (e n) ∨ p2 (e n) ∨ p3 (e n))
+    (h1 : leadsTo (statePred p1) (statePred q) e)
+    (h2 : leadsTo (statePred p2) (statePred q) e)
+    (h3 : leadsTo (statePred p3) (statePred q) e) :
+    ∀ n, inv (e n) → p (e n) → eventually (statePred q) (e.drop n) := by
+  have hOr12 : leadsTo (statePred (fun s => p1 s ∨ p2 s)) (statePred q) e :=
+    leads_to_or_state p1 p2 q e h1 h2
+  have hOr : leadsTo (statePred (fun s => (p1 s ∨ p2 s) ∨ p3 s)) (statePred q) e :=
+    leads_to_or_state (fun s => p1 s ∨ p2 s) p3 q e hOr12 h3
+  intro n hinv hp
+  have hsplit : (p1 (e n) ∨ p2 (e n)) ∨ p3 (e n) := by
+    rcases hcase n hinv hp with hp1 | hp2 | hp3
+    · exact Or.inl (Or.inl hp1)
+    · exact Or.inl (Or.inr hp2)
+    · exact Or.inr hp3
+  exact hOr n (by
+    simpa [statePred, Cslib.ωSequence.drop, Nat.add_comm] using hsplit)
+
 /-! ## CSLib bridges: enabled-infinitely-often in filter vocabulary -/
 
 open Filter
@@ -422,5 +474,25 @@ theorem sf1_frequently {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : A
     rcases hfreq 0 with ⟨j, _hj0, hj⟩
     exact ⟨j, hj⟩
   exact hf
+
+/-- Finite-state pigeonhole (CSLib `frequently_in_finite_type`): in a
+finite state space, "`a` is enabled infinitely often along `e`" is witnessed
+by a single enabled state that recurs infinitely often (the `infOcc`
+vocabulary). -/
+theorem frequently_enabled_finite {σ : Type u} [Finite σ] (e : Behavior σ) (a : Action σ) :
+    (∃ᶠ k in atTop, Enabled a (e k)) ↔
+      ∃ s : σ, Enabled a s ∧ ∃ᶠ k in atTop, e k = s := by
+  simpa using (Cslib.ωSequence.frequently_in_finite_type
+    (α := σ) (xs := e) (s := {s : σ | Enabled a s}))
+
+/-- The pointwise "enabled infinitely often" premise of `sf1` is equivalent,
+for finite state spaces, to the existence of a single enabled state that
+occurs infinitely often — the pigeonhole ingredient for finite-state
+strong-fairness arguments. -/
+theorem sf_enabled_infOcc_iff {σ : Type u} [Finite σ] (e : Behavior σ) (a : Action σ) :
+    (∀ n : Nat, ∃ j : Nat, Enabled a (e (n + j))) ↔
+      ∃ s : σ, Enabled a s ∧ ∃ᶠ k in atTop, e k = s := by
+  rw [sf_enabled_frequently_iff]
+  exact frequently_enabled_finite e a
 
 end Tla

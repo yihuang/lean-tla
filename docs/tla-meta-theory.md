@@ -222,16 +222,20 @@ structural version (image-finite hypotheses) is the natural CSLib reuse:
 `deterministic` are CSLib's LTS classes, and refinement becomes a forward
 simulation between saturated LTSs (stutter-v plays τ's role via `HasTau`).
 
-### CSLib reuse (reviewer table) — **bridge started**
+### CSLib reuse (reviewer table) — **bridge done, lattice complete**
 
 `leads_to_state_iff` in `TlaDsl/Rules.lean` proves the exact bridge the
 reviewer stated — `Tla.leadsTo ⌜p⌝ ⌜q⌝ e ⟺ e.LeadsTo {s | p s} {s | q s}` —
 and `leads_to_trans_state` re-proves leads-to transitivity through CSLib's
-grind-native `LeadsTo` (no manual proof). Planned next: migrate the rest of
-the leads-to lattice (`leadsTo_or`, `leads_to_cases`) through the same
-bridge; use `InfOcc.frequently_in_finite_type` (pigeonhole) for the
-finite-state "enabled infinitely often" ingredient of `sf1`; then the LTS
-refinement layer (point 5) and the FLP vocabulary for the BFT target.
+grind-native `LeadsTo` (no manual proof). The rest of the lattice now goes
+through the same bridge: `leads_to_or_state` (disjunction on the left) via
+CSLib's `leadsTo_cases_or`, and `leads_to_cases_state` (invariant-guided
+3-way case split) built on it. The finite-state pigeonhole ingredient is
+also in: `frequently_enabled_finite`/`sf_enabled_infOcc_iff` rephrase
+"enabled infinitely often" via CSLib's `InfOcc.frequently_in_finite_type`
+as "some enabled state recurs infinitely often", the `sf1` finite-state
+ingredient. Planned next: the LTS refinement layer (point 5) and the FLP
+vocabulary for the BFT target.
 
 ## 4. Honest scope notes
 
