@@ -161,12 +161,22 @@ SLOC Ivy, 14 justice assumptions, lexicographic ranking, lemma-free proof in
 
 ### M5 — Parameterized justice (Rule 11) and case-study scale
 
-- `∀x` schedulers/justice over unbounded ids; auxiliary-variable witnesses
-  for quantifier alternations (the paper's §4.2);
-- a CPU-memory-subsystem-shaped example (unbounded cores/controllers, queue
-  stages with reordering and blocking) as the DSL's analogue of the Apple
-  case study; tie into CSLib LTS `imageFinite`/`finiteState` for the
-  finite-state ingredients.
+- `rel_rank_param` (Rule 11) — **theory done**, in
+  [`TlaDsl/RelRank.lean`](../TlaDsl/RelRank.lean): schedulers `ψᵢ(x)` and
+  justice actions `rᵢ(x)` parameterized over an unbounded set `X` (process
+  ids, addresses, ...), with `preᵢ(ψ)(x) = ∃ j < i, ψⱼ(x)` and the
+  per-parameter L2/P3/P4 premises. Soundness fixes the parameter `x₀` that
+  schedules the least-ever-scheduled component `l` and runs the Rule 10
+  descent at `(l, x₀)`;
+- per-process-queue example — **done**, in
+  [`TlaDsl/Examples/ParamQueue.lean`](../TlaDsl/Examples/ParamQueue.lean):
+  unbounded processes, `Poll p` delivers the earliest message owned by `p`,
+  fairness `∀p, □◇ Poll p`, scheduler `ψ(p) = owner t = p ∧ t ∈ pend`,
+  giving `(∀p, □◇ Poll p) ⊢ sent(t) ↝ recv(t)`;
+- remaining: a CPU-memory-subsystem-shaped example (unbounded
+  cores/controllers, queue stages with reordering and blocking) as the DSL's
+  analogue of the Apple case study; tie into CSLib LTS
+  `imageFinite`/`finiteState` for the finite-state ingredients.
 
 ## Acceptance criteria
 
