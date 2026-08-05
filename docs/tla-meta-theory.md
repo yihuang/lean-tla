@@ -195,7 +195,14 @@ components are conserved and it strictly shrinks when its justice fires.
 The vector order's well-foundedness embeds into the strict lex order on
 `Fin n → ℕ` (itself well-founded by induction on `n`). Rankings are
 `Finset`-valued, so the paper's S5/S6 (finiteness) premises are
-automatic. A reordering-queue example (§3.4) is the remaining slice.
+automatic. The §3.4 reordering-queue example
+(`TlaDsl/Examples/LexReordering.lean`) completes M4: two message classes
+share one strictly-increasing timestamp counter (so timestamps are
+globally unique), `δ₀ = pendA ∩ {τ ≤ t}` preempts `δ₁ = arrivals ≤ ArrT t`,
+and the full six-clause invariant is inductive over all five actions. The
+conserve/reduce/stability clauses for the lex ranking are proven directly
+against `rel_rank_lex`, giving
+`(□◇ poll₁A) ∧ (□◇ poll₂) ⊢ sent₁(t) ↝ recv₂(t)`.
 
 ### 4. Action algebra — **done (with one correction)**
 

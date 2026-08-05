@@ -126,26 +126,27 @@ SLOC Ivy, 14 justice assumptions, lexicographic ranking, lemma-free proof in
   fires);
 - remaining: a Rule-10 example — the paper's §3.4 reordering queue (two
   message classes, lexicographic rank, preempted lower component growing
-  while a higher one is scheduled). *Exploration note (2026-08-05):* a
-  two-pass attempt at this example pinned down both the model fix and the
-  remaining proof-design issue:
+  while a higher one is scheduled) — **done**, in
+  [`TlaDsl/Examples/LexReordering.lean`](../TlaDsl/Examples/LexReordering.lean):
+  `(□◇ poll₁A) ∧ (□◇ poll₂) ⊢ sent₁(t) ↝ recv₂(t)`, with the full
+  six-clause inductive invariant and the L2 conserve/reduce/stability
+  obligations discharged against `rel_rank_lex`.
 
-  1. **Unique timestamps (validated).** The paper implicitly assumes
+  Two model-design notes from the exploration:
+
+  1. **Unique timestamps are essential.** The paper implicitly assumes
      per-message unique timestamps; a class-`B` message sharing the tracked
      class-`A` timestamp `t` breaks `δ₁` conservation. The fix — a single
      shared, strictly-increasing `last` for both classes, with invariants
      `∀τ ∈ pendB, τ ∉ sentA` and `∀τ ∈ sentA, τ ≤ last` — makes the model
-     correct. The reordering model, the 6-clause inductive invariant, and
-     its preservation proof were completed in Lean against this design.
-  2. **`ArrT` needs a dedicated helper (open).** `ArrT` (the arrival of
-     `t` in queue 2) must be the deterministic *minimum* arrival, but the
-     min-based definition makes `ArrT s' t = ArrT s t` proofs (needed by
-     the `δ₁` conserve clauses when `poll₁B`/`poll₂` change queue 2)
-     expensive — `rw [ArrT]` repeatedly hits whnf heartbeat limits. The
-     clean fix is a `minArrival` helper with ready-made lemmas
-     (`minArrival_insert_ne`, `minArrival_erase_ne`, `minArrival_iff_mem`),
-     then the conserve proofs become one-line rewrites. The Rule 10
-     soundness engine is unaffected.
+     correct.
+  2. **`minArrival` made `ArrT` proofs cheap.** `ArrT` (the arrival of
+     `t` in queue 2) is the deterministic *minimum* arrival; proving
+     `ArrT s' t = ArrT s t` for the `δ₁` conserve clauses (when `poll₁B` /
+     `poll₂` change queue 2) became one-line rewrites after introducing a
+     `minArrival` helper with `minArrival_insert_ne` /
+     `minArrival_erase_ne` lemmas, instead of unfolding `ArrT` and hitting
+     heartbeat limits.
 
 ### M5 — Parameterized justice (Rule 11) and case-study scale
 
