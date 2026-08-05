@@ -103,12 +103,23 @@ SLOC Ivy, 14 justice assumptions, lexicographic ranking, lemma-free proof in
   single-queue lemmas (Rule 6 instances) via Rule 7, with the coupling
   invariant `recv₁ t → sent₂ t` handing off when a poll₁ removes `t`.
 
-### M3 — Stable schedulers (Rule 8)
+### M3 — Stable schedulers (Rule 8) — *done via the Rule 10 machinery*
 
-- `rel_rank_scheduler` soundness: multiple `δᵢ`/`ψᵢ`/`rᵢ`, stability,
-  `∨ᵢ ψᵢ`, per-component conservation/reduction; proof following the
-  paper's Theorem 3 (reduce to Rule 6/10 machinery);
-- bounded-cascade / DRAM-blocking example with priority scheduler.
+- the stable-scheduler machinery (`Pre`/`Req`, per-component
+  conservation/reduction, scheduler stability until the justice fires,
+  `∨ᵢ ψᵢ`, scheduled justice) is built into `rel_rank_lex` (Rule 10)
+  rather than a standalone rule, and is exercised by the reordering
+  example (M4, `n = 2`) and by the bounded-cascade example below;
+- bounded-cascade / DRAM-blocking example (the paper's §3.3 bounded
+  paragraph) — **done**, in
+  [`TlaDsl/Examples/BoundedCascade.lean`](../TlaDsl/Examples/BoundedCascade.lean):
+  queue 2 holds at most one timestamp, so `poll₁` blocks while it is
+  non-empty, and the complementary schedulers
+  `ψ₀ = no τ ≤ t in queue₂` / `ψ₁ = some τ ≤ t in queue₂` prioritize the
+  action that unblocks the other. The Fig. 3 ranking
+  `δ₀ = pend₁ ∩ {τ ≤ t}`, `δ₁ = (pend₁ ∪ queue₂) ∩ {τ ≤ t}` (a message
+  moving from queue 1 to queue 2 conserves `δ₁`) gives
+  `(□◇ poll₁) ∧ (□◇ poll₂) ⊢ sent₁(t) ↝ recv₂(t)`.
 
 ### M4 — Lexicographic rankings (Rule 10, Theorem 1)
 
