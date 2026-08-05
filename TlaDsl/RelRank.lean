@@ -24,6 +24,13 @@ Contents:
   invariant `φ`, a relational ranking `δ`, a finite envelope `R`, and the
   step premises C1–C3 (proved under the spec `H`); soundness by finite
   descent on `|δ|`, mirroring `leads_to_via_nat`;
+* `eventually_unfold`/`eventually_imp` — the `◇` tableau axioms used when
+  chaining response properties;
+* `relational_ranking_rule_leadsTo` — Rule 7: the chaining variant whose
+  premises carry `◇q` instead of `q` and whose justice condition `r` is a
+  parameter supplied by a `D4` premise (while `φ` holds, `r` eventually
+  fires) instead of a global `□◇⟨r⟩`; this is how response properties are
+  proved from other response properties;
 * `LexLess`/`lex_less_wellFounded` — Theorem 1: the lexicographic order
   induced by a lexicographic relational ranking (components as finite
   sets) is well-founded.
@@ -199,6 +206,152 @@ theorem relational_ranking_rule {σ : Type u} {α : Type v} (p q : StatePred σ)
   rcases hc1 with hq | hrest
   · refine ⟨0, ?_⟩
     simpa [statePred, Cslib.ωSequence.drop, Nat.add_comm] using hq
+  · rcases hrest with ⟨hφk, hδR⟩
+    have hfin : Set.Finite {x | δ (e k) x} := (hR e k).subset hδR
+    exact hmain ({x | δ (e k) x}).ncard k hfin le_rfl hφk
+
+/-! ## The `◇` tableau axioms -/
+
+/-- The `◇` tableau axiom: `◇F` at a suffix is `F` now, or `◇F` at the next
+suffix. This is the fact that lets rule premises mentioning `◇q` be chained
+propositionally (the paper's §3.2). -/
+theorem eventually_unfold {σ : Type u} (F : Pred σ) (e : Behavior σ) (k : Nat) :
+    eventually F (e.drop k) ↔ F (e.drop k) ∨ eventually F (e.drop (k + 1)) := by
+  constructor
+  · rintro ⟨m, hm⟩
+    cases m with
+    | zero =>
+        left
+        simpa [Cslib.ωSequence.drop] using hm
+    | succ m =>
+        right
+        refine ⟨m, ?_⟩
+        simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hm
+  · rintro (h | ⟨m, hm⟩)
+    · exact ⟨0, h⟩
+    · refine ⟨m + 1, ?_⟩
+      simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hm
+
+/-- `F` now implies `◇F` (the trivial tableau axiom). -/
+theorem eventually_imp {σ : Type u} (F : Pred σ) (e : Behavior σ) (k : Nat) :
+    F (e.drop k) → eventually F (e.drop k) := fun h => ⟨0, by simpa using h⟩
+
+/-! ## Rule 7: the chaining (relational reactivity) rule -/
+
+/-- The chaining variant of the relational reactivity rule (Rule 7 in the
+paper). The premises carry the eventual `◇q` instead of `q`, and the
+justice condition `r` is a rule parameter supplied by `D4` (while `φ`
+holds, `r` eventually fires — unless `q` is reached) instead of a global
+`□◇⟨r⟩` assumption. This is what allows response properties to be proved
+from other response properties (the cascaded-queue example): `D3` is
+discharged by a lemma `φ ∧ r ⇒ ◇q`, and the `◇q`s are manipulated with the
+tableau axioms. Soundness is the same finite descent as Rule 6, with
+`◇q`-branches lifted along suffixes. -/
+theorem relational_ranking_rule_leadsTo {σ : Type u} {α : Type v} (p q : StatePred σ)
+    (r : Action σ) (φ : StatePred σ) (δ R : σ → α → Prop) (H : Pred σ)
+    (hR : ∀ e : Behavior σ, ∀ n : Nat, Set.Finite {x : α | R (e n) x})
+    (hD1 : ∀ e : Behavior σ, H e → ∀ k : Nat, p (e k) →
+      eventually (statePred q) (e.drop k) ∨ (φ (e k) ∧ ∀ x, δ (e k) x → R (e k) x))
+    (hD2 : ∀ e : Behavior σ, H e → ∀ k : Nat, φ (e k) →
+      eventually (statePred q) (e.drop k) ∨
+        (φ (e (k + 1)) ∧ Conserves δ (e k) (e (k + 1))))
+    (hD3 : ∀ e : Behavior σ, H e → ∀ k : Nat, φ (e k) → r (e k) (e (k + 1)) →
+      eventually (statePred q) (e.drop k) ∨ Reduces δ (e k) (e (k + 1)))
+    (hD4 : ∀ e : Behavior σ, H e → ∀ k : Nat, φ (e k) →
+      eventually (statePred q) (e.drop k) ∨ eventually (actionPred r) (e.drop k)) :
+    Entails H (leadsTo (statePred p) (statePred q)) := by
+  intro e hH k hp
+  have hp' : p (e k) := by
+    simpa [statePred, Cslib.ωSequence.drop, Nat.add_comm] using hp
+  have hmain : ∀ n : Nat, ∀ k : Nat,
+      Set.Finite {x | δ (e k) x} → ({x | δ (e k) x}).ncard ≤ n → φ (e k) →
+      eventually (statePred q) (e.drop k) := by
+    intro n
+    refine Nat.strong_induction_on n ?_
+    intro n ih k hfin hn hφk
+    rcases hD4 e hH k hφk with hevq | hevr
+    · exact hevq
+    · rcases hevr with ⟨m, hm⟩
+      have hr : r (e (k + m)) (e (k + m + 1)) := by
+        simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hm
+      have hwalk : ∀ d : Nat, d ≤ m → eventually (statePred q) (e.drop k) ∨
+          (φ (e (k + d)) ∧
+           (∀ m' : Nat, m' < d → Conserves δ (e (k + m')) (e (k + m' + 1))) ∧
+           {x | δ (e (k + d)) x} ⊆ {x | δ (e k) x}) := by
+        intro d
+        induction d with
+        | zero =>
+            intro _hle
+            right
+            refine ⟨by simpa using hφk, ?_, ?_⟩
+            · intro m' hm'
+              omega
+            · intro x hx
+              exact hx
+        | succ d ihd =>
+            intro hle
+            rcases ihd (Nat.le_trans (Nat.le_succ d) hle) with hev | hrest
+            · exact Or.inl hev
+            · rcases hrest with ⟨hφd, hcons, hsubd⟩
+              have hd2 := hD2 e hH (k + d) hφd
+              rcases hd2 with hevq' | hrest'
+              · left
+                rcases hevq' with ⟨t0, ht0⟩
+                refine ⟨d + t0, ?_⟩
+                simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+                  Nat.add_left_comm] using ht0
+              · rcases hrest' with ⟨hφd1, hconsd⟩
+                right
+                refine ⟨by simpa [Nat.add_assoc] using hφd1, ?_, ?_⟩
+                · intro m' hm'
+                  by_cases h : m' = d
+                  · simpa [h] using hconsd
+                  · exact hcons m' (by omega)
+                · intro x hx
+                  exact hsubd (hconsd x hx)
+      rcases hwalk m le_rfl with hev | hrest
+      · exact hev
+      · rcases hrest with ⟨hφm, _hcons, hsubm⟩
+        have hd3 := hD3 e hH (k + m) hφm hr
+        rcases hd3 with hevq' | hred
+        · rcases hevq' with ⟨t0, ht0⟩
+          refine ⟨m + t0, ?_⟩
+          simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+            Nat.add_left_comm] using ht0
+        · rcases hred with ⟨x0, hx0in, hx0out⟩
+          have hd2m := hD2 e hH (k + m) hφm
+          rcases hd2m with hevq'' | hrest'
+          · rcases hevq'' with ⟨t0, ht0⟩
+            refine ⟨m + t0, ?_⟩
+            simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+              Nat.add_left_comm] using ht0
+          · rcases hrest' with ⟨hφm1, hconsm⟩
+            have hsubm1 : {x | δ (e (k + m + 1)) x} ⊆ {x | δ (e k) x} := by
+              intro x hx
+              exact hsubm (hconsm x hx)
+            have hfinm : Set.Finite {x | δ (e (k + m)) x} := hfin.subset hsubm
+            have hfinm1 : Set.Finite {x | δ (e (k + m + 1)) x} := hfin.subset hsubm1
+            have hssub : {x | δ (e (k + m + 1)) x} ⊂ {x | δ (e (k + m)) x} := by
+              constructor
+              · exact hconsm
+              · intro hsup
+                exact hx0out (hsup hx0in)
+            have hnlt : ({x | δ (e (k + m + 1)) x}).ncard <
+                ({x | δ (e (k + m)) x}).ncard :=
+              Set.ncard_lt_ncard hssub hfinm
+            have hnle : ({x | δ (e (k + m)) x}).ncard ≤ n :=
+              le_trans (Set.ncard_le_ncard hsubm hfin) hn
+            have hn' : ({x | δ (e (k + m + 1)) x}).ncard < n :=
+              lt_of_lt_of_le hnlt hnle
+            have hev' : eventually (statePred q) ((e.drop k).drop (m + 1)) := by
+              simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using
+                ih ({x | δ (e (k + m + 1)) x}).ncard hn' (k + m + 1) hfinm1 le_rfl hφm1
+            rcases hev' with ⟨t0, ht0⟩
+            refine ⟨m + 1 + t0, ?_⟩
+            simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+              Nat.add_left_comm] using ht0
+  rcases hD1 e hH k hp' with hevq | hrest
+  · exact hevq
   · rcases hrest with ⟨hφk, hδR⟩
     have hfin : Set.Finite {x | δ (e k) x} := (hR e k).subset hδR
     exact hmain ({x | δ (e k) x}).ncard k hfin le_rfl hφk

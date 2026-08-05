@@ -28,3 +28,4 @@ import TlaDsl.Examples.Multimmit
 import TlaDsl.Examples.MinimmitTimed
 import TlaDsl.Examples.Countdown
 import TlaDsl.Examples.TimestampedQueue
+import TlaDsl.Examples.CascadedQueues

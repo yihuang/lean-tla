@@ -92,9 +92,16 @@ SLOC Ivy, 14 justice assumptions, lexicographic ranking, lemma-free proof in
 
 ### M2 — Chaining and tableau reasoning (Rule 7)
 
-- `relational_ranking_leadsTo` (weak-`◇q` premises, justice as a parameter);
-- tableau tautologies (`◇q ⇒ q ∨ ◇q'`, `q ⇒ ◇q`) as grind-attributes;
-- cascaded-queue example (`send₁(t) ↝ recv₂(t)` from two lemmas).
+- `eventually_unfold`/`eventually_imp` — the `◇` tableau axioms;
+- `relational_ranking_rule_leadsTo` (Rule 7): premises carry `◇q`, the
+  justice condition is a rule parameter supplied by `D4` (while `φ` holds,
+  `r` eventually fires) — in
+  [`TlaDsl/RelRank.lean`](../TlaDsl/RelRank.lean);
+- cascaded-queue example in
+  [`TlaDsl/Examples/CascadedQueues.lean`](../TlaDsl/Examples/CascadedQueues.lean):
+  `(□◇ poll₁) ∧ (□◇ poll₂) ⊢ sent₁ t ↝ recv₂ t` chained from two
+  single-queue lemmas (Rule 6 instances) via Rule 7, with the coupling
+  invariant `recv₁ t → sent₂ t` handing off when a poll₁ removes `t`.
 
 ### M3 — Stable schedulers (Rule 8)
 

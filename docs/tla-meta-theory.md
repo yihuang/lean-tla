@@ -171,6 +171,18 @@ Theorem 1 (lexicographic relational rankings are well-founded);
 `TlaDsl/Examples/TimestampedQueue.lean` runs the paper's Fig. 1 queue:
 `(□◇ poll) → (sent t ↝ recv t)` via `δ(τ) = pend τ ∧ τ ≤ t`.
 
+### 3c. Relational rankings — **M2 done (chaining, Rule 7)**
+
+`relational_ranking_rule_leadsTo` (Rule 7) carries `◇q` in the premises and
+takes the justice condition as a rule parameter (`D4`: while `φ` holds,
+`r` eventually fires) instead of a global `□◇⟨r⟩`; the `◇` tableau axioms
+`eventually_unfold`/`eventually_imp` support the propositional chaining.
+The cascaded-queue example
+(`TlaDsl/Examples/CascadedQueues.lean`) proves
+`(□◇ poll₁) ∧ (□◇ poll₂) ⊢ sent₁ t ↝ recv₂ t` from two single-queue
+Rule-6 lemmas, handing off through the coupling invariant
+`recv₁ t → sent₂ t` when a poll₁ removes `t` — the paper's §3.2.
+
 ### 4. Action algebra — **done (with one correction)**
 
 `enabled_or`, `enabled_and`, `enabled_angle_or`; `nstutinv_and`, `nstutinv_or`
