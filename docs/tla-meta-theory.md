@@ -214,13 +214,22 @@ Enabled ⟨A⟩` gives WF of `A∨B`). The reviewer's suggested
 enablement while the union stays enabled, so neither is ever
 eventually-always enabled and no fairness fires — documented in the lemma.
 
-### 5. Deep Abadi–Lamport liveness with structural hypotheses — **planned via CSLib**
+### 5. Deep Abadi–Lamport liveness with structural hypotheses — **LTS layer done, deep theorem next**
 
-The current `refinement_mapping_liveness` is the composition form. The
-structural version (image-finite hypotheses) is the natural CSLib reuse:
-`Next : σ → σ → Prop` is an LTS transition, `imageFinite`/`finiteState`/
-`deterministic` are CSLib's LTS classes, and refinement becomes a forward
-simulation between saturated LTSs (stutter-v plays τ's role via `HasTau`).
+The LTS refinement layer is in
+[`TlaDsl/LTSRefine.lean`](../TlaDsl/LTSRefine.lean): a stuttering spec
+`□⟨next⟩_v` is an LTS (`SpecLTS`, single label `τ = ()`) whose ω-executions
+are exactly its behaviors (`specLTS_omegaExec_iff_stutAlways`); the
+Abadi–Lamport step condition is exactly a forward simulation between the
+spec LTSs (`sim_iff_step`) and between the *saturated* LTSs, τ-absorbing
+stutter runs on both sides (`sim_saturate_of_step`); safety refinement is
+re-derived as trace inclusion of ω-executions (`refinement_mapping_lts`),
+with the liveness composition form restated in the same vocabulary
+(`refinement_mapping_liveness_lts`). A finite state space makes `SpecLTS`
+image-finite (`specLTS_imageFinite`), the structural hypothesis the deep
+A-L liveness theorem needs — that theorem (deriving `LA` from the
+simulation plus `imageFinite`/`finiteState` instead of a hand-given `hL`)
+is the remaining slice.
 
 ### CSLib reuse (reviewer table) — **bridge done, lattice complete**
 
@@ -235,7 +244,8 @@ also in: `frequently_enabled_finite`/`sf_enabled_infOcc_iff` rephrase
 "enabled infinitely often" via CSLib's `InfOcc.frequently_in_finite_type`
 as "some enabled state recurs infinitely often", the `sf1` finite-state
 ingredient. Planned next: the LTS refinement layer (point 5) and the FLP
-vocabulary for the BFT target.
+vocabulary for the BFT target. *Update: the LTS refinement layer (point 5)
+is done — see above.*
 
 ## 4. Honest scope notes
 

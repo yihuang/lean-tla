@@ -9,6 +9,7 @@ import TlaDsl.TlaVar
 import TlaDsl.Meta
 import TlaDsl.SimFull
 import TlaDsl.ModelCheck
+import TlaDsl.LTSRefine
 import TlaDsl.Pretty
 import TlaDsl.Examples.Counter
 import TlaDsl.Examples.Refinement
