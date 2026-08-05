@@ -16,6 +16,11 @@ Isabelle/TLA+ as the reference and mathlib/CSLib as leverage.
   design decisions (prime notation, lifting, tactics, model checking,
   composition), a priority-ordered improvement list, and a phased roadmap
   with UX acceptance criteria.
+- [`docs/north-star.md`](docs/north-star.md) — the north-star goal:
+  formalize McMillan's *relational rankings* (CAV 2024, "Toward Liveness
+  Proofs at Scale") as the DSL's liveness engine — finite relations ordered
+  by implication, stable schedulers, lexicographic combination — with a
+  milestone roadmap (M1, the basic rule + queue example, is done).
 - [`docs/research/`](docs/research/) — downloaded reference artifacts
   (papers, web pages, vendored sources: coq-tla, Lentil, Leslie; mathlib ZFC
   and CSLib LTS source files) with provenance in
@@ -37,5 +42,8 @@ variables, an invariant tactic, and machine-checked examples (counter,
 refinement, ticket-lock liveness, two-process mutex with full-chain
 liveness). Mathlib is a dependency (toolchain `v4.33.0-rc1`, matching
 mathlib's pin) and `tla_grind` provides SMT-style automation.
-
-The repository is currently design-documentation only; no Lean code yet.
+The relational-ranking liveness engine
+([`TlaDsl/RelRank.lean`](TlaDsl/RelRank.lean)) proves the paper's Rule 6
+(finite-descent leads-to) and Theorem 1 (lexicographic rankings are
+well-founded), with the timestamped-queue example
+([`TlaDsl/Examples/TimestampedQueue.lean`](TlaDsl/Examples/TimestampedQueue.lean)).

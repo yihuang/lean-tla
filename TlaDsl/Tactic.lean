@@ -58,6 +58,13 @@ strictly decreases (or the goal is reached). -/
 macro "tla_leads_to_via_nat " f:term : tactic =>
   `(tactic| (apply Tla.leads_to_via_nat _ _ $f <;> try tla_grind))
 
+/-- Apply the relational-ranking liveness rule (`relational_ranking_rule`),
+supplying the invariant `φ`, the relational ranking `δ` and the finite
+envelope `R`; leaves the four obligations: `R` finite, and the C1/C2/C3
+step premises (under the spec). -/
+macro "tla_rel_rank " φ:term δ:term R:term : tactic =>
+  `(tactic| (apply Tla.relational_ranking_rule _ _ _ $φ $δ $R <;> try tla_grind))
+
 /-- Leads-to choreography: solve a `P ↝ Q` goal by assumption, disjunction
 on the left, or transitivity through a chain of leads-to facts in context. -/
 macro "tla_leads_to" : tactic => `(tactic| assumption)

@@ -3,6 +3,7 @@ import TlaDsl.Notation
 import TlaDsl.Coercion
 import TlaDsl.Prime
 import TlaDsl.Rules
+import TlaDsl.RelRank
 import TlaDsl.Tactic
 import TlaDsl.TlaVar
 import TlaDsl.Meta
@@ -26,3 +27,4 @@ import TlaDsl.Examples.Minimmit
 import TlaDsl.Examples.Multimmit
 import TlaDsl.Examples.MinimmitTimed
 import TlaDsl.Examples.Countdown
+import TlaDsl.Examples.TimestampedQueue

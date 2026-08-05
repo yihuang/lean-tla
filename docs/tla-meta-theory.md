@@ -157,6 +157,20 @@ quotient-based version. This is the largest remaining meta-theory item.
 plus the `tla_leads_to_via_nat f` tactic. This is the BFT-liveness engine
 the chained-WF1 approach lacked.
 
+### 3b. Relational rankings (north-star) — **M1 done**
+
+McMillan's relational-ranking engine (CAV 2024, the repo's north-star —
+see [`north-star.md`](north-star.md)) generalizes the rank-function rule:
+the ranking is a *relation* `δ : σ → α → Prop` ordered by implication
+(`Conserves` = no element added, `Reduces` = at least one removed) whose
+finiteness is proved separately (`finite_rank`, the paper's Rule 5) rather
+than assumed of a well-founded domain. `relational_ranking_rule` (Rule 6)
+in `TlaDsl/RelRank.lean` proves `H ∧ □◇⟨r⟩ ⊢ p ↝ q` from C1/C2/C3 step
+premises by finite descent on `|δ|`; `lex_less_wellFounded` is the paper's
+Theorem 1 (lexicographic relational rankings are well-founded);
+`TlaDsl/Examples/TimestampedQueue.lean` runs the paper's Fig. 1 queue:
+`(□◇ poll) → (sent t ↝ recv t)` via `δ(τ) = pend τ ∧ τ ≤ t`.
+
 ### 4. Action algebra — **done (with one correction)**
 
 `enabled_or`, `enabled_and`, `enabled_angle_or`; `nstutinv_and`, `nstutinv_or`
