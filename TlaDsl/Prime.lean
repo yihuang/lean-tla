@@ -530,6 +530,8 @@ partial def elabActionLiftCore (bound : NameSet) (st0 st1 : Expr) (expected? : O
         let n := stx.getId.toString
         if n == "true" then pure (mkConst ``True)
         else if n == "false" then pure (mkConst ``False)
+        else if bound.contains stx.getId then
+          Term.elabIdent stx none
         else if n.endsWith "'" then
           let base : Syntax := mkIdent (n.dropEnd 1).toName
           let e ← Term.elabIdent base none
@@ -539,8 +541,6 @@ partial def elabActionLiftCore (bound : NameSet) (st0 st1 : Expr) (expected? : O
               if (← isDefEq d (← inferType st0)) then pure (mkApp e st1)
               else throwError s!"[a| ...]: primed identifier '{base}' is not a state function"
           | _ => throwError s!"[a| ...]: primed identifier '{base}' is not a state function"
-        else if bound.contains stx.getId then
-          Term.elabIdent stx none
         else
           let e ← Term.elabIdent stx none
           let e ← applyIfAction st0 st1 e

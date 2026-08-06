@@ -188,6 +188,57 @@ SLOC Ivy, 14 justice assumptions, lexicographic ranking, lemma-free proof in
   `δ₁ = done ∩ {op ≤ t}` may grow while completions are still possible. The
   proof is `t ∈ issued ↝ t ∈ retired`.
 
+### M6 — BFT case study: Streamlet consistency
+
+The BFT target case study (replacing the earlier Multimmit exploration) is
+**Streamlet** (Chan & Shi, *Streamlet: Textbook Streamlined Blockchains*,
+IACR ePrint 2020/088), chosen for being a modern, minimal protocol whose
+safety argument is a *clean chain-tree statement* rather than a
+message-passing invariant. Local reference material:
+`docs/research/papers/streamlet-textbook-streamlined-blockchains-chan-shi-2020.pdf`
+and the extracted text under `docs/research/web/`.
+
+- **Formalization** — **done**, in
+  [`TlaDsl/Examples/Streamlet.lean`](../TlaDsl/Examples/Streamlet.lean):
+  the crash-fault protocol (Appendix A, `> n/2` quorums) with all nodes
+  honest, modeled as the paper's abstract block tree
+  (`Block.epoch`/`Block.length`/`Block.atLen`), votes per node per epoch,
+  and a per-node `seen` relation recording notarized-chain lengths. The
+  DSL actions (`Vote`, `Notarize`) encode Streamlet's rule: a node votes
+  only for a proposal whose parent chain is a *longest* chain it has seen.
+  Proved: `unique_notarization` (Lemma 10), `finality_no_conflict`
+  (Lemma 11/14 — the main consistency lemma), and `consistency`
+  (Theorem 12: two final chains are prefix-comparable), plus the
+  temporal statement `spec_entails_consistency`.
+- **The proof shape** — the whole safety argument reduces to one invariant,
+  `VoteLenMono`: honest votes are for blocks of non-decreasing length
+  (the longest-chain discipline). Lemma 14 is then a two-line length
+  contradiction against a common voter; consistency is Lemma 14 applied to
+  the shorter chain's finality witness. Timing-independence falls out: no
+  delivery model appears anywhere.
+- **CSLib reuse in this slice** — the quorum-overlap argument reuses the
+  `Quorum`/`quorum_overlap` pattern from `Paxos.lean`; `ChainNotarized` +
+  `atLen` gives the chain/prefix machinery without a hash model. Still on
+  the reuse list for the BFT target: CSLib's
+  `Computability/Distributed/FLP` failure/fairness vocabulary
+  (`ProcFaulty`, `ProcFair`, `AdmissibleRun`) for a Byzantine version, and
+  `Semantics/FLTS` (deterministic step functions) if a leader-schedule /
+  liveness layer is added.
+- **DSL improvement that fell out** — the `[a|]` elaborator treated any
+  identifier ending in `'` as a primed state variable, so bound variables
+  like `e'` in `∀ e' : Epoch, ...` failed. Fixed in
+  [`TlaDsl/Prime.lean`](../TlaDsl/Prime.lean): bound identifiers are
+  resolved before the prime heuristic, so `e'`/`x'` are usable as binders
+  inside bracket notation.
+- **Next steps** — (a) liveness (the paper's Theorem 13: 5 consecutive
+  honest-leader epochs after GST) with an explicit leader schedule
+  `L : Epoch → Node`, reusing `rel_rank_param` or `leads_to_via_nat`;
+  (b) a Byzantine version with `f < n/3` and an honest-node guard
+  (`CorrectAct`/`[c| ... | ...]`), connecting to CSLib's FLP vocabulary;
+  (c) an executable `FLTS`/`OmegaExecution` bridge so Streamlet's `Next`
+  is also a runnable step function (the E1/E3 refinement path from the
+  reviewer thread).
+
 ## Acceptance criteria
 
 - zero `sorry`, zero warnings, green `lake build` at every commit;
