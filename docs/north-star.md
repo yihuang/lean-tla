@@ -216,6 +216,23 @@ and the extracted text under `docs/research/web/`.
   contradiction against a common voter; consistency is Lemma 14 applied to
   the shorter chain's finality witness. Timing-independence falls out: no
   delivery model appears anywhere.
+- **Liveness structure** — **done**, in
+  [`TlaDsl/Examples/StreamletLiveness.lean`](../TlaDsl/Examples/StreamletLiveness.lean):
+  the epoch/proposal model behind the paper's Section 3.6 liveness proof.
+  The state adds `cur : Epoch` and `proposed : Epoch → Option Block`;
+  **epoch numbers are the timestamps** — "notarized by epoch `e`"
+  (`NotarizedBy`) is a quorum that voted in epochs `≤ e`, so the paper's
+  delivery facts (Fact 1/2, `2∆` epochs with `∆`-bounded delivery) are
+  abstracted to an immediate-delivery predicate with no explicit time/seen
+  state, and the "at that time" longest-chain conditions become plain
+  epoch-bounded invariants. Proved: `proposal_growth` (Fact 3), the
+  `longest_chain_by` bound, `main_liveness_lemma` (Lemma 5: no conflict at
+  the third proposal's length), and `liveness_finality` (Theorem 6: five
+  on-time proposals with growing lengths make `B₃` final), plus the safety
+  core re-proved for the extended model. The remaining slice is the
+  temporal wrapper — per-epoch leads-to progress (honest leaders propose,
+  honest nodes vote) composed via `leads_to_via_nat`, which needs a
+  fairness design for single-shot (non-recurring) epoch actions.
 - **CSLib reuse in this slice** — the quorum-overlap argument reuses the
   `Quorum`/`quorum_overlap` pattern from `Paxos.lean`; `ChainNotarized` +
   `atLen` gives the chain/prefix machinery without a hash model. Still on
