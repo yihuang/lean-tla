@@ -33,3 +33,4 @@ import TlaDsl.Examples.CascadedQueues
 import TlaDsl.Examples.LexReordering
 import TlaDsl.Examples.BoundedCascade
 import TlaDsl.Examples.ParamQueue
+import TlaDsl.Examples.MemoryPipeline

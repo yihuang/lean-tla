@@ -178,6 +178,16 @@ SLOC Ivy, 14 justice assumptions, lexicographic ranking, lemma-free proof in
   analogue of the Apple case study; tie into CSLib LTS
   `imageFinite`/`finiteState` for the finite-state ingredients.
 
+  *Update:* the memory-pipeline case study is **done**, in
+  [`TlaDsl/Examples/MemoryPipeline.lean`](../TlaDsl/Examples/MemoryPipeline.lean):
+  unbounded memory controllers with per-controller completion fairness
+  (`∀c, □◇ Complete c`) plus `□◇ Retire`, and a reorder buffer that retires
+  in timestamp order. It needs the *global* preemption variant of Rule 11
+  (`rel_rank_param_global` in `TlaDsl/RelRank.lean`): the retire component
+  is preempted whenever *any* controller still has a pending `op ≤ t`, and
+  `δ₁ = done ∩ {op ≤ t}` may grow while completions are still possible. The
+  proof is `t ∈ issued ↝ t ∈ retired`.
+
 ## Acceptance criteria
 
 - zero `sorry`, zero warnings, green `lake build` at every commit;

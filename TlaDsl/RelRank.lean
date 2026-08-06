@@ -613,6 +613,102 @@ theorem l2step_param_fixed {σ : Type u} {α : Type v} {X : Type w} {n : Nat}
        ⟨fun i hreq hfire => hrest.2.2.1 x i hreq hfire,
         fun i hreq hnr => hrest.2.2.2 x i hreq hnr⟩⟩⟩
 
+/-! ### The walk machinery with a custom preemption relation -/
+
+/-- The L2 step shape for a *custom* preemption relation `pre`, used by the
+global-preemption parameterized rule. The requirement relation is derived
+as `ψs i s ∧ ¬ pre i s` (the plain `L2Step` is this with
+`pre := Pre ψs`). -/
+def L2StepWith {σ : Type u} {α : Type v} {n : Nat}
+    (pre : Fin n → σ → Prop) (q : StatePred σ) (φ : StatePred σ)
+    (δs : Fin n → σ → Finset α) (ψs : Fin n → σ → Prop) (rs : Fin n → Action σ)
+    (e : Behavior σ) (k : Nat) : Prop :=
+  eventually (statePred q) (e.drop k) ∨
+    (φ (e (k + 1)) ∧
+     (∀ i : Fin n, ¬ pre i (e k) → ConservesFinset (δs i) (e k) (e (k + 1))) ∧
+     (∀ i : Fin n, ψs i (e k) ∧ ¬ pre i (e k) → rs i (e k) (e (k + 1)) →
+       ReducesFinset (δs i) (e k) (e (k + 1))) ∧
+     (∀ i : Fin n, ψs i (e k) ∧ ¬ pre i (e k) → ¬ rs i (e k) (e (k + 1)) → ψs i (e (k + 1))))
+
+/-- Walk A (custom preemption): under `¬◇q`, the L2 step keeps `φ` true
+forever. -/
+theorem phi_persist_with {σ : Type u} {α : Type v} {n : Nat}
+    (pre : Fin n → σ → Prop) (q : StatePred σ) (φ : StatePred σ)
+    (δs : Fin n → σ → Finset α) (ψs : Fin n → σ → Prop) (rs : Fin n → Action σ)
+    (e : Behavior σ) (k : Nat)
+    (hL2 : ∀ k : Nat, φ (e k) → L2StepWith pre q φ δs ψs rs e k)
+    (hnot : ¬ eventually (statePred q) (e.drop k)) (hφk : φ (e k)) :
+    ∀ t : Nat, φ (e (k + t)) := by
+  intro t
+  induction t with
+  | zero => simpa using hφk
+  | succ t ih =>
+      rcases hL2 (k + t) ih with hevq' | hrest
+      · exact False.elim (hnot (eventually_statePred_lift q e k t hevq'))
+      · simpa [Nat.add_assoc] using hrest.1
+
+/-- Walks A+B (custom preemption): with `¬◇q`, L2 keeps `φ` and conserves
+every un-preempted component forever. -/
+theorem walk_below_with {σ : Type u} {α : Type v} {n : Nat}
+    (pre : Fin n → σ → Prop) (q : StatePred σ) (φ : StatePred σ)
+    (δs : Fin n → σ → Finset α) (ψs : Fin n → σ → Prop) (rs : Fin n → Action σ)
+    (e : Behavior σ) (k : Nat) (l : Fin n)
+    (hL2 : ∀ k : Nat, φ (e k) → L2StepWith pre q φ δs ψs rs e k)
+    (hnot : ¬ eventually (statePred q) (e.drop k)) (hφk : φ (e k))
+    (hnotpre : ∀ i : Fin n, i.val ≤ l.val → ∀ t : Nat, ¬ pre i (e (k + t))) :
+    ∀ t : Nat, φ (e (k + t)) ∧
+      ∀ i : Fin n, i.val ≤ l.val → (δs i (e (k + t))).card ≤ (δs i (e k)).card := by
+  intro t
+  induction t with
+  | zero =>
+      constructor
+      · simpa using hφk
+      · intro i hi
+        exact le_rfl
+  | succ t ih =>
+      rcases ih with ⟨hφt, hle⟩
+      rcases hL2 (k + t) hφt with hevq' | hrest
+      · exact False.elim (hnot (eventually_statePred_lift q e k t hevq'))
+      · constructor
+        · simpa [Nat.add_assoc] using hrest.1
+        · intro i hi
+          have hcons : ConservesFinset (δs i) (e (k + t)) (e (k + t + 1)) :=
+            hrest.2.1 i (hnotpre i hi t)
+          have hle1 : (δs i (e (k + t + 1))).card ≤ (δs i (e (k + t))).card :=
+            Finset.card_le_card hcons
+          simpa [Nat.add_assoc] using le_trans hle1 (hle i hi)
+
+/-- Walk C (custom preemption): while the justice action `r_l` has not
+fired, the required scheduler `ψ_l` persists up to the first firing. -/
+theorem sched_persist_with {σ : Type u} {α : Type v} {n : Nat}
+    (pre : Fin n → σ → Prop) (q : StatePred σ) (φ : StatePred σ)
+    (δs : Fin n → σ → Finset α) (ψs : Fin n → σ → Prop) (rs : Fin n → Action σ)
+    (e : Behavior σ) (k m0 j0 : Nat) (l : Fin n)
+    (hL2 : ∀ k : Nat, φ (e k) → L2StepWith pre q φ δs ψs rs e k)
+    (hnot : ¬ eventually (statePred q) (e.drop k))
+    (hφm0 : φ (e (k + m0))) (hψm0 : ψs l (e (k + m0)))
+    (hnotpre : ∀ t : Nat, ¬ pre l (e (k + m0 + t)))
+    (hfirst : ∀ j : Nat, j < j0 → ¬ rs l (e (k + m0 + j)) (e (k + m0 + j + 1))) :
+    ∀ t : Nat, t ≤ j0 → φ (e (k + m0 + t)) ∧ ψs l (e (k + m0 + t)) := by
+  intro t
+  induction t with
+  | zero =>
+      intro ht
+      constructor
+      · simpa [Nat.add_assoc] using hφm0
+      · exact hψm0
+  | succ t ih =>
+      intro ht
+      rcases ih (by omega) with ⟨hφt, hψt⟩
+      have hreqt : ψs l (e (k + m0 + t)) ∧ ¬ pre l (e (k + m0 + t)) := ⟨hψt, hnotpre t⟩
+      have hnr : ¬ rs l (e (k + m0 + t)) (e (k + m0 + t + 1)) := hfirst t (by omega)
+      rcases hL2 (k + m0 + t) hφt with hevq' | hrest
+      · exact False.elim (hnot (eventually_statePred_lift q e k (m0 + t)
+          (by simpa [Nat.add_assoc] using hevq')))
+      · constructor
+        · simpa [Nat.add_assoc] using hrest.1
+        · simpa [Nat.add_assoc] using hrest.2.2.2 l hreqt hnr
+
 /-- Walk A (paper: "while `φ` holds"): under `¬◇q` from `k`, L2 keeps `φ`
 true forever. -/
 theorem phi_persist {σ : Type u} {α : Type v} {n : Nat} (q : StatePred σ) (φ : StatePred σ)
@@ -946,6 +1042,179 @@ theorem rel_rank_param {σ : Type u} {α : Type v} {X : Type w} {n : Nat}
             have hφk'' : φ (e (k + m0 + j0)) := (hpersist j0 le_rfl).1
             have hψk'' : ψs l x0' (e (k + m0 + j0)) := (hpersist j0 le_rfl).2
             have hreqk'' : Req (fun i => ψs i x0') l (e (k + m0 + j0)) :=
+              ⟨hψk'', by simpa [Nat.add_assoc] using hnotpre l le_rfl (m0 + j0)⟩
+            rcases hL2x (k + m0 + j0) hφk'' with hevq' | hrest
+            · exact False.elim (hnot (eventually_statePred_lift q e k (m0 + j0)
+                (by simpa [Nat.add_assoc] using hevq')))
+            · have hφnext : φ (e (k + m0 + j0 + 1)) := hrest.1
+              have hcons : ConservesFinset (δs l) (e (k + m0 + j0)) (e (k + m0 + j0 + 1)) :=
+                hrest.2.1 l (by simpa [Nat.add_assoc] using hnotpre l le_rfl (m0 + j0))
+              have hred : ReducesFinset (δs l) (e (k + m0 + j0)) (e (k + m0 + j0 + 1)) :=
+                hrest.2.2.1 l hreqk'' hfire
+              -- the cardinality vector at the end is lex-below the start one
+              have hlex : VecLexLess (fun i => (δs i (e (k + m0 + j0 + 1))).card) v := by
+                refine ⟨l, ?_, ?_⟩
+                · intro j hj
+                  have h1 : (δs j (e (k + m0 + j0 + 1))).card ≤ (δs j (e k)).card := by
+                    simpa [Nat.add_assoc] using (hwalk (m0 + j0 + 1)).2 j (le_of_lt hj)
+                  exact le_trans h1 (hv j)
+                · have hnlt : (δs l (e (k + m0 + j0 + 1))).card <
+                    (δs l (e (k + m0 + j0))).card :=
+                    card_lt_card_of_reduce (δs l) hcons hred
+                  have hchainl : (δs l (e (k + m0 + j0))).card ≤ (δs l (e k)).card := by
+                    simpa [Nat.add_assoc] using (hwalk (m0 + j0)).2 l le_rfl
+                  exact lt_of_lt_of_le hnlt (le_trans hchainl (hv l))
+              -- well-founded induction at the strictly smaller vector,
+              -- lifted back to the suffix at `k`
+              have hev' : eventually (statePred q) (e.drop (k + m0 + j0 + 1)) :=
+                ih (fun i => (δs i (e (k + m0 + j0 + 1))).card) hlex (k + m0 + j0 + 1) hφnext
+                  (fun i => le_rfl)
+              exact eventually_statePred_lift q e k (m0 + j0 + 1) (by
+                simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hev')
+    exact hmain (fun i => (δs i (e k)).card) k hφk (fun i => le_rfl)
+
+/-! ### Rule 11 with global preemption -/
+
+/-- Global preemption for parameterized justice: component `i` (for any
+parameter) is preempted when a higher-priority component `j < i` is
+scheduled *for some parameter* — `preᵢ(ψ)(x) = ∃ j < i, ∃ y, ψⱼ(y)`. This
+is the preemption needed by the reorder-buffer case study: a retire
+component is preempted whenever *any* controller still has a blocking
+operation, not just the same parameter instance. -/
+def PreParamGlobal {σ : Type u} {X : Type w} {n : Nat}
+    (ψs : Fin n → X → σ → Prop) (i : Fin n) (_x : X) (s : σ) : Prop :=
+  ∃ j : Fin n, j.val < i.val ∧ ∃ y : X, ψs j y s
+
+/-- `reqᵢ(ψ)(x)` with global preemption. -/
+def ReqParamGlobal {σ : Type u} {X : Type w} {n : Nat}
+    (ψs : Fin n → X → σ → Prop) (i : Fin n) (x : X) (s : σ) : Prop :=
+  ψs i x s ∧ ¬ PreParamGlobal ψs i x s
+
+/-- The L2 step shape for parameterized justice with global preemption
+(paper Rule 11 with `preᵢ(ψ)(x) = ∃ j < i, ∃ y, ψⱼ(y)`). -/
+def L2StepParamGlobal {σ : Type u} {α : Type v} {X : Type w} {n : Nat}
+    (q : StatePred σ) (φ : StatePred σ) (δs : Fin n → σ → Finset α)
+    (ψs : Fin n → X → σ → Prop) (rs : Fin n → X → Action σ)
+    (e : Behavior σ) (k : Nat) : Prop :=
+  eventually (statePred q) (e.drop k) ∨
+    (φ (e (k + 1)) ∧
+     (∀ x : X, ∀ i : Fin n, ¬ PreParamGlobal ψs i x (e k) →
+       ConservesFinset (δs i) (e k) (e (k + 1))) ∧
+     (∀ x : X, ∀ i : Fin n, ReqParamGlobal ψs i x (e k) → rs i x (e k) (e (k + 1)) →
+       ReducesFinset (δs i) (e k) (e (k + 1))) ∧
+     (∀ x : X, ∀ i : Fin n, ReqParamGlobal ψs i x (e k) → ¬ rs i x (e k) (e (k + 1)) →
+       ψs i x (e (k + 1))))
+
+/-- A global-preemption L2 step gives the custom-relation L2 step at a
+fixed parameter `x`. -/
+theorem l2step_param_global_fixed {σ : Type u} {α : Type v} {X : Type w} {n : Nat}
+    (q : StatePred σ) (φ : StatePred σ) (δs : Fin n → σ → Finset α)
+    (ψs : Fin n → X → σ → Prop) (rs : Fin n → X → Action σ)
+    (e : Behavior σ) (k : Nat) (x : X)
+    (h : L2StepParamGlobal q φ δs ψs rs e k) :
+    L2StepWith (fun i s => PreParamGlobal ψs i x s)
+      q φ δs (fun i => ψs i x) (fun i => rs i x) e k := by
+  rcases h with hevq | hrest
+  · exact Or.inl hevq
+  · exact Or.inr ⟨hrest.1,
+      ⟨fun i hni => hrest.2.1 x i hni,
+       ⟨fun i hreq hfire => hrest.2.2.1 x i hreq hfire,
+        fun i hreq hnr => hrest.2.2.2 x i hreq hnr⟩⟩⟩
+
+/-- Rule 11 with global preemption (paper §4.2, the case-study form):
+parameterized schedulers `ψs i x` and justice actions `rs i x` over an
+unbounded parameter set, where component `i` is preempted when *any*
+higher-priority component is scheduled. Soundness is the same descent as
+`rel_rank_param`, with the fixed-parameter instance run through the custom
+preemption walk (`L2StepWith` + `walk_below_with`/`sched_persist_with`). -/
+theorem rel_rank_param_global {σ : Type u} {α : Type v} {X : Type w} {n : Nat}
+    (p q : StatePred σ) (φ : StatePred σ) (δs : Fin n → σ → Finset α)
+    (ψs : Fin n → X → σ → Prop) (rs : Fin n → X → Action σ) (H : Pred σ)
+    (hS1 : ∀ e : Behavior σ, H e → ∀ k : Nat, p (e k) →
+      eventually (statePred q) (e.drop k) ∨ φ (e k))
+    (hP2 : ∀ e : Behavior σ, H e → ∀ k : Nat, φ (e k) →
+      L2StepParamGlobal q φ δs ψs rs e k)
+    (hP3 : ∀ e : Behavior σ, H e → ∀ k : Nat, φ (e k) → ∀ x : X, ∀ i : Fin n,
+      ψs i x (e k) → eventually (statePred q) (e.drop k) ∨
+        eventually (actionPred (rs i x)) (e.drop k))
+    (hP4 : ∀ e : Behavior σ, H e → ∀ k : Nat, φ (e k) →
+      eventually (statePred q) (e.drop k) ∨ ∃ x : X, ∃ i : Fin n, ψs i x (e k)) :
+    Entails H (leadsTo (statePred p) (statePred q)) := by
+  intro e hH k hp
+  have hp' : p (e k) := by simpa using hp
+  rcases hS1 e hH k hp' with hevq | hφk
+  · exact hevq
+  · -- well-founded induction on the cardinality vector (VecLexLess)
+    have hwf : WellFounded (@VecLexLess n) := vecLexLess_wellFounded n
+    have hmain : ∀ (v : Fin n → Nat) (k : Nat), φ (e k) →
+        (∀ i, (δs i (e k)).card ≤ v i) → eventually (statePred q) (e.drop k) := by
+      intro v
+      refine WellFounded.induction (C := fun v => ∀ k : Nat, φ (e k) →
+          (∀ i, (δs i (e k)).card ≤ v i) → eventually (statePred q) (e.drop k)) hwf v ?_
+      intro v ih k hφk hv
+      classical
+      by_cases hevq : eventually (statePred q) (e.drop k)
+      · exact hevq
+      · -- `q` never occurs from `k`: run the descent stretch below
+        have hnot : ¬ eventually (statePred q) (e.drop k) := hevq
+        rcases hP4 e hH k hφk with hevq' | ⟨x0, i0, hi0⟩
+        · exact False.elim (hnot hevq')
+        · -- the least component ever scheduled (for some parameter), and a
+          -- parameter `x₀` witnessing its first scheduling
+          rcases min_ever_scheduled (fun i s => ∃ x : X, ψs i x s) e k
+            ⟨i0, ⟨x0, hi0⟩⟩ with ⟨l, hlmem, hminimal⟩
+          rcases hlmem with ⟨m0, hψlm0⟩
+          rcases hψlm0 with ⟨x0', hψx0'⟩
+          -- nothing at or below `l` is ever preempted (global: for any
+          -- parameter), so all higher-priority components stay bounded
+          have hnotpre : ∀ (i : Fin n), i.val ≤ l.val → ∀ t : Nat,
+              ¬ PreParamGlobal ψs i x0' (e (k + t)) := by
+            intro i hi t hpre
+            rcases hpre with ⟨j, hj, hψj⟩
+            rcases hψj with ⟨y, hψjy⟩
+            exact hminimal j (lt_of_lt_of_le hj hi) t ⟨y, hψjy⟩
+          -- the fixed-parameter instance of the global L2 walk
+          have hL2x : ∀ k : Nat, φ (e k) →
+              L2StepWith (fun i s => PreParamGlobal ψs i x0' s)
+                q φ δs (fun i => ψs i x0') (fun i => rs i x0') e k := by
+            intro k' hφk'
+            exact l2step_param_global_fixed q φ δs ψs rs e k' x0' (hP2 e hH k' hφk')
+          have hwalk : ∀ t : Nat, φ (e (k + t)) ∧
+              ∀ i : Fin n, i.val ≤ l.val → (δs i (e (k + t))).card ≤ (δs i (e k)).card :=
+            walk_below_with (fun i s => PreParamGlobal ψs i x0' s)
+              q φ δs (fun i => ψs i x0') (fun i => rs i x0') e k l hL2x hnot hφk hnotpre
+          -- the least-ever-scheduled justice eventually fires; `j0` is its
+          -- first firing (P3 + Nat.find)
+          have hφm0 : φ (e (k + m0)) := (hwalk m0).1
+          rcases hP3 e hH (k + m0) hφm0 x0' l hψx0' with hevq' | hrl
+          · exact False.elim (hnot (eventually_statePred_lift q e k m0 hevq'))
+          · have hrl' : ∃ j : Nat, rs l x0' (e (k + m0 + j)) (e (k + m0 + j + 1)) := by
+              rcases hrl with ⟨j, hj⟩
+              refine ⟨j, ?_⟩
+              simpa [actionPred_drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hj
+            let j0 : Nat := Nat.find hrl'
+            have hfire : rs l x0' (e (k + m0 + j0)) (e (k + m0 + j0 + 1)) := by
+              simpa [j0] using
+                (Nat.find_spec (p := fun j => rs l x0' (e (k + m0 + j)) (e (k + m0 + j + 1))) hrl')
+            have hfirst : ∀ j : Nat, j < j0 →
+                ¬ rs l x0' (e (k + m0 + j)) (e (k + m0 + j + 1)) := by
+              intro j hj
+              exact Nat.find_min (p := fun j => rs l x0' (e (k + m0 + j)) (e (k + m0 + j + 1))) hrl'
+                (by simpa [j0] using hj)
+            -- stability: `φ` and the required scheduler `ψ_l x₀` persist up
+            -- to the first firing (walk C)
+            have hpersist : ∀ t : Nat, t ≤ j0 →
+                φ (e (k + m0 + t)) ∧ ψs l x0' (e (k + m0 + t)) :=
+              sched_persist_with (fun i s => PreParamGlobal ψs i x0' s)
+                q φ δs (fun i => ψs i x0') (fun i => rs i x0') e k m0 j0 l
+                hL2x hnot hφm0 hψx0'
+                (fun t => by simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
+                  using hnotpre l le_rfl (m0 + t))
+                hfirst
+            -- at the firing step the required component strictly shrinks
+            have hφk'' : φ (e (k + m0 + j0)) := (hpersist j0 le_rfl).1
+            have hψk'' : ψs l x0' (e (k + m0 + j0)) := (hpersist j0 le_rfl).2
+            have hreqk'' : ReqParamGlobal ψs l x0' (e (k + m0 + j0)) :=
               ⟨hψk'', by simpa [Nat.add_assoc] using hnotpre l le_rfl (m0 + j0)⟩
             rcases hL2x (k + m0 + j0) hφk'' with hevq' | hrest
             · exact False.elim (hnot (eventually_statePred_lift q e k (m0 + j0)
