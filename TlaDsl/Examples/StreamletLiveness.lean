@@ -547,26 +547,12 @@ theorem vote_inv {n : Nat} {s s' : St} {i : Node} {b : Block}
   have hs' : s' = vote s i b := by
     ext <;> simp [vote, hVotes', hProp', hCur']
   subst s'
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · exact votedEpoch_vote hInv
-  · exact votedPosEpoch_vote hpos hInv
-  · exact votedProposed_vote hProp hInv
-  · exact votedCur_vote hcur hInv
-  · exact votedSeenParent_vote hSeen hpos hcur hInv
-  · exact votedLongest_vote hLongest hpos hcur hInv
-  · exact voteLenMono_vote
-      (Block.epoch_pos_ne_genesis hpos)
-      hLongest hcur hInv
-  · -- ProposedEpoch: unchanged
-    intro e0 b0 hv0
-    exact hInv.proposedEpoch e0 b0 (by simpa [vote] using hv0)
-  · -- ProposedPosEpoch
-    intro e0 b0 hv0
-    exact hInv.proposedPosEpoch e0 b0 (by simpa [vote] using hv0)
-  · -- ProposedCur
-    intro e0 b0 hv0
-    exact hInv.proposedCur e0 b0 (by simpa [vote] using hv0)
-  · -- ProposedSeenParent
+  tla_inv_step
+  · -- VoteLenMono: votes changed; the dedicated lemma needs the
+    -- non-genesis fact derived from `hpos`
+    exact voteLenMono_vote (Block.epoch_pos_ne_genesis hpos) hLongest hcur hInv
+  · -- ProposedSeenParent: votes changed, so the chain lookup needs the
+    -- votes-preservation rewrite
     intro e0 b0 hv0
     have hv0' : s.proposed e0 = some b0 := by simpa [vote] using hv0
     have hc : ChainNotarizedBy s n b0.pred (e0 - 1) := hInv.proposedSeenParent e0 b0 hv0'
@@ -588,12 +574,9 @@ theorem propose_inv {n : Nat} {s s' : St} {e : Epoch} {b : Block}
   have hs' : s' = propose s e b := by
     ext <;> simp [propose, hProp', hCur', hVotes']
   subst s'
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · intro i e0 b0 hv0
-    exact hInv.votedEpoch i e0 b0 (by simpa [propose] using hv0)
-  · intro i e0 b0 hv0
-    exact hInv.votedPosEpoch i e0 b0 (by simpa [propose] using hv0)
-  · intro i e0 b0 hv0
+  tla_inv_step
+  · -- VotedProposed: a vote for the new epoch-e proposal
+    intro i e0 b0 hv0
     have hv0' : s.votes i e0 = some b0 := by simpa [propose] using hv0
     have hp0 : s.proposed e0 = some b0 := hInv.votedProposed i e0 b0 hv0'
     have hne : e0 ≠ e := by
@@ -602,19 +585,7 @@ theorem propose_inv {n : Nat} {s s' : St} {e : Epoch} {b : Block}
       rw [hp0] at hNone
       cases hNone
     exact (propose_proposed_of_ne (s := s) (e := e) (e0 := e0) (b := b) hne) ▸ hp0
-  · intro i e0 b0 hv0
-    exact hInv.votedCur i e0 b0 (by simpa [propose] using hv0)
-  · intro i e0 b0 hv0
-    exact hInv.votedSeenParent i e0 b0 (by simpa [propose] using hv0)
-  · intro i e0 b0 hv0 C hC
-    have hv0' : s.votes i e0 = some b0 := by simpa [propose] using hv0
-    have hC' : NotarizedBy s n C (e0 - 1) :=
-      (notarizedBy_votes_same (by rfl : (propose s e b).votes = s.votes)).2 hC
-    exact hInv.votedLongest i e0 b0 hv0' C hC'
-  · intro i e1 e2 b1 b2 hv1 hv2 hlt
-    exact hInv.voteLenMono i e1 e2 b1 b2
-      (by simpa [propose] using hv1) (by simpa [propose] using hv2) hlt
-  · -- ProposedEpoch: the new proposal has b.epoch = e; old ones unchanged
+  · -- ProposedEpoch
     intro e0 b0 hv0
     by_cases he0 : e0 = e
     · subst e0
@@ -675,44 +646,15 @@ theorem advance_inv {n : Nat} {s s' : St}
   have hs' : s' = { s with cur := s.cur + 1 } := by
     ext <;> simp [hCur', hProp', hVotes']
   subst s'
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · intro i e0 b0 hv0
-    exact hInv.votedEpoch i e0 b0 (by simpa [hVotes'] using hv0)
-  · intro i e0 b0 hv0
-    exact hInv.votedPosEpoch i e0 b0 (by simpa [hVotes'] using hv0)
-  · intro i e0 b0 hv0
-    exact hInv.votedProposed i e0 b0 (by simpa [hVotes'] using hv0)
-  · intro i e0 b0 hv0
+  tla_inv_step
+  · -- VotedCur: the clock advanced, so `e0 ≤ cur` needs the step
+    intro i e0 b0 hv0
     have h1 : e0 ≤ s.cur := hInv.votedCur i e0 b0 (by simpa [hVotes'] using hv0)
     simpa using (le_trans h1 (Nat.le_succ s.cur))
-  · intro i e0 b0 hv0
-    have hv0' : s.votes i e0 = some b0 := by simpa [hVotes'] using hv0
-    exact (chainNotarizedBy_votes_same (by rfl : { s with cur := s.cur + 1 }.votes = s.votes)).1
-      (hInv.votedSeenParent i e0 b0 hv0')
-  · intro i e0 b0 hv0 C hC
-    have hv0' : s.votes i e0 = some b0 := by simpa [hVotes'] using hv0
-    have hC' : NotarizedBy s n C (e0 - 1) :=
-      (notarizedBy_votes_same (by rfl : { s with cur := s.cur + 1 }.votes = s.votes)).2 hC
-    exact hInv.votedLongest i e0 b0 hv0' C hC'
-  · intro i e1 e2 b1 b2 hv1 hv2 hlt
-    exact hInv.voteLenMono i e1 e2 b1 b2
-      (by simpa [hVotes'] using hv1) (by simpa [hVotes'] using hv2) hlt
-  · intro e0 b0 hv0
-    exact hInv.proposedEpoch e0 b0 (by simpa [hProp'] using hv0)
-  · intro e0 b0 hv0
-    exact hInv.proposedPosEpoch e0 b0 (by simpa [hProp'] using hv0)
-  · intro e0 b0 hv0
+  · -- ProposedCur
+    intro e0 b0 hv0
     have h1 : e0 ≤ s.cur := hInv.proposedCur e0 b0 (by simpa [hProp'] using hv0)
     simpa using (le_trans h1 (Nat.le_succ s.cur))
-  · intro e0 b0 hv0
-    have hv0' : s.proposed e0 = some b0 := by simpa [hProp'] using hv0
-    exact (chainNotarizedBy_votes_same (by rfl : { s with cur := s.cur + 1 }.votes = s.votes)).1
-      (hInv.proposedSeenParent e0 b0 hv0')
-  · intro e0 b0 hv0 C hC
-    have hv0' : s.proposed e0 = some b0 := by simpa [hProp'] using hv0
-    have hC' : NotarizedBy s n C (e0 - 1) :=
-      (notarizedBy_votes_same (by rfl : { s with cur := s.cur + 1 }.votes = s.votes)).2 hC
-    exact hInv.proposedLongest e0 b0 hv0' C hC'
 
 theorem init_inv {n : Nat} {s : St} (h : Init s) : Inv n s := by
   tla_unfold

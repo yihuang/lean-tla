@@ -2,7 +2,11 @@ import TlaDsl.Rules
 import TlaDsl.Meta
 import TlaDsl.Prime
 
+import Lean
+
 namespace Tla
+
+open Lean Elab Tactic Meta
 
 /-! # Tactics
 
@@ -94,5 +98,120 @@ macro "refine_via " f:term : tactic =>
 only checked on reachable states). -/
 macro "refine_via_inv " inv:term f:term : tactic =>
   `(tactic| (apply Tla.refinement_mapping_inv _ _ _ _ _ _ $inv $f <;> try tla_grind))
+
+/-- **Invariant-preservation automation.** After a step proof has
+established `s' = transformer s ...` and `subst s'`, `tla_inv_step` splits
+the invariant structure in the goal (`Inv ... s'`), finds the pre-state
+invariant hypothesis, and for each field tries, in order:
+
+1. a definitional-equality check of <the corresponding pre-state field>
+   against the goal (record-update projections reduce in the kernel, so
+   `proposed`-only or `votes`-only changes are invisible to fields that do
+   not mention the updated component);
+2. `simpa [transformer] using <the corresponding pre-state field>` — the
+   transformer is read from the goal's state expression (a record update,
+   as in `Advance`, needs no lemmas);
+3. the convention-named preservation lemma `⟨field⟩_⟨transformer⟩` (e.g.
+   `votedEpoch_vote` for the `Inv.votedEpoch` field of `vote`), via
+   `apply ⟨lemma⟩ <;> assumption`, which discharges fields whose proof
+   needs case analysis on a `Function.update`-style state change.
+
+Only the fields the action genuinely changes remain, in the structure's
+field order, ready for bullets. -/
+elab "tla_inv_step" : tactic => do
+  -- identify the invariant structure from the goal: `Inv ... s'`
+  let mvar ← getMainGoal
+  let goalType := (← instantiateMVars (← mvar.getType)).consumeMData
+  let invName ← match goalType.getAppFn with
+    | Expr.const n _ => pure n
+    | _ => throwError "tla_inv_step: goal is not an applied structure (expected `Inv ... state`)"
+  let stateExpr ← match goalType.getAppArgs.toList.getLast? with
+    | some st => pure st
+    | none => throwError "tla_inv_step: goal is not an applied structure"
+  -- the transformer def, if the state is an application of one
+  let env ← getEnv
+  let transformerName ← match stateExpr.getAppFn with
+    | Expr.const n _ =>
+        match env.find? n with
+        | some (ConstantInfo.defnInfo _) => pure (some n)
+        | _ => pure none
+    | _ => pure none
+  let simpLemma ← match transformerName with
+    | some n => pure (some (← `(Parser.Tactic.simpLemma| $(mkIdent n):ident)))
+    | none => pure none
+  -- find the pre-state invariant hypothesis
+  let ctx ← getLCtx
+  let hInv ← ctx.findDeclM? fun d => do
+    if d.isImplementationDetail then pure none
+    else
+      let ty ← instantiateMVars d.type
+      match ty.consumeMData.getAppFn with
+      | Expr.const n _ =>
+          if n == invName then pure (some d) else pure none
+      | _ => pure none
+  let some hInv := hInv | throwError "tla_inv_step: no pre-state invariant hypothesis found"
+  -- split the goal into the structure's fields
+  try
+    evalTactic (← `(tactic| constructor))
+  catch _ => throwError "tla_inv_step: the goal is not a single-constructor structure"
+  let goals := (← getGoals)
+  if goals.isEmpty then return  -- single trivial field, already closed
+  -- the structure's field projectors, in declaration order
+  let env ← getEnv
+  -- `constructor` introduces the fields in declaration order; `fieldNames`
+  -- preserves that order (unlike `StructureInfo.fieldInfo`, which is sorted)
+  let fields := (getStructureFields env invName).map
+    (fun n => (getFieldInfo? env invName n).get!.projFn)
+  if goals.length != fields.size then
+    throwError "tla_inv_step: {goals.length} field goals but {fields.size} structure fields"
+  -- convention-named preservation lemmas `⟨field⟩_⟨transformer⟩`, looked up
+  -- next to the structure and at the root
+  let convLemma : Name → Name → Option Name := fun proj transformer =>
+    let fieldBase := (proj.toString.splitOn ".").getLast!
+    let transformerBase := (transformer.toString.splitOn ".").getLast!
+    let convStr := fieldBase ++ "_" ++ transformerBase
+    let ns := proj.getPrefix.getPrefix
+    if env.find? (ns.mkStr convStr) |>.isSome then
+      some (ns.mkStr convStr)
+    else if env.find? (Name.anonymous.mkStr convStr) |>.isSome then
+      some (Name.anonymous.mkStr convStr)
+    else none
+  -- for each field subgoal, try the simplification route and then the
+  -- convention lemma; unsolved goals are left for the user
+  let hId := mkIdent hInv.userName
+  let hFVar := mkFVar hInv.fvarId
+  for (g, f) in goals.zip fields.toList do
+    setGoals [g]
+    let saved ← saveState
+    -- attempt 1: the pre-state field is definitionally equal to the goal
+    -- (the action does not touch the components the field mentions).  This
+    -- is done at the meta level — unlike `exact`, a failed unification does
+    -- not log error messages.
+    let exactOk ← try
+      let fieldName := f.toString.splitOn "." |>.getLast! |> Name.mkSimple
+      let projExpr ← mkProjection hFVar fieldName
+      isDefEq (mkMVar g) projExpr
+    catch _ => pure false
+    unless exactOk do
+      saved.restore
+      let tm ← `(term| $(mkIdent f) $hId)
+      let tac ← match simpLemma with
+        | some l => `(tactic| simpa [$l] using $tm)
+        | none => `(tactic| simpa using $tm)
+      -- `simpa` emits the `unnecessarySimpa` linter warning when the target
+      -- does not change; that is the normal case here (the field was already
+      -- in the right shape), so suppress it for the generated tactic.
+      let simpaOk ← try
+        withOptions (fun o => o.setBool `linter.unnecessarySimpa false) <| evalTactic tac
+        pure (← g.isAssigned)
+      catch _ => pure false
+      unless simpaOk do
+        saved.restore
+        if let some n := transformerName.bind (convLemma f) then
+          let convTac ← `(tactic| (apply $(mkIdent n) <;> assumption))
+          try
+            evalTactic convTac
+          catch _ => saved.restore
+    setGoals goals
 
 end Tla

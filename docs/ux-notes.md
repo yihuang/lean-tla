@@ -388,6 +388,83 @@ Next: item 1 — `tla_inv_step` (invariant-preservation automation), the big
 line win, with `StreamletLiveness.lean`'s four preservation proofs as the
 regression suite.
 
+### Slice 1 done (2026-08-06): `tla_inv_step` — invariant-preservation automation
+
+`TlaDsl/Tactic.lean` now provides `tla_inv_step`. After a step proof has
+established `s' = transformer s ...` and `subst s'`, one call replaces the
+whole 12-field bullet list:
+
+```lean
+theorem vote_inv ... : Inv n s' := by
+  tla_unfold
+  rcases hstep with ⟨hcur, hpos, hProp, hNoVote, hSeen, hLongest, hVotes', hProp', hCur'⟩
+  have hs' : s' = vote s i b := by ext <;> simp [vote, hVotes', hProp', hCur']
+  subst s'
+  tla_inv_step
+  · -- only the genuinely-changed fields remain, in field order
+    exact voteLenMono_vote (Block.epoch_pos_ne_genesis hpos) hLongest hcur hInv
+  · -- ProposedSeenParent: votes changed, chain lookup needs the rewrite
+    ...
+  · -- ProposedLongest
+    ...
+```
+
+What it does, per field of the invariant structure (in declaration order):
+
+1. **defeq check** (`isDefEq (mkMVar g) ⟨pre-state field projection⟩`, at the
+   meta level): closes unchanged fields definitionally — record-update
+   projections reduce in the kernel, so an action that only touches `votes`
+   is invisible to a `proposed`-only field. This alone discharges the bulk
+   of the frame cases with no elaboration at all.
+2. **`simpa [transformer] using ⟨pre-state field⟩`**: the transformer is read
+   from the goal's state expression (a record update, as in `advance`,
+   needs no lemma). Handles arithmetic and simple rewrites.
+3. **convention-named preservation lemma** `⟨field⟩_⟨transformer⟩` (e.g.
+   `votedEpoch_vote` for `Inv.votedEpoch` under `vote`), via
+   `apply ⟨lemma⟩ <;> assumption`: discharges the fields whose proof needs
+   the case analysis on a `Function.update`-style state change. This is now
+   part of the DSL convention: when an action's preservation proof is not
+   pure simplification, write it once as `field_action` and `tla_inv_step`
+   picks it up automatically.
+
+Measured effect on `StreamletLiveness.lean`:
+
+- file length 1604 → 1546 (−58 lines, all three preservation proofs);
+- 36 invariant bullets (12 per action) → 11 total:
+  `vote_inv` 3 (VoteLenMono + ProposedSeenParent + ProposedLongest),
+  `propose_inv` 6 (VotedProposed + the four proposed-group cases +
+  ProposedLongest), `advance_inv` 2 (VotedCur + ProposedCur);
+- every remaining bullet is a real case (a `Function.update` case split, a
+  votes-preservation rewrite, or an arithmetic step), so the tactic's
+  "what's left is what the action writes" contract holds.
+
+Implementation notes (three Lean API traps worth recording for future
+tactic work):
+
+- **`simp` argument nodes must have the right syntax kind.** A
+  `TSyntax \`Lean.Parser.Tactic.simpLemma` wrapping a raw `ident` node is
+  silently dropped by `elabSimpArg` (it dispatches on the node kind and
+  recovers by returning `.none`). Build it with the quotation
+  `` `(Parser.Tactic.simpLemma| $(mkIdent n):ident) `` instead.
+- **`StructureInfo.fieldInfo` is sorted, not reverse-declaration-order.**
+  `fieldInfo` is sorted by `StructureFieldInfo.lt`; `.reverse` only
+  accidentally matches declaration order for two-field structures. Use
+  `getStructureFields env invName` (declaration order) plus
+  `getFieldInfo?` for the projector.
+- **A failing `exact` can log error messages and swallow its own failure.**
+  `evalTactic (exact ...)` on a type mismatch logs "Application type
+  mismatch" and throws an abort exception that `Tactic.run` catches and
+  turns into a normal return, so "the tactic ran" does not imply "the goal
+  closed" and the leaked message persists. Doing the defeq check directly
+  (`isDefEq (mkMVar g) projExpr`, via `Meta.mkProjection` for the field
+  projection — which also supplies the structure parameters) avoids both
+  problems and is faster.
+
+Remaining per the priority table: slice 4 (state/action delaborators,
+medium–hard) and slice 5 (gotcha documentation + mini-utilities, easy) —
+the P5 gotchas above (the `rcases ... rfl` subst trap, `by omega` in
+argument position, `ωSequence` defeq) are the ones to capture.
+
 ## 4. The one-paragraph takeaway
 
 The DSL's notation is not the bottleneck anymore — the *proof plumbing* is:
@@ -398,3 +475,9 @@ and (b) a leads-to API that works at states instead of suffixes. Both are
 pure automation on top of the existing semantics, both have the Streamlet
 files as ready-made test cases, and together they would cut the liveness
 file's mechanical overhead by roughly half.
+
+Status: (a) is done — `tla_inv_step` eats the frame cases (36 → 11
+bullets, −58 lines); (b) is done — `leadsTo_at`/`leadsTo_at_suffix`/
+`inv_all_of_spec` (40 → 16 drop conversions, −84 lines). The remaining
+mechanical overhead is the temporal wrapper's suffix-level conclusions,
+which slice 4's delaborators and slice 5's mini-utilities should attack.
