@@ -307,7 +307,7 @@ all are UX:
 | # | Slice | Pain | Expected impact | Effort |
 |---|---|---|---|---|
 | 1 | `tla_inv_step` — invariant-preservation automation (unfold, ext, field-split, auto-discharge frames) | P1 | `next_inv` for any protocol: 12 bullets → 1 tactic call + real cases; ~200 lines saved here | medium (pure tactic) |
-| 2 | State-level leads-to API: `tla_leads_to_at` tactic + `tla_inv_of_spec` helper | P2 | temporal proofs lose all drop-conversion noise; ~100 lines + readability | easy–medium |
+| 2 | State-level leads-to API: `leadsTo_at`/`leadsTo_at_suffix` + `inv_all_of_spec` | P2 | temporal proofs lose all drop-conversion noise; ~100 lines + readability | easy–medium — **done (2026-08-06)** |
 | 3 | Bracket lifting of named state-first predicates | P3 | complex invariants stay in `[p| ...]` form; specs read uniformly | easy (elaborator-local) |
 | 4 | State/action delaborators (`[p| ...]`-style goal display) | P4 | goals/hyps read like TLA in the middle of proofs | medium–hard |
 | 5 | Gotcha documentation + mini-utilities (subst pattern, `by omega` note, naming conventions) | P5 | fewer debugging cycles | easy |
@@ -318,6 +318,34 @@ then **1** (the big line win), then 4, then 5. Item 2's helpers
 exist in `StreamletLiveness.lean` and can be promoted into the library
 verbatim; item 1 should be prototyped against `StreamletLiveness.lean`'s
 four preservation proofs as the regression suite.
+
+### Slice 2 done (2026-08-06): state-level leads-to API
+
+`TlaDsl/Rules.lean` now has the state-level leads-to API:
+
+- `leadsTo_at h hp` — apply a leads-to at the current state:
+  `P (e n) → ∃ j, Q (e (n + j))`;
+- `leadsTo_at_suffix h hp` — same, with the premise already at the suffix
+  state `(e.drop n) 0`;
+- `inv_all_of_spec spec_entails hspec` — the pointwise invariant
+  `∀ m, inv (e m)` from `spec ⊢ □ ⌜inv⌝` and `spec e`.
+
+`StreamletLiveness.lean` was refactored onto the new API. Measured effect:
+
+- file length 1688 → 1604 lines (−84);
+- `Cslib.ωSequence.drop` conversions 40 → 16 (the remaining ones are the
+  unavoidable suffix-level conclusion of `leadsTo`, the `hStut` extraction,
+  and the k=0 base case);
+- the `epoch_step` propose/vote/clock chain reads as
+  `rcases Tla.leadsTo_at (hH.2.2.2.1 e') ⟨hcur, hnone0⟩ with ⟨j1, hj1⟩`
+  — the premise and conclusion are both at the state level, no drop
+  arithmetic visible;
+- the three `hInvAll` extractions are each one `inv_all_of_spec` call.
+
+The `leadsTo_at_suffix` variant covers the one case (the propose step in
+`epoch_step`) where the premise facts arrive from an `rcases` of a
+suffix-level state predicate; everything else uses `leadsTo_at`. Item 3
+(bracket lifting of named state-first predicates) is next.
 
 ## 4. The one-paragraph takeaway
 

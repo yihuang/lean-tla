@@ -1364,23 +1364,6 @@ lemma le_self_add (a b : Nat) : a ≤ a + b := by
         exact Nat.le_succ (a + b)
       exact le_trans ih h1
 
-/-- A state predicate at a suffix is the predicate at the corresponding
-state. -/
-lemma drop_at_zero {σ : Type u} {e : Tla.Behavior σ} (k : Nat) : (e.drop k) 0 = e k := by
-  simp [Cslib.ωSequence.drop, Nat.add_comm]
-
-lemma statePred_drop {σ : Type u} {P : σ → Prop} {e : Tla.Behavior σ} {k : Nat}
-    (h : P (e k)) : (Tla.statePred P) (e.drop k) := by
-  change P ((e.drop k) 0)
-  rw [drop_at_zero]
-  exact h
-
-lemma statePred_drop' {σ : Type u} {P : σ → Prop} {e : Tla.Behavior σ} {k : Nat}
-    (h : (Tla.statePred P) (e.drop k)) : P (e k) := by
-  change P ((e.drop k) 0) at h
-  rw [drop_at_zero] at h
-  exact h
-
 /-- **The window delivers**: if all five window epochs completed with
 chain-notarized proposals, the third proposal is final. -/
 lemma window_finality {n : Nat} {s : St} (hInv : Inv n s) {e0 : Epoch} (he0 : 0 < e0)
@@ -1439,8 +1422,7 @@ lemma epoch_step {n : Nat} {e' : Epoch} {e : Tla.Behavior St} (hH : H n e) :
     have hm := hH.2.1 m
     simpa [Tla.actionPred, Tla.always, Cslib.ωSequence.drop, Nat.add_comm] using hm
   have hInvAll : ∀ m, Inv n (e m) := by
-    have hsp := spec_entails_inv n e ⟨hH.1, hH.2.1⟩
-    simpa [Tla.always, Tla.statePred, Cslib.ωSequence.drop, Nat.add_comm] using hsp
+    exact Tla.inv_all_of_spec (spec_entails_inv n) ⟨hH.1, hH.2.1⟩
   intro k hp
   rcases hp with ⟨hInv0, hcur⟩
   -- step 1: the proposal of epoch `e'` exists (maybe after the propose
@@ -1448,16 +1430,10 @@ lemma epoch_step {n : Nat} {e' : Epoch} {e : Tla.Behavior St} (hH : H n e) :
   have hstep1 : ∃ j1 : Nat,
       (e (k + j1)).proposed e' ≠ none ∧ (e (k + j1)).cur = e' := by
     by_cases hnone : (e k).proposed e' = none
-    · have hp0 : (Tla.statePred (fun s => s.cur = e' ∧ s.proposed e' = none))
-        (e.drop k) := by
-        have hnone0 : ((e.drop k) 0).proposed e' = none := by
-          simpa [Cslib.ωSequence.drop, Nat.add_comm] using hnone
-        change ((e.drop k) 0).cur = e' ∧ ((e.drop k) 0).proposed e' = none
-        exact ⟨hcur, hnone0⟩
-      rcases (hH.2.2.2.1 e') k hp0 with ⟨j1, hj1⟩
-      refine ⟨j1, ?_⟩
-      simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
-        Nat.add_left_comm] using hj1
+    · have hnone0 : ((e.drop k) 0).proposed e' = none := by
+        simpa [Cslib.ωSequence.drop, Nat.add_comm] using hnone
+      rcases Tla.leadsTo_at_suffix (hH.2.2.2.1 e') ⟨hcur, hnone0⟩ with ⟨j1, hj1⟩
+      exact ⟨j1, hj1⟩
     · refine ⟨0, ?_⟩
       have hk : e (k + 0) = e k := by rw [Nat.add_zero]
       have hcur' : (e k).cur = e' := by
@@ -1482,35 +1458,17 @@ lemma epoch_step {n : Nat} {e' : Epoch} {e : Tla.Behavior St} (hH : H n e) :
     · exact hInv1.proposedSeenParent e' b hpb'
     · intro C hC
       exact hInv1.proposedLongest e' b hpb' C hC
-  have hp1 : (Tla.statePred (fun s => s.cur = e' ∧
-      ∃ b : Block, s.proposed e' = some b ∧
-        ChainNotarizedBy s n b.pred (e' - 1) ∧
-        ∀ C : Block, NotarizedBy s n C (e' - 1) → C.length ≤ b.pred.length))
-      (e.drop (k + j1)) := by
-      simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
-        Nat.add_left_comm] using hp1s
-  rcases (hH.2.2.2.2 e') (k + j1) hp1 with ⟨j2, hj2⟩
-  have hj2' : (e (k + j1 + j2)).cur = e' ∧
-      ∃ b : Block, (e (k + j1 + j2)).proposed e' = some b ∧
-        ChainNotarizedBy (e (k + j1 + j2)) n b e' := by
-      simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
-        Nat.add_left_comm] using hj2
+  rcases Tla.leadsTo_at (hH.2.2.2.2 e') hp1s with ⟨j2, hj2⟩
   -- step 3: the clock advances
-  have hp2 : (Tla.statePred (fun s => s.cur = e')) (e.drop (k + j1 + j2)) := by
-    simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
-      Nat.add_left_comm] using hj2'.1
-  rcases (hH.2.2.1 e') (k + j1 + j2) hp2 with ⟨j3, hj3⟩
-  have hj3' : (e (k + j1 + j2 + j3)).cur = e' + 1 := by
-    simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
-      Nat.add_left_comm] using hj3
+  rcases Tla.leadsTo_at (hH.2.2.1 e') hj2.1 with ⟨j3, hj3⟩
   -- assemble
-  rcases hj2' with ⟨hcur2, b, hpb, hcb⟩
+  rcases hj2 with ⟨hcur2, b, hpb, hcb⟩
   refine ⟨j1 + j2 + j3, ?_⟩
   constructor
   · simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using
       (hInvAll (k + (j1 + j2 + j3)))
   · constructor
-    · simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hj3'
+    · simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hj3
     · refine ⟨b, ?_, ?_⟩
       · simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
           Nat.add_left_comm] using
@@ -1546,57 +1504,37 @@ theorem window_progress (n : Nat) (e0 : Epoch) (k : Nat) (hk : k ≤ 5) {e : Tla
         have hcur0 : (e n').cur = e0 + 5 - k := by
           simpa [Cslib.ωSequence.drop, Nat.add_comm] using hcur
         have hcur' : (e n').cur = e' := by simpa [e'] using hcur0
-        have hInv' : Inv n (e n') := by
-          have hsp := spec_entails_inv n e ⟨hH.1, hH.2.1⟩
-          have hall : ∀ m, Inv n (e m) := by
-            simpa [Tla.always, Tla.statePred, Cslib.ωSequence.drop, Nat.add_comm] using hsp
-          exact hall n'
+        have hInv' : Inv n (e n') :=
+          Tla.inv_all_of_spec (spec_entails_inv n) ⟨hH.1, hH.2.1⟩ n'
         have hstep := epoch_step (n := n) (e' := e') hH
-        have hInv0 : Inv n ((e.drop n') 0) := by
-          simpa [Cslib.ωSequence.drop, Nat.add_comm] using hInv'
-        have hcur0' : ((e.drop n') 0).cur = e' := by
-          simpa [Cslib.ωSequence.drop, Nat.add_comm] using hcur'
-        rcases hstep n' ⟨hInv0, hcur0'⟩ with ⟨j, hj⟩
+        rcases Tla.leadsTo_at hstep ⟨hInv', hcur'⟩ with ⟨j, hj⟩
         have hStut : ∀ m, Tla.StutAction (Next n) vars (e m) (e (m + 1)) := by
           intro m
           have hm := hH.2.1 m
           simpa [Tla.actionPred, Tla.always, Cslib.ωSequence.drop, Nat.add_comm] using hm
+        have hW0 : WindowDone n e0 (e n') := by
+          simpa [Cslib.ωSequence.drop, Nat.add_comm] using hW
         -- build WindowDone at the new state
         have hW' : WindowDone n e0 (e (n' + j)) := by
           rcases hj with ⟨hInvj, hcurj, hfact⟩
           intro e'' he0'' hlt''
-          have hcurj' : (e (n' + j)).cur = e' + 1 := by
-            simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
-              Nat.add_left_comm] using hcurj
           have hltj : e'' < e' + 1 := by
-            simpa [hcurj'] using hlt''
+            simpa [hcurj] using hlt''
           by_cases hlt : e'' < e'
-          · have hlt0 : e'' < ((e.drop n') 0).cur := by
-              simpa [Cslib.ωSequence.drop, Nat.add_comm, e', hcur0] using hlt
-            rcases hW e'' he0'' hlt0 with ⟨b, hpb, hcb⟩
-            have hpb0 : (e n').proposed e'' = some b := by
-              simpa [Cslib.ωSequence.drop, Nat.add_comm] using hpb
-            have hcb0 : ChainNotarizedBy (e n') n b e'' := by
-              simpa [Cslib.ωSequence.drop, Nat.add_comm] using hcb
-            refine ⟨b, proposals_persist_along hStut (k := n') (j := j) hpb0,
-              chainNotarizedBy_persist_along hStut (k := n') (j := j) hcb0⟩
+          · have hlt0 : e'' < (e n').cur := by
+              simpa [hcur'] using hlt
+            rcases hW0 e'' he0'' hlt0 with ⟨b, hpb, hcb⟩
+            refine ⟨b, proposals_persist_along hStut (k := n') (j := j) hpb,
+              chainNotarizedBy_persist_along hStut (k := n') (j := j) hcb⟩
           · have heq : e'' = e' := by
               have hge : e' ≤ e'' := le_of_not_gt hlt
               exact le_antisymm (Nat.le_of_lt_succ hltj) hge
             subst e''
             rcases hfact with ⟨b, hpb, hcb⟩
-            have hpb0 : (e (n' + j)).proposed e' = some b := by
-              simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
-                Nat.add_left_comm] using hpb
-            have hcb0 : ChainNotarizedBy (e (n' + j)) n b e' := by
-              simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
-                Nat.add_left_comm] using hcb
-            exact ⟨b, hpb0, hcb0⟩
+            exact ⟨b, hpb, hcb⟩
         -- the rank decreased by one
         have hrank : (e (n' + j)).cur = e0 + 5 - (k - 1) := by
-          have hcurj : (e (n' + j)).cur = e' + 1 := by
-            simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
-              Nat.add_left_comm] using hj.2.1
+          have hcurj : (e (n' + j)).cur = e' + 1 := hj.2.1
           have hsub : e' + 1 = e0 + 5 - (k - 1) := by
             dsimp [e']
             have hk1 : 1 ≤ k := hkpos
@@ -1623,13 +1561,7 @@ theorem window_progress (n : Nat) (e0 : Epoch) (k : Nat) (hk : k ≤ 5) {e : Tla
             (Tla.statePred (fun s => WindowDone n e0 s ∧ s.cur = e0 + 5 - (k - 1)))
             (Tla.statePred (fun s => WindowDone n e0 s ∧ s.cur = e0 + 5)) e :=
           ih (k - 1) hkm hkm5
-        have hW0' : WindowDone n e0 ((e.drop (n' + j)) 0) := by
-          simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
-            Nat.add_left_comm] using hW'
-        have hrank0' : ((e.drop (n' + j)) 0).cur = e0 + 5 - (k - 1) := by
-          simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
-            Nat.add_left_comm] using hrank
-        rcases hih (n' + j) ⟨hW0', hrank0'⟩ with ⟨j', hj'⟩
+        rcases Tla.leadsTo_at hih ⟨hW', hrank⟩ with ⟨j', hj'⟩
         refine ⟨j + j', ?_⟩
         simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
           Nat.add_left_comm] using hj'
@@ -1651,10 +1583,7 @@ theorem liveness_spec (n : Nat) (e0 : Epoch) (he0 : 0 < e0) :
     have hm := hH.2.1 m
     simpa [Tla.actionPred, Tla.always, Cslib.ωSequence.drop, Nat.add_comm] using hm
   have hInvAll : ∀ m, Inv n (e m) := by
-    have hsp := spec_entails_inv n e ⟨hH.1, hH.2.1⟩
-    intro m
-    have hm := hsp m
-    simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_comm] using hm
+    exact Tla.inv_all_of_spec (spec_entails_inv n) ⟨hH.1, hH.2.1⟩
   have hW : WindowDone n e0 (e n') := by
     intro e'' he0'' hlt''
     have hlt0 : e'' < e0 := by
@@ -1665,23 +1594,10 @@ theorem liveness_spec (n : Nat) (e0 : Epoch) (he0 : 0 < e0) :
     rw [hcur0]
     exact Nat.add_sub_cancel e0 5
   have h5 := window_progress n e0 5 (by omega) hH
-  have hW0 : WindowDone n e0 ((e.drop n') 0) := by
-    simpa [Cslib.ωSequence.drop, Nat.add_comm] using hW
-  have hrank0 : ((e.drop n') 0).cur = e0 + 5 - 5 := by
-    simpa [Cslib.ωSequence.drop, Nat.add_comm] using hrank
-  rcases h5 n' ⟨hW0, hrank0⟩ with ⟨j, hj⟩
+  rcases Tla.leadsTo_at h5 ⟨hW, hrank⟩ with ⟨j, hj⟩
   rcases hj with ⟨hW', hcur'⟩
   refine ⟨j, ?_⟩
-  have hInv' : Inv n ((e.drop (n' + j)) 0) := by
-    simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
-      Nat.add_left_comm] using (hInvAll (n' + j))
-  have hW'' : WindowDone n e0 ((e.drop (n' + j)) 0) := by
-    simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
-      Nat.add_left_comm] using hW'
-  have hcur'' : ((e.drop (n' + j)) 0).cur = e0 + 5 := by
-    simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
-      Nat.add_left_comm] using hcur'
-  have hfin : FinalSome n ((e.drop (n' + j)) 0) := window_finality hInv' he0 hW'' hcur''
+  have hfin : FinalSome n (e (n' + j)) := window_finality (hInvAll (n' + j)) he0 hW' hcur'
   simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
     Nat.add_left_comm] using hfin
 

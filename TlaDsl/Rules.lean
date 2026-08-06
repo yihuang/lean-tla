@@ -261,6 +261,53 @@ theorem leads_to_via_nat {σ : Type u} (p q : StatePred σ) (f : σ → Nat) (H 
   have hp' : p (e k) := by simpa [statePred, Cslib.ωSequence.drop, Nat.add_comm] using hp
   exact hmain (f (e k)) k rfl hp'
 
+/-! ## State-level leads-to API
+
+`leadsTo` is defined at the suffix level (`Q (e.drop (n + j))`); these
+helpers apply a leads-to at a *state* and return the conclusion at the
+state level (`Q (e (n + j))`), so proofs never see `e.drop` arithmetic.
+The `inv_all_of_spec` helper extracts the pointwise invariant from a spec
+entailment. -/
+
+/-- `(e.drop k) 0` is `e k`. -/
+lemma drop_at_zero {σ : Type u} {e : Behavior σ} (k : Nat) : (e.drop k) 0 = e k := by
+  simp [Cslib.ωSequence.drop, Nat.add_comm]
+
+/-- Apply a leads-to at the current state: `P (e n)` leads to
+`∃ j, Q (e (n + j))`. -/
+theorem leadsTo_at {σ : Type u} {P Q : σ → Prop} {e : Behavior σ} {n : Nat}
+    (h : leadsTo (statePred P) (statePred Q) e) (hp : P (e n)) :
+    ∃ j : Nat, Q (e (n + j)) := by
+  have hp' : (statePred P) (e.drop n) := by
+    change P ((e.drop n) 0)
+    rw [drop_at_zero]
+    exact hp
+  rcases h n hp' with ⟨j, hj⟩
+  refine ⟨j, ?_⟩
+  simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+    Nat.add_left_comm] using hj
+
+/-- Apply a leads-to when the premise is already given at the suffix state
+`(e.drop n) 0`. -/
+theorem leadsTo_at_suffix {σ : Type u} {P Q : σ → Prop} {e : Behavior σ} {n : Nat}
+    (h : leadsTo (statePred P) (statePred Q) e) (hp : P ((e.drop n) 0)) :
+    ∃ j : Nat, Q (e (n + j)) := by
+  have hp' : (statePred P) (e.drop n) := by
+    change P ((e.drop n) 0)
+    exact hp
+  rcases h n hp' with ⟨j, hj⟩
+  refine ⟨j, ?_⟩
+  simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+    Nat.add_left_comm] using hj
+
+/-- From `spec ⊢ □ ⌜inv⌝` and `spec e`, every state of `e` satisfies
+`inv`. -/
+theorem inv_all_of_spec {σ : Type u} {inv : σ → Prop} {spec : Pred σ} {e : Behavior σ}
+    (h : Entails spec (always (statePred inv))) (hspec : spec e) : ∀ m : Nat, inv (e m) := by
+  intro m
+  have hm := h e hspec m
+  simpa [statePred, Cslib.ωSequence.drop, Nat.add_comm] using hm
+
 /-! ## Action algebra -/
 
 /-- `Enabled` distributes over action disjunction. -/
