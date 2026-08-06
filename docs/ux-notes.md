@@ -465,6 +465,50 @@ medium–hard) and slice 5 (gotcha documentation + mini-utilities, easy) —
 the P5 gotchas above (the `rcases ... rfl` subst trap, `by omega` in
 argument position, `ωSequence` defeq) are the ones to capture.
 
+### Slice 4 done (2026-08-06): state/action delaborators
+
+`TlaDsl/Pretty.lean` now registers a `@[delab lam]` that inverts the
+bracket elaborators: a `σ → Prop` lambda whose state variable only ever
+occurs as the first argument of a state function (a `tla_var` abbreviation
+or a structure projection) displays as `[p| ...]`, and a `σ → σ → Prop`
+lambda as `[a| ...]` with the post-state applications primed. Goals that
+used to read
+
+```lean
+⊢ (fun s => s.cur = 0 ∧ (∀ e : Epoch, s.proposed e = none) ∧ ...) s
+```
+
+now read
+
+```lean
+⊢ [p| cur = 0 ∧ (∀ e : Epoch, proposed e = none) ∧ ...] s
+```
+
+and action-shaped hypotheses read `[a| cur' = cur + 1 ∧ votes' = votes]`.
+It is conservative: it falls through (default lambda display) for value
+binders (`∀ C : Block, C ∈ b.ancestors → ...` keeps its `C`), for lambdas
+over non-structure domains, for `Enabled`-style shapes where the state is
+an argument of a free-variable action, under `pp.all`, and whenever the
+elision would leave a stray state-variable occurrence. `TlaDsl/Tactic.lean`
+imports `TlaDsl.Pretty`, so every example file that uses the tactics gets
+the display for free.
+
+Implementation notes (the delabbed syntax shapes that took the debugging):
+
+- applications delaborate as `app(f, argNode)` where `argNode` is a `null`
+  node wrapping *all* explicit arguments, so multi-ary state functions
+  (`s.votes i e` = `app(proj(s, votes), #[i, e])`) need two cases: the
+  state as the first wrapped argument, and the state as the base of a
+  field-notation head;
+- never reuse child syntax nodes in the rewritten body — their source
+  annotations corrupt the info tree ("failed to pretty print"); rebuild
+  idents with `mkIdent`;
+- match binder names exactly (`sName.getId`), not by string, to keep macro
+  scopes consistent.
+
+Remaining per the priority table: slice 5 (gotcha documentation +
+mini-utilities, easy) — the P5 gotchas are the ones to capture.
+
 ## 4. The one-paragraph takeaway
 
 The DSL's notation is not the bottleneck anymore — the *proof plumbing* is:
@@ -480,4 +524,6 @@ Status: (a) is done — `tla_inv_step` eats the frame cases (36 → 11
 bullets, −58 lines); (b) is done — `leadsTo_at`/`leadsTo_at_suffix`/
 `inv_all_of_spec` (40 → 16 drop conversions, −84 lines). The remaining
 mechanical overhead is the temporal wrapper's suffix-level conclusions,
-which slice 4's delaborators and slice 5's mini-utilities should attack.
+which slice 5's mini-utilities should attack. Slice 4 is done too: goals
+and hypotheses display state predicates and actions in `[p| ...]`/`[a| ...]`
+form instead of lifted lambdas.

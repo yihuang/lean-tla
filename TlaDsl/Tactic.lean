@@ -1,6 +1,7 @@
 import TlaDsl.Rules
 import TlaDsl.Meta
 import TlaDsl.Prime
+import TlaDsl.Pretty
 
 import Lean
 
