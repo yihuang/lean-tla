@@ -233,6 +233,25 @@ and the extracted text under `docs/research/web/`.
   temporal wrapper — per-epoch leads-to progress (honest leaders propose,
   honest nodes vote) composed via `leads_to_via_nat`, which needs a
   fairness design for single-shot (non-recurring) epoch actions.
+
+  *Update:* the **temporal wrapper is done**, still in
+  `TlaDsl/Examples/StreamletLiveness.lean`. Since each `Propose`/`Vote`
+  fires at most once, the DSL's recurring-action fairness (`□◇`, `WF`,
+  `SF`) cannot force them; the honest-timing assumptions are therefore
+  stated as per-epoch leads-to predicates (`ProposeAssumption`,
+  `VoteAssumption`, `ClockAssumption`), bundled into the `H` spec. The
+  theorem `liveness_spec` proves `cur = e0 ↝ FinalSome` under `H` for any
+  `0 < e0`, via:
+  - `epoch_step` — one epoch completes (propose → votes → clock) with the
+    proposal chain-notarized;
+  - `window_progress` — a strong induction on the remaining epochs
+    (`k ≤ 5`), threading the `WindowDone` progress predicate;
+  - `window_finality` — the final state applies Fact 3 four times and
+    `liveness_finality` to conclude a block is final.
+  This is the paper's Theorem 13 abstracted to epoch-granularity (the
+  `2∆`/GST delivery is the immediate `NotarizedBy` predicate), and it
+  exercises exactly the leads-to composition the north-star's liveness
+  engines are for.
 - **CSLib reuse in this slice** — the quorum-overlap argument reuses the
   `Quorum`/`quorum_overlap` pattern from `Paxos.lean`; `ChainNotarized` +
   `atLen` gives the chain/prefix machinery without a hash model. Still on

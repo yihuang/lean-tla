@@ -1145,4 +1145,544 @@ theorem liveness_finality {n : Nat} {s : St} (hInv : Inv n s)
   intro C hmem hne
   exact ⟨e + 4, hC4 C hmem hne⟩
 
+/-! ## Temporal liveness: the honest-timing wrapper -/
+
+/-- Some block is final. -/
+def FinalSome (n : Nat) (s : St) : Prop :=
+  ∃ e : Epoch, ∃ b0 b b2 : Block, Finalized n s e b0 b b2
+
+/-- The window `[e0, e0+5)` progress predicate: every completed window
+epoch's proposal is chain-notarized by its own epoch. -/
+def WindowDone (n : Nat) (e0 : Epoch) (s : St) : Prop :=
+  ∀ e' : Epoch, e0 ≤ e' → e' < s.cur →
+    ∃ b : Block, s.proposed e' = some b ∧ ChainNotarizedBy s n b e'
+
+/-- The leader of epoch `e` proposes before the epoch passes. -/
+def ProposeAssumption (e : Epoch) : Tla.Pred St :=
+  Tla.leadsTo (Tla.statePred (fun s => s.cur = e ∧ s.proposed e = none))
+    (Tla.statePred (fun s => s.proposed e ≠ none ∧ s.cur = e))
+
+/-- Every honest node votes for the epoch's proposal once it is ready, so
+it becomes chain-notarized before the epoch passes. -/
+def VoteAssumption (n : Nat) (e : Epoch) : Tla.Pred St :=
+  Tla.leadsTo
+    (Tla.statePred (fun s => s.cur = e ∧
+      ∃ b : Block, s.proposed e = some b ∧
+        ChainNotarizedBy s n b.pred (e - 1) ∧
+        ∀ C : Block, NotarizedBy s n C (e - 1) → C.length ≤ b.pred.length))
+    (Tla.statePred (fun s => s.cur = e ∧
+      ∃ b : Block, s.proposed e = some b ∧ ChainNotarizedBy s n b e))
+
+/-- The clock: the epoch ends eventually. -/
+def ClockAssumption (e : Epoch) : Tla.Pred St :=
+  Tla.leadsTo (Tla.statePred (fun s => s.cur = e))
+    (Tla.statePred (fun s => s.cur = e + 1))
+
+/-- The honest-timing spec: the protocol plus the honest leaders/nodes
+acting before their epoch passes. -/
+def H (n : Nat) : Tla.Pred St :=
+  Tla.tlaAnd (Tla.statePred Init)
+    (Tla.tlaAnd (Tla.stutAlways (Next n) vars)
+      (Tla.tlaAnd (fun e => ∀ e' : Epoch, ClockAssumption e' e)
+        (Tla.tlaAnd (fun e => ∀ e' : Epoch, ProposeAssumption e' e)
+          (fun e => ∀ e' : Epoch, VoteAssumption n e' e))))
+
+/-! ### Persistence along behaviors -/
+
+/-- A frame step (votes unchanged) preserves every recorded vote. -/
+lemma votes_persist_of_frame {s s' : St} {i : Node} {e : Epoch} {b : Block}
+    (hframe : votes s' = votes s) (hv : s.votes i e = some b) :
+    s'.votes i e = some b := by
+  have hv' : votes s i e = some b := by simpa using hv
+  have hv'' : votes s' i e = some b := by rw [hframe]; exact hv'
+  simpa using hv''
+
+/-- A frame step (proposals unchanged) preserves every recorded proposal. -/
+lemma proposals_persist_of_frame {s s' : St} {e : Epoch} {b : Block}
+    (hframe : proposed s' = proposed s) (hp : s.proposed e = some b) :
+    s'.proposed e = some b := by
+  have hp' : proposed s e = some b := by simpa using hp
+  have hp'' : proposed s' e = some b := by rw [hframe]; exact hp'
+  simpa using hp''
+
+/-- A `Next` step never removes a vote. -/
+lemma next_votes_persist {n : Nat} {s s' : St} (hstep : Next n s s')
+    {i : Node} {e : Epoch} {b : Block} (hv : s.votes i e = some b) :
+    s'.votes i e = some b := by
+  unfold Next at hstep
+  rcases hstep with hadv | ⟨e0, b0, hstep⟩
+  · rcases hadv with ⟨hCur', hProp', hVotes'⟩
+    exact votes_persist_of_frame hVotes' hv
+  · rcases hstep with hp | ⟨i0, hvot⟩
+    · rcases hp with ⟨hcur, hNone, hpos, hbE, hSeen, hLongest, hProp', hCur', hVotes'⟩
+      exact votes_persist_of_frame hVotes' hv
+    · rcases hvot with ⟨hcur, hpos, hProp, hNoVote, hSeen, hLongest, hVotes', hProp', hCur'⟩
+      by_cases hke : i = i0 ∧ e = b0.epoch
+      · rcases hke with ⟨hii, hee⟩
+        subst i
+        subst e
+        have hv' : votes s i0 b0.epoch = some b := by simpa using hv
+        have hvn : votes s i0 b0.epoch ≠ none := by
+          rw [hv']
+          simp
+        exact (hvn hNoVote).elim
+      · have hv' : (vote s i0 b0).votes i e = s.votes i e :=
+          vote_votes_of_ne (not_and_or.mp hke)
+        have hs' : s' = vote s i0 b0 := by
+          apply St.ext
+          · simpa [vote] using hCur'
+          · simpa [vote] using hProp'
+          · simpa [vote] using hVotes'
+        rw [hs']
+        exact hv'.trans hv
+
+/-- A `Next` step never removes a proposal. -/
+lemma next_proposals_persist {n : Nat} {s s' : St} (hstep : Next n s s')
+    {e : Epoch} {b : Block} (hp : s.proposed e = some b) : s'.proposed e = some b := by
+  unfold Next at hstep
+  rcases hstep with hadv | ⟨e0, b0, hstep⟩
+  · rcases hadv with ⟨hCur', hProp', hVotes'⟩
+    exact proposals_persist_of_frame hProp' hp
+  · rcases hstep with hp' | ⟨i0, hvot⟩
+    · rcases hp' with ⟨hcur, hNone, hpos, hbE, hSeen, hLongest, hProp', hCur', hVotes'⟩
+      by_cases he : e = e0
+      · subst e
+        have hp' : proposed s e0 = some b := by simpa using hp
+        have hpn : proposed s e0 ≠ none := by
+          rw [hp']
+          simp
+        exact (hpn hNone).elim
+      · have hp'' : (propose s e0 b0).proposed e = s.proposed e := by
+          simp [propose, Function.update, he]
+        have hs' : s' = propose s e0 b0 := by
+          apply St.ext
+          · simpa [propose] using hCur'
+          · simpa [propose] using hProp'
+          · simpa [propose] using hVotes'
+        rw [hs']
+        exact hp''.trans hp
+    · rcases hvot with ⟨hcur, hpos, hProp, hNoVote, hSeen, hLongest, hVotes', hProp', hCur'⟩
+      exact proposals_persist_of_frame hProp' hp
+
+/-- Stuttering steps never remove votes or proposals. -/
+lemma stut_votes_persist {n : Nat} {s s' : St}
+    (hstep : Tla.StutAction (Next n) vars s s')
+    {i : Node} {e : Epoch} {b : Block} (hv : s.votes i e = some b) :
+    s'.votes i e = some b := by
+  rcases hstep with hnext | hstut
+  · exact next_votes_persist hnext hv
+  · have hs' : s' = s := by simpa using hstut
+    subst s'
+    exact hv
+
+lemma stut_proposals_persist {n : Nat} {s s' : St}
+    (hstep : Tla.StutAction (Next n) vars s s')
+    {e : Epoch} {b : Block} (hp : s.proposed e = some b) :
+    s'.proposed e = some b := by
+  rcases hstep with hnext | hstut
+  · exact next_proposals_persist hnext hp
+  · have hs' : s' = s := by simpa using hstut
+    subst s'
+    exact hp
+
+lemma votes_persist_along {n : Nat} {e : Tla.Behavior St}
+    (hStut : ∀ m, Tla.StutAction (Next n) vars (e m) (e (m + 1)))
+    {i : Node} {e' : Epoch} {b : Block} {k j : Nat}
+    (hv : (e k).votes i e' = some b) : (e (k + j)).votes i e' = some b := by
+  induction j with
+  | zero => simpa using hv
+  | succ j ih =>
+      have h' : (e (k + j)).votes i e' = some b := ih
+      have h'' := stut_votes_persist (hStut (k + j)) h'
+      simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h''
+
+lemma proposals_persist_along {n : Nat} {e : Tla.Behavior St}
+    (hStut : ∀ m, Tla.StutAction (Next n) vars (e m) (e (m + 1)))
+    {e' : Epoch} {b : Block} {k j : Nat}
+    (hp : (e k).proposed e' = some b) : (e (k + j)).proposed e' = some b := by
+  induction j with
+  | zero => simpa using hp
+  | succ j ih =>
+      have h' : (e (k + j)).proposed e' = some b := ih
+      have h'' := stut_proposals_persist (hStut (k + j)) h'
+      simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h''
+
+/-- Notarization facts survive additions of votes. -/
+lemma notarizedBy_votes_add {n : Nat} {s s' : St} {b : Block} {e : Epoch}
+    (hv : ∀ i : Node, ∀ e' : Epoch, s.votes i e' = some b → s'.votes i e' = some b) :
+    NotarizedBy s n b e → NotarizedBy s' n b e := by
+  rintro ⟨Q, hQ, h⟩
+  refine ⟨Q, hQ, ?_⟩
+  intro i hi
+  rcases h i hi with ⟨e0, he0, hv0⟩
+  exact ⟨e0, he0, hv i e0 hv0⟩
+
+lemma chainNotarizedBy_votes_add {n : Nat} {s s' : St} {b : Block} {e : Epoch}
+    (hv : ∀ b : Block, ∀ i : Node, ∀ e' : Epoch,
+      s.votes i e' = some b → s'.votes i e' = some b) :
+    ChainNotarizedBy s n b e → ChainNotarizedBy s' n b e := by
+  intro hc C hmem hne
+  exact notarizedBy_votes_add (hv C) (hc C hmem hne)
+
+lemma chainNotarizedBy_persist_along {n : Nat} {e : Tla.Behavior St}
+    (hStut : ∀ m, Tla.StutAction (Next n) vars (e m) (e (m + 1)))
+    {b : Block} {e' : Epoch} {k j : Nat}
+    (hc : ChainNotarizedBy (e k) n b e') : ChainNotarizedBy (e (k + j)) n b e' := by
+  intro C hmem hne
+  rcases hc C hmem hne with ⟨Q, hQ, hv⟩
+  refine ⟨Q, hQ, ?_⟩
+  intro i hi
+  rcases hv i hi with ⟨e0, he0, hv0⟩
+  exact ⟨e0, he0, votes_persist_along hStut hv0⟩
+
+/-- The completed-window facts survive to a later state. -/
+lemma window_done_persist {n : Nat} {s s' : St}
+    (hv : ∀ b : Block, ∀ i : Node, ∀ e : Epoch,
+      s.votes i e = some b → s'.votes i e = some b)
+    (hp : ∀ b : Block, ∀ e : Epoch, s.proposed e = some b → s'.proposed e = some b)
+    {e0 : Epoch} (hW : WindowDone n e0 s) :
+    ∀ e' : Epoch, e0 ≤ e' → e' < s.cur →
+      ∃ b : Block, s'.proposed e' = some b ∧ ChainNotarizedBy s' n b e' := by
+  intro e' he0' he'
+  rcases hW e' he0' he' with ⟨b0, hpb0, hcb0⟩
+  refine ⟨b0, hp b0 e' hpb0, chainNotarizedBy_votes_add hv hcb0⟩
+
+/-! ### The final step: the window delivers a final block -/
+
+/-- A chain-notarized block is itself notarized. -/
+lemma chain_notarized_block {n : Nat} {s : St} {b : Block} {e : Epoch}
+    (hc : ChainNotarizedBy s n b e) (hne : b ≠ Block.genesis) : NotarizedBy s n b e :=
+  hc b (Block.mem_ancestors_self b) hne
+
+/-- `a ≤ a + b` for all naturals. -/
+lemma le_self_add (a b : Nat) : a ≤ a + b := by
+  induction b with
+  | zero => simp
+  | succ b ih =>
+      have h1 : a + b ≤ a + (b + 1) := by
+        rw [← Nat.add_assoc]
+        exact Nat.le_succ (a + b)
+      exact le_trans ih h1
+
+/-- A state predicate at a suffix is the predicate at the corresponding
+state. -/
+lemma drop_at_zero {σ : Type u} {e : Tla.Behavior σ} (k : Nat) : (e.drop k) 0 = e k := by
+  simp [Cslib.ωSequence.drop, Nat.add_comm]
+
+lemma statePred_drop {σ : Type u} {P : σ → Prop} {e : Tla.Behavior σ} {k : Nat}
+    (h : P (e k)) : (Tla.statePred P) (e.drop k) := by
+  change P ((e.drop k) 0)
+  rw [drop_at_zero]
+  exact h
+
+lemma statePred_drop' {σ : Type u} {P : σ → Prop} {e : Tla.Behavior σ} {k : Nat}
+    (h : (Tla.statePred P) (e.drop k)) : P (e k) := by
+  change P ((e.drop k) 0) at h
+  rw [drop_at_zero] at h
+  exact h
+
+/-- **The window delivers**: if all five window epochs completed with
+chain-notarized proposals, the third proposal is final. -/
+lemma window_finality {n : Nat} {s : St} (hInv : Inv n s) {e0 : Epoch} (he0 : 0 < e0)
+    (hW : WindowDone n e0 s) (hcur : s.cur = e0 + 5) : FinalSome n s := by
+  have hlt0 : e0 < s.cur := by
+    rw [hcur]
+    exact Nat.lt_add_of_pos_right (by decide : 0 < 5)
+  have hlt1 : e0 + 1 < s.cur := by
+    rw [hcur]
+    exact Nat.add_lt_add_left (by decide : 1 < 5) e0
+  have hlt2 : e0 + 2 < s.cur := by
+    rw [hcur]
+    exact Nat.add_lt_add_left (by decide : 2 < 5) e0
+  have hlt3 : e0 + 3 < s.cur := by
+    rw [hcur]
+    exact Nat.add_lt_add_left (by decide : 3 < 5) e0
+  have hlt4 : e0 + 4 < s.cur := by
+    rw [hcur]
+    exact Nat.add_lt_add_left (by decide : 4 < 5) e0
+  rcases hW e0 le_rfl hlt0 with ⟨b0, hp0, hc0⟩
+  rcases hW (e0 + 1) (le_self_add e0 1) hlt1 with ⟨b1, hp1, hc1⟩
+  rcases hW (e0 + 2) (le_self_add e0 2) hlt2 with ⟨b2, hp2, hc2⟩
+  rcases hW (e0 + 3) (le_self_add e0 3) hlt3 with ⟨b3, hp3, hc3⟩
+  rcases hW (e0 + 4) (le_self_add e0 4) hlt4 with ⟨b4, hp4, hc4⟩
+  have hb0ne : b0 ≠ Block.genesis := proposal_ne_genesis_of hInv hp0 (by omega)
+  have hb1ne : b1 ≠ Block.genesis := proposal_succ_ne_genesis hInv hp1
+  have hb2ne : b2 ≠ Block.genesis :=
+    proposal_ne_genesis_of hInv hp2 (Nat.succ_pos (e0 + 1))
+  have hb3ne : b3 ≠ Block.genesis :=
+    proposal_ne_genesis_of hInv hp3 (Nat.succ_pos (e0 + 2))
+  have hb4ne : b4 ≠ Block.genesis :=
+    proposal_ne_genesis_of hInv hp4 (Nat.succ_pos (e0 + 3))
+  have hG01 : b0.length < b1.length :=
+    proposal_growth hInv hp0 hp1 ⟨b0, chain_notarized_block hc0 hb0ne, le_rfl⟩
+  have hG12 : b1.length < b2.length :=
+    proposal_growth hInv hp1 hp2 ⟨b1, chain_notarized_block hc1 hb1ne, le_rfl⟩
+  have hG23 : b2.length < b3.length :=
+    proposal_growth hInv hp2 hp3 ⟨b2, chain_notarized_block hc2 hb2ne, le_rfl⟩
+  have hG34 : b3.length < b4.length :=
+    proposal_growth hInv hp3 hp4 ⟨b3, chain_notarized_block hc3 hb3ne, le_rfl⟩
+  exact ⟨e0 + 2, b2, b3, b4,
+    liveness_finality hInv hp0 hp1 hp2 hp3 hp4 hG01 hG12 hG23 hG34 hc2 hc3 hc4⟩
+
+/-! ### The per-epoch step -/
+
+/-- **One epoch completes**: from `cur = e'` (with the invariants), the
+propose/vote/clock assumptions deliver `cur = e'+1` with the epoch's
+proposal chain-notarized. -/
+lemma epoch_step {n : Nat} {e' : Epoch} {e : Tla.Behavior St} (hH : H n e) :
+    Tla.leadsTo
+      (Tla.statePred (fun s => Inv n s ∧ s.cur = e'))
+      (Tla.statePred (fun s => Inv n s ∧ s.cur = e' + 1 ∧
+        ∃ b : Block, s.proposed e' = some b ∧ ChainNotarizedBy s n b e')) e := by
+  have hStut : ∀ m, Tla.StutAction (Next n) vars (e m) (e (m + 1)) := by
+    intro m
+    have hm := hH.2.1 m
+    simpa [Tla.actionPred, Tla.always, Cslib.ωSequence.drop, Nat.add_comm] using hm
+  have hInvAll : ∀ m, Inv n (e m) := by
+    have hsp := spec_entails_inv n e ⟨hH.1, hH.2.1⟩
+    simpa [Tla.always, Tla.statePred, Cslib.ωSequence.drop, Nat.add_comm] using hsp
+  intro k hp
+  rcases hp with ⟨hInv0, hcur⟩
+  -- step 1: the proposal of epoch `e'` exists (maybe after the propose
+  -- assumption fires)
+  have hstep1 : ∃ j1 : Nat,
+      (e (k + j1)).proposed e' ≠ none ∧ (e (k + j1)).cur = e' := by
+    by_cases hnone : (e k).proposed e' = none
+    · have hp0 : (Tla.statePred (fun s => s.cur = e' ∧ s.proposed e' = none))
+        (e.drop k) := by
+        have hnone0 : ((e.drop k) 0).proposed e' = none := by
+          simpa [Cslib.ωSequence.drop, Nat.add_comm] using hnone
+        change ((e.drop k) 0).cur = e' ∧ ((e.drop k) 0).proposed e' = none
+        exact ⟨hcur, hnone0⟩
+      rcases (hH.2.2.2.1 e') k hp0 with ⟨j1, hj1⟩
+      refine ⟨j1, ?_⟩
+      simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+        Nat.add_left_comm] using hj1
+    · refine ⟨0, ?_⟩
+      have hk : e (k + 0) = e k := by rw [Nat.add_zero]
+      have hcur' : (e k).cur = e' := by
+        simpa [Cslib.ωSequence.drop, Nat.add_comm] using hcur
+      constructor
+      · rw [hk]
+        exact hnone
+      · rw [hk]
+        exact hcur'
+  rcases hstep1 with ⟨j1, hj1⟩
+  -- step 2: the vote assumption chain-notarizes the proposal
+  have hp1s : (fun s => s.cur = e' ∧
+      ∃ b : Block, s.proposed e' = some b ∧
+        ChainNotarizedBy s n b.pred (e' - 1) ∧
+        ∀ C : Block, NotarizedBy s n C (e' - 1) → C.length ≤ b.pred.length)
+      (e (k + j1)) := by
+    have hne : (e (k + j1)).proposed e' ≠ none := hj1.1
+    rcases Option.ne_none_iff_exists.mp hne with ⟨b, hpb⟩
+    have hpb' : (e (k + j1)).proposed e' = some b := hpb.symm
+    have hInv1 : Inv n (e (k + j1)) := hInvAll (k + j1)
+    refine ⟨hj1.2, ⟨b, hpb', ?_, ?_⟩⟩
+    · exact hInv1.proposedSeenParent e' b hpb'
+    · intro C hC
+      exact hInv1.proposedLongest e' b hpb' C hC
+  have hp1 : (Tla.statePred (fun s => s.cur = e' ∧
+      ∃ b : Block, s.proposed e' = some b ∧
+        ChainNotarizedBy s n b.pred (e' - 1) ∧
+        ∀ C : Block, NotarizedBy s n C (e' - 1) → C.length ≤ b.pred.length))
+      (e.drop (k + j1)) := by
+      simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+        Nat.add_left_comm] using hp1s
+  rcases (hH.2.2.2.2 e') (k + j1) hp1 with ⟨j2, hj2⟩
+  have hj2' : (e (k + j1 + j2)).cur = e' ∧
+      ∃ b : Block, (e (k + j1 + j2)).proposed e' = some b ∧
+        ChainNotarizedBy (e (k + j1 + j2)) n b e' := by
+      simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+        Nat.add_left_comm] using hj2
+  -- step 3: the clock advances
+  have hp2 : (Tla.statePred (fun s => s.cur = e')) (e.drop (k + j1 + j2)) := by
+    simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+      Nat.add_left_comm] using hj2'.1
+  rcases (hH.2.2.1 e') (k + j1 + j2) hp2 with ⟨j3, hj3⟩
+  have hj3' : (e (k + j1 + j2 + j3)).cur = e' + 1 := by
+    simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+      Nat.add_left_comm] using hj3
+  -- assemble
+  rcases hj2' with ⟨hcur2, b, hpb, hcb⟩
+  refine ⟨j1 + j2 + j3, ?_⟩
+  constructor
+  · simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using
+      (hInvAll (k + (j1 + j2 + j3)))
+  · constructor
+    · simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hj3'
+    · refine ⟨b, ?_, ?_⟩
+      · simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+          Nat.add_left_comm] using
+          (proposals_persist_along hStut (k := k + j1 + j2) (j := j3) hpb)
+      · simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+          Nat.add_left_comm] using
+          (chainNotarizedBy_persist_along hStut (k := k + j1 + j2) (j := j3) hcb)
+
+/-! ### The window countdown -/
+
+/-- From `k` epochs remaining in the window, the window completes:
+`WindowDone ∧ cur = e0+5-k` leads to `WindowDone ∧ cur = e0+5`. -/
+theorem window_progress (n : Nat) (e0 : Epoch) (k : Nat) (hk : k ≤ 5) {e : Tla.Behavior St}
+    (hH : H n e) :
+    Tla.leadsTo
+      (Tla.statePred (fun s => WindowDone n e0 s ∧ s.cur = e0 + 5 - k))
+      (Tla.statePred (fun s => WindowDone n e0 s ∧ s.cur = e0 + 5)) e := by
+  induction k using Nat.strong_induction_on with
+  | h k ih =>
+      intro n' hp
+      rcases hp with ⟨hW, hcur⟩
+      by_cases hk0 : k = 0
+      · subst k
+        have hW' : WindowDone n e0 (e n') := by
+          simpa [Cslib.ωSequence.drop, Nat.add_comm] using hW
+        have hcur' : (e n').cur = e0 + 5 := by
+          simpa [Cslib.ωSequence.drop, Nat.add_comm] using hcur
+        refine ⟨0, ?_⟩
+        simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+          Nat.add_left_comm] using ⟨hW', hcur'⟩
+      · have hkpos : 0 < k := Nat.pos_of_ne_zero hk0
+        let e' := e0 + 5 - k
+        have hcur0 : (e n').cur = e0 + 5 - k := by
+          simpa [Cslib.ωSequence.drop, Nat.add_comm] using hcur
+        have hcur' : (e n').cur = e' := by simpa [e'] using hcur0
+        have hInv' : Inv n (e n') := by
+          have hsp := spec_entails_inv n e ⟨hH.1, hH.2.1⟩
+          have hall : ∀ m, Inv n (e m) := by
+            simpa [Tla.always, Tla.statePred, Cslib.ωSequence.drop, Nat.add_comm] using hsp
+          exact hall n'
+        have hstep := epoch_step (n := n) (e' := e') hH
+        have hInv0 : Inv n ((e.drop n') 0) := by
+          simpa [Cslib.ωSequence.drop, Nat.add_comm] using hInv'
+        have hcur0' : ((e.drop n') 0).cur = e' := by
+          simpa [Cslib.ωSequence.drop, Nat.add_comm] using hcur'
+        rcases hstep n' ⟨hInv0, hcur0'⟩ with ⟨j, hj⟩
+        have hStut : ∀ m, Tla.StutAction (Next n) vars (e m) (e (m + 1)) := by
+          intro m
+          have hm := hH.2.1 m
+          simpa [Tla.actionPred, Tla.always, Cslib.ωSequence.drop, Nat.add_comm] using hm
+        -- build WindowDone at the new state
+        have hW' : WindowDone n e0 (e (n' + j)) := by
+          rcases hj with ⟨hInvj, hcurj, hfact⟩
+          intro e'' he0'' hlt''
+          have hcurj' : (e (n' + j)).cur = e' + 1 := by
+            simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+              Nat.add_left_comm] using hcurj
+          have hltj : e'' < e' + 1 := by
+            simpa [hcurj'] using hlt''
+          by_cases hlt : e'' < e'
+          · have hlt0 : e'' < ((e.drop n') 0).cur := by
+              simpa [Cslib.ωSequence.drop, Nat.add_comm, e', hcur0] using hlt
+            rcases hW e'' he0'' hlt0 with ⟨b, hpb, hcb⟩
+            have hpb0 : (e n').proposed e'' = some b := by
+              simpa [Cslib.ωSequence.drop, Nat.add_comm] using hpb
+            have hcb0 : ChainNotarizedBy (e n') n b e'' := by
+              simpa [Cslib.ωSequence.drop, Nat.add_comm] using hcb
+            refine ⟨b, proposals_persist_along hStut (k := n') (j := j) hpb0,
+              chainNotarizedBy_persist_along hStut (k := n') (j := j) hcb0⟩
+          · have heq : e'' = e' := by
+              have hge : e' ≤ e'' := le_of_not_gt hlt
+              exact le_antisymm (Nat.le_of_lt_succ hltj) hge
+            subst e''
+            rcases hfact with ⟨b, hpb, hcb⟩
+            have hpb0 : (e (n' + j)).proposed e' = some b := by
+              simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+                Nat.add_left_comm] using hpb
+            have hcb0 : ChainNotarizedBy (e (n' + j)) n b e' := by
+              simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+                Nat.add_left_comm] using hcb
+            exact ⟨b, hpb0, hcb0⟩
+        -- the rank decreased by one
+        have hrank : (e (n' + j)).cur = e0 + 5 - (k - 1) := by
+          have hcurj : (e (n' + j)).cur = e' + 1 := by
+            simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+              Nat.add_left_comm] using hj.2.1
+          have hsub : e' + 1 = e0 + 5 - (k - 1) := by
+            dsimp [e']
+            have hk1 : 1 ≤ k := hkpos
+            have hka : k ≤ e0 + 5 := by omega
+            have hkk : k = (k - 1) + 1 := (Nat.sub_add_cancel hk1).symm
+            rw [hkk]
+            rw [← Nat.sub_sub]
+            have hk' : k - 1 ≤ e0 + 4 := Nat.sub_le_sub_right hka 1
+            have hsub2 : e0 + 5 - (e0 + 4) ≤ e0 + 5 - (k - 1) :=
+              Nat.sub_le_sub_left hk' (e0 + 5)
+            have h1 : 1 ≤ e0 + 5 - (e0 + 4) := by
+              have hh : e0 + 5 = e0 + 4 + 1 := by
+                rw [Nat.add_succ]
+              rw [hh]
+              simp
+            have hle : 1 ≤ e0 + 5 - (k - 1) := le_trans h1 hsub2
+            rw [Nat.sub_add_cancel hle]
+            rfl
+          rw [hsub] at hcurj
+          exact hcurj
+        have hkm : k - 1 < k := by omega
+        have hkm5 : k - 1 ≤ 5 := by omega
+        have hih : Tla.leadsTo
+            (Tla.statePred (fun s => WindowDone n e0 s ∧ s.cur = e0 + 5 - (k - 1)))
+            (Tla.statePred (fun s => WindowDone n e0 s ∧ s.cur = e0 + 5)) e :=
+          ih (k - 1) hkm hkm5
+        have hW0' : WindowDone n e0 ((e.drop (n' + j)) 0) := by
+          simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+            Nat.add_left_comm] using hW'
+        have hrank0' : ((e.drop (n' + j)) 0).cur = e0 + 5 - (k - 1) := by
+          simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+            Nat.add_left_comm] using hrank
+        rcases hih (n' + j) ⟨hW0', hrank0'⟩ with ⟨j', hj'⟩
+        refine ⟨j + j', ?_⟩
+        simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+          Nat.add_left_comm] using hj'
+
+/-! ### The liveness theorem -/
+
+/-- **Streamlet liveness (Theorem 13, abstracted)**: under the honest
+timing assumptions, from the start of a 5-epoch window some block is
+eventually final. -/
+theorem liveness_spec (n : Nat) (e0 : Epoch) (he0 : 0 < e0) :
+    Tla.Entails (H n)
+      (Tla.leadsTo (Tla.statePred (fun s => s.cur = e0))
+        (Tla.statePred (fun s => FinalSome n s))) := by
+  intro e hH n' hp
+  have hcur0 : (e n').cur = e0 := by
+    simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_comm] using hp
+  have hStut : ∀ m, Tla.StutAction (Next n) vars (e m) (e (m + 1)) := by
+    intro m
+    have hm := hH.2.1 m
+    simpa [Tla.actionPred, Tla.always, Cslib.ωSequence.drop, Nat.add_comm] using hm
+  have hInvAll : ∀ m, Inv n (e m) := by
+    have hsp := spec_entails_inv n e ⟨hH.1, hH.2.1⟩
+    intro m
+    have hm := hsp m
+    simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_comm] using hm
+  have hW : WindowDone n e0 (e n') := by
+    intro e'' he0'' hlt''
+    have hlt0 : e'' < e0 := by
+      rw [hcur0] at hlt''
+      exact hlt''
+    exact (not_lt_of_ge he0'' hlt0).elim
+  have hrank : (e n').cur = e0 + 5 - 5 := by
+    rw [hcur0]
+    exact Nat.add_sub_cancel e0 5
+  have h5 := window_progress n e0 5 (by omega) hH
+  have hW0 : WindowDone n e0 ((e.drop n') 0) := by
+    simpa [Cslib.ωSequence.drop, Nat.add_comm] using hW
+  have hrank0 : ((e.drop n') 0).cur = e0 + 5 - 5 := by
+    simpa [Cslib.ωSequence.drop, Nat.add_comm] using hrank
+  rcases h5 n' ⟨hW0, hrank0⟩ with ⟨j, hj⟩
+  rcases hj with ⟨hW', hcur'⟩
+  refine ⟨j, ?_⟩
+  have hInv' : Inv n ((e.drop (n' + j)) 0) := by
+    simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+      Nat.add_left_comm] using (hInvAll (n' + j))
+  have hW'' : WindowDone n e0 ((e.drop (n' + j)) 0) := by
+    simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+      Nat.add_left_comm] using hW'
+  have hcur'' : ((e.drop (n' + j)) 0).cur = e0 + 5 := by
+    simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+      Nat.add_left_comm] using hcur'
+  have hfin : FinalSome n ((e.drop (n' + j)) 0) := window_finality hInv' he0 hW'' hcur''
+  simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+    Nat.add_left_comm] using hfin
+
 end TlaDsl.Examples.Streamlet.Liveness
