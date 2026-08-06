@@ -25,9 +25,21 @@ Because lifting is type-directed rather than syntax-pattern-based, the
 brackets accept anything Lean elaborates: operators and function
 applications (`Even x`, `n % 2`), `if-then-else`, typed and bounded
 quantifiers (`∀ x : T, ...`, `∀ x ∈ S, ...` over set-valued state
-functions), constants, and plain non-state values (kept as-is).
+functions and other containers — `Finset`, `Set`, `List`, `Array`,
+`Multiset`, ... — so chain-style specs like
+`∀ C ∈ b.ancestors, C ≠ genesis → Notarized n C` work), constants, and
+plain non-state values (kept as-is).
 `[t| ...]` rewrites propositional connectives to the temporal ones and
 leaves everything else alone.
+
+**Named predicates in brackets.** Any identifier whose first parameter is
+the state type is lifted to the state automatically, so predicates written
+*state-first* (`def ChainNotarized (s : St) (n : Nat) (b : Block) : Prop`)
+can be applied inside brackets with the state omitted
+(`[p| ChainNotarized n b e]`); the primed form (`ChainNotarized' n b e`
+inside `[a| ...]`) applies them to the post state. This is the convention
+the examples follow: write derived predicates state-first and they compose
+with the pseudocode layer.
 -/
 
 /-! ## Pointwise operators at the state level -/
@@ -66,8 +78,11 @@ abbrev actMod {σ : Type u} {α : Type v} [Mod α] (f g : σ → σ → α) : σ
 
 /-! ## The lifting elaborators -/
 
-/-- The element type of a set-valued term (`Finset α`, `Set α`, or
-`α → Prop`). -/
+/-- The element type of a set-valued term: `Finset α`, `Set α`, `α → Prop`,
+or any other container with a `Membership` instance whose element type is
+its type argument (`List α`, `Array α`, `Multiset α`, ...). This is what
+makes `∀ x ∈ xs, ...` / `∃ x ∈ xs, ...` work inside the brackets for
+chain-style specs (`∀ C ∈ b.ancestors, ...`). -/
 def elabElemType (lS : Expr) : TermElabM Expr := do
   let t ← whnf (← inferType lS)
   match t with
@@ -75,7 +90,8 @@ def elabElemType (lS : Expr) : TermElabM Expr := do
       if (← isDefEq β (mkSort Level.zero)) then pure α
       else throwError s!"[p|]/[a| ...]: unsupported set type: {t}"
   | .app f a =>
-      if f.isConst && f.constName == ``Finset then pure a
+      if f.isConst && (f.constName == ``Finset || f.constName == ``List ||
+          f.constName == ``Array || f.constName == ``Multiset) then pure a
       else throwError s!"[p|]/[a| ...]: unsupported set type: {t}"
   | _ => throwError s!"[p|]/[a| ...]: unsupported set type: {t}"
 

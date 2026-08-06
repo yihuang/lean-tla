@@ -308,7 +308,7 @@ all are UX:
 |---|---|---|---|---|
 | 1 | `tla_inv_step` — invariant-preservation automation (unfold, ext, field-split, auto-discharge frames) | P1 | `next_inv` for any protocol: 12 bullets → 1 tactic call + real cases; ~200 lines saved here | medium (pure tactic) |
 | 2 | State-level leads-to API: `leadsTo_at`/`leadsTo_at_suffix` + `inv_all_of_spec` | P2 | temporal proofs lose all drop-conversion noise; ~100 lines + readability | easy–medium — **done (2026-08-06)** |
-| 3 | Bracket lifting of named state-first predicates | P3 | complex invariants stay in `[p| ...]` form; specs read uniformly | easy (elaborator-local) |
+| 3 | Bracket lifting of named state-first predicates + `∈` over `List` | P3 | complex invariants stay in `[p| ...]` form; specs read uniformly | easy (elaborator-local) — **done (2026-08-06)** |
 | 4 | State/action delaborators (`[p| ...]`-style goal display) | P4 | goals/hyps read like TLA in the middle of proofs | medium–hard |
 | 5 | Gotcha documentation + mini-utilities (subst pattern, `by omega` note, naming conventions) | P5 | fewer debugging cycles | easy |
 
@@ -346,6 +346,47 @@ The `leadsTo_at_suffix` variant covers the one case (the propose step in
 `epoch_step`) where the premise facts arrive from an `rcases` of a
 suffix-level state predicate; everything else uses `leadsTo_at`. Item 3
 (bracket lifting of named state-first predicates) is next.
+
+### Slice 3 done (2026-08-06): named predicates in brackets — mostly already there
+
+Honest correction: the review's P3 claim ("the brackets don't lift named
+relations") was **wrong**. The elaborator's type-directed lifting already
+applies any identifier whose first parameter is the state type, so
+state-first predicates compose with the pseudocode layer:
+
+```lean
+-- state-first signature (the convention), usable inside brackets as:
+[p| ∀ i : Node, ∀ e : Epoch, ∀ b : Block,
+      votes[i][e] = some b → ChainNotarizedBy n b.pred (e - 1)]
+
+-- primed form inside actions applies to the post state:
+[a| ... ∧ (∃ b : Block, NotarizedBy' n b (cur - 1)) ∧ ...]
+```
+
+The `Vote`/`Propose` actions in `StreamletLiveness.lean` already use this
+in production. What *was* missing:
+
+- **`∈` over `List`** (and `Array`/`Multiset`) in bounded quantifiers:
+  `∀ C ∈ b.ancestors, ...` failed with "unsupported set type: List".
+  Fixed in `TlaDsl/Prime.lean`'s `elabElemType` — chain-style specs can
+  now be written in bracket form.
+- **The convention was undocumented.** Added to `Prime.lean`'s header:
+  write derived predicates state-first and they compose with the brackets;
+  primed forms apply to the post state.
+
+One caveat recorded for future work: the *shared* derived predicates
+(`NotarizedBy`, `ChainNotarizedBy`, the `Inv` conjuncts) stay plain
+definitional lambdas rather than `[p| ...]` brackets, because the brackets
+lift the `tla_var` projections (`votes s`) while proofs operate on the
+structure fields (`s.votes`), and the two do not compose definitionally in
+`exact`. A future elaborator refinement could emit the field projection
+for `tla_var`-generated state functions, making bracket-form definitions
+fully proof-compatible; until then the convention is: brackets for the
+action/spec layer, plain defs for shared proof-relevant predicates.
+
+Next: item 1 — `tla_inv_step` (invariant-preservation automation), the big
+line win, with `StreamletLiveness.lean`'s four preservation proofs as the
+regression suite.
 
 ## 4. The one-paragraph takeaway
 
