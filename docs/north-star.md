@@ -271,6 +271,15 @@ and the extracted text under `docs/research/web/`.
   `L : Epoch → Node`, reusing `rel_rank_param` or `leads_to_via_nat`;
   (b) a Byzantine version with `f < n/3` and an honest-node guard
   (`CorrectAct`/`[c| ... | ...]`), connecting to CSLib's FLP vocabulary;
+  — **safety done**, in
+  [`TlaDsl/Examples/StreamletByz.lean`](../TlaDsl/Examples/StreamletByz.lean):
+  Byzantine quorums of size `> 2n/3`, the honest-overlap lemma (two
+  quorums share an honest node when fewer than `n/3` are Byzantine), the
+  honest-guarded `Vote`, the honest-restricted invariant (`VoteLenMonoByz`),
+  and the Byzantine versions of Lemma 10 (unique notarization),
+  finality-no-conflict, and Theorem 12 (two final chains are
+  prefix-comparable). The liveness half (honest-leader epochs under a
+  leader schedule) remains, as does the CSLib FLP vocabulary link;
   (c) an executable `FLTS`/`OmegaExecution` bridge so Streamlet's `Next`
   is also a runnable step function (the E1/E3 refinement path from the
   reviewer thread) — **done**, in

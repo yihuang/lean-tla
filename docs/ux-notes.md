@@ -685,6 +685,21 @@ per-action facts are the two one-liners `vote_step_fires` /
 `notarize_step_fires` ("under the guard, the action fires to the step")
 and the determinism lemmas.
 
+### Streamlet under Byzantine faults (2026-08-07)
+
+`TlaDsl/Examples/StreamletByz.lean` — the safety core of BFT Streamlet:
+quorums of size `> 2n/3` (`QuorumByz`), the Byzantine bound
+`3 * Byz.card < n`, and `quorum_overlap_honest` — two notarizing quorums
+share a node, and since the intersection is larger than the Byzantine set,
+that node is honest. The protocol actions are guarded by `i ∉ Byz`
+(`[c| ...]`-style), the invariant is the honest-restricted
+`VoteLenMonoByz` (Byzantine votes are unconstrained), and the Byzantine
+versions of Lemma 10 (`unique_notarization_byz`), finality-no-conflict and
+Theorem 12 (`consistency_byz`) follow the same finality-chain argument as
+the honest model, with the honest common voter at every overlap. This is
+the BFT item on the north-star roadmap; the liveness half (honest-leader
+epochs) and the CSLib FLP vocabulary link remain.
+
 ## 4. The one-paragraph takeaway
 
 The DSL's notation is not the bottleneck anymore — the *proof plumbing* is:
