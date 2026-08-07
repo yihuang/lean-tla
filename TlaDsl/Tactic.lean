@@ -100,6 +100,67 @@ only checked on reachable states). -/
 macro "refine_via_inv " inv:term f:term : tactic =>
   `(tactic| (apply Tla.refinement_mapping_inv _ _ _ _ _ _ $inv $f <;> try tla_grind))
 
+/-- **`ωSequence`-conversion simpa.** `e (n + j)` and `(e.drop n) j` are
+not definitionally equal, so suffix-level conversions need the drop lemmas
+and Nat reassociations in the simp set; this bundles them (plus the spec
+layer unfoldings used at those sites) so the conversion reads as one call:
+
+```lean
+have hp0 : ... := by tla_drop_simpa using hnone
+```
+
+instead of repeating `simpa [Cslib.ωSequence.drop, Nat.add_assoc,
+Nat.add_comm, Nat.add_left_comm] using ...`. -/
+syntax "tla_drop_simpa" (" using " term)? : tactic
+macro_rules
+  | `(tactic| tla_drop_simpa) =>
+      `(tactic| simpa [Tla.statePred, Tla.actionPred, Tla.always,
+        Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm])
+  | `(tactic| tla_drop_simpa using $h) =>
+      `(tactic| simpa [Tla.statePred, Tla.actionPred, Tla.always,
+        Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using $h)
+
+/-- **Safe equality-conjunction split.** `rcases h with ⟨rfl, rfl⟩` on
+`j = i ∧ e' = b.epoch` substitutes the *right*-hand-side variables
+(eliminating `i` and `b.epoch`), so later references to them fail with
+"unknown identifier". `tla_rcases_subst h` splits the conjunction and
+substitutes the *left*-hand-side variables by name instead (the same as
+`rcases h with ⟨h1, h2⟩; subst j; subst e'`):
+
+```lean
+tla_rcases_subst hje
+```
+-/
+elab "tla_rcases_subst " h:ident : tactic => withMainContext do
+  let hDecl ← getLocalDeclFromUserName h.getId
+  let hType ← instantiateMVars hDecl.type
+  -- collect the left-hand-side variables of the equality conjunction
+  -- `a = b ∧ c = d` (one or two equalities)
+  let lhsVars ← liftMetaM do
+    let hType ← whnf hType
+    let eqs := match hType with
+      | .app (.app (.const ``And _) eq1) eq2 => #[eq1, eq2]
+      | .app (.app (.app (.const ``Eq _) _) _) _ => #[hType]
+      | _ => #[]
+    let mut lhs : Array FVarId := #[]
+    for eq in eqs do
+      let eq ← whnf eq
+      match eq with
+      | .app (.app (.app (.const ``Eq _) _) l) _ =>
+          if l.isFVar then lhs := lhs.push l.fvarId!
+      | _ => pure ()
+    pure lhs
+  if lhsVars.isEmpty then
+    throwError "tla_rcases_subst: expected an equality or conjunction of equalities, got {hType}"
+  -- split the conjunction so the equalities are separate hypotheses
+  if hType.consumeMData.getAppFn.isConst && hType.consumeMData.getAppFn.constName! == ``And then
+    evalTactic (← `(tactic| rcases $h:term with ⟨h1, h2⟩))
+  -- `subst` on a variable finds the equality in the context and replaces
+  -- the *left*-hand side, keeping the right-hand-side variables alive
+  for v in lhsVars do
+    let name := (← v.getDecl).userName
+    evalTactic (← `(tactic| subst $(mkIdent name)))
+
 /-- **Invariant-preservation automation.** After a step proof has
 established `s' = transformer s ...` and `subst s'`, `tla_inv_step` splits
 the invariant structure in the goal (`Inv ... s'`), finds the pre-state

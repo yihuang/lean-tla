@@ -509,6 +509,37 @@ Implementation notes (the delabbed syntax shapes that took the debugging):
 Remaining per the priority table: slice 5 (gotcha documentation +
 mini-utilities, easy) — the P5 gotchas are the ones to capture.
 
+### Slice 5 done (2026-08-07): gotcha documentation + mini-utilities
+
+`docs/gotchas.md` now documents the P5 papercuts with symptom/cause/fix
+and a live example each:
+
+- **`rcases h with ⟨rfl, rfl⟩` eliminates the right-hand-side variables**
+  (so `j = i ∧ e' = b.epoch` kills `i` and `b.epoch`) — and, the subtle
+  part, `subst h1` on `h1 : j = i` has the same trap. Fix: substitute the
+  left-hand-side variables by name. New utility:
+  `tla_rcases_subst h` reads the LHS variables from the conjunction type
+  and substitutes them, keeping the RHS variables alive.
+- **`by omega` in argument position** fails with "No usable constraints"
+  when the expected type still has a metavariable — annotate the expected
+  type or bind the argument in a named `have` first.
+- **`ωSequence` suffix conversions are not definitional** — the
+  `simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+  Nat.add_left_comm]` incantation is now `tla_drop_simpa using h` (with or
+  without `using`), bundling that exact set plus the spec-layer
+  unfoldings. StreamletLiveness's 16 repeated conversion calls collapsed
+  to it.
+- **`Block` namespace/type collision** — resolution depends on scope; keep
+  the type and its lemma namespace apart by convention.
+
+Bonus: the `tla_rcases_subst` elab needed `withMainContext` — a tactic
+that reads hypotheses at the top level otherwise sees the *original*
+theorem context, not the goal's intro'd variables. Recorded in
+`docs/gotchas.md` §5.
+
+All four original slices are now done; the one-paragraph takeaway below is
+the current state of the DSL's proof UX.
+
 ## 4. The one-paragraph takeaway
 
 The DSL's notation is not the bottleneck anymore — the *proof plumbing* is:
@@ -526,4 +557,7 @@ bullets, −58 lines); (b) is done — `leadsTo_at`/`leadsTo_at_suffix`/
 mechanical overhead is the temporal wrapper's suffix-level conclusions,
 which slice 5's mini-utilities should attack. Slice 4 is done too: goals
 and hypotheses display state predicates and actions in `[p| ...]`/`[a| ...]`
-form instead of lifted lambdas.
+form instead of lifted lambdas. Slice 5 is done: the P5 gotchas are
+documented in `docs/gotchas.md` and two of them now have one-call
+utilities (`tla_rcases_subst`, `tla_drop_simpa`), so the remaining
+mechanical overhead is the temporal wrapper's suffix-level conclusions.
