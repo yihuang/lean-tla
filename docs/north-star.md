@@ -268,7 +268,15 @@ and the extracted text under `docs/research/web/`.
   inside bracket notation.
 - **Next steps** — (a) liveness (the paper's Theorem 13: 5 consecutive
   honest-leader epochs after GST) with an explicit leader schedule
-  `L : Epoch → Node`, reusing `rel_rank_param` or `leads_to_via_nat`;
+  `L : Epoch → Node` — **done**, in
+  [`TlaDsl/Examples/StreamletLiveness.lean`](../TlaDsl/Examples/StreamletLiveness.lean):
+  `LeaderProposeAssumption Byz L e` (the honest leader `L e ∉ Byz`
+  proposes before the epoch passes), the leader-schedule spec `HL n Byz L`,
+  and `liveness_spec_leader`: `HL n Byz L ⊢ cur = e0 ↝ FinalSome`, proved
+  by reducing to the abstract `liveness_spec` (the honest model's liveness
+  does not need to know who proposes, so the honest-leader condition is
+  assumed and dropped). The `Byz` parameter is the bridge to the Byzantine
+  liveness half;
   (b) a Byzantine version with `f < n/3` and an honest-node guard
   (`CorrectAct`/`[c| ... | ...]`), connecting to CSLib's FLP vocabulary;
   — **safety done**, in

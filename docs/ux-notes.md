@@ -700,6 +700,18 @@ the honest model, with the honest common voter at every overlap. This is
 the BFT item on the north-star roadmap; the liveness half (honest-leader
 epochs) and the CSLib FLP vocabulary link remain.
 
+### The explicit leader schedule (2026-08-07)
+
+`StreamletLiveness.lean` gains the roadmap's leader-schedule liveness: the
+paper's Theorem 13 is now stated with an explicit `L : Epoch → Node`.
+`LeaderProposeAssumption Byz L e` bundles the honest-leader condition
+(`L e ∉ Byz`, the bridge to the Byzantine liveness half) with the abstract
+per-epoch propose assumption, `HL n Byz L` is the leader-schedule spec,
+and `liveness_spec_leader` proves `HL n Byz L ⊢ cur = e0 ↝ FinalSome` for
+any schedule and Byzantine bound — by reducing to the existing abstract
+`liveness_spec` (the honest model's liveness proof never needs to know who
+proposes, so the honest-leader condition is assumed and dropped).
+
 ## 4. The one-paragraph takeaway
 
 The DSL's notation is not the bottleneck anymore — the *proof plumbing* is:

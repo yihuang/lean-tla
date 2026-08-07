@@ -1529,4 +1529,63 @@ theorem liveness_spec (n : Nat) (e0 : Epoch) (he0 : 0 < e0) :
   have hfin : FinalSome n (e (n' + j)) := window_finality (hInvAll (n' + j)) he0 hW' hcur'
   tla_drop_simpa using hfin
 
+/-! ### The explicit leader schedule
+
+The paper's Theorem 13 is stated with an explicit leader schedule
+`L : Epoch → Node`: the honest leader of epoch `e` proposes before the
+epoch passes. The abstract model does not record the proposer in the
+state, so the schedule appears in the assumption and in the theorem's
+signature; the Byzantine extension (item b) will additionally guard the
+propose action by `L e ∉ Byz` (see `HonestLeader`). -/
+
+/-- The honest leader of epoch `e` (`L e ∉ Byz`) proposes before the epoch
+passes. -/
+def LeaderProposeAssumption (Byz : Finset Node) (L : Epoch → Node) (e : Epoch) : Tla.Pred St :=
+  fun e0 => L e ∉ Byz ∧ ProposeAssumption e e0
+
+/-- The honest-leader spec: the protocol plus the clock, the honest leader
+`L e` proposing each epoch, and the honest nodes voting. -/
+def HL (n : Nat) (Byz : Finset Node) (L : Epoch → Node) : Tla.Pred St :=
+  Tla.tlaAnd (Tla.statePred Init)
+    (Tla.tlaAnd (Tla.stutAlways (Next n) vars)
+      (Tla.tlaAnd (fun e => ∀ e' : Epoch, ClockAssumption e' e)
+        (Tla.tlaAnd (fun e => ∀ e' : Epoch, LeaderProposeAssumption Byz L e' e)
+          (fun e => ∀ e' : Epoch, VoteAssumption n e' e))))
+
+/-- The leader schedule is an instance of the honest-timing spec: the
+leader's propose assumption implies the abstract one (the honest-leader
+condition is dropped; the honest model's liveness does not need to know
+who proposes). -/
+theorem hl_entails_h (n : Nat) (Byz : Finset Node) (L : Epoch → Node) :
+    Tla.Entails (HL n Byz L) (H n) := by
+  intro e hHL
+  simp [HL, H, Tla.tlaAnd] at hHL ⊢
+  rcases hHL with ⟨hInit, hNext, hClock, hPropose, hVote⟩
+  constructor
+  · exact hInit
+  · constructor
+    · exact hNext
+    · constructor
+      · exact hClock
+      · constructor
+        · intro e'
+          exact (hPropose e').2
+        · exact hVote
+
+/-- **Theorem 13 with an explicit leader schedule**: under the clock, the
+honest leader of each epoch proposing, and the honest nodes voting, the
+epoch-`e0` counter reaches a final block — for any schedule `L`. -/
+theorem liveness_spec_leader (n : Nat) (Byz : Finset Node) (L : Epoch → Node)
+    (e0 : Epoch) (he0 : 0 < e0) :
+    Tla.Entails (HL n Byz L)
+      (Tla.leadsTo (Tla.statePred (fun s => s.cur = e0))
+        (Tla.statePred (fun s => FinalSome n s))) := by
+  intro e hHL
+  exact liveness_spec n e0 he0 e (hl_entails_h n Byz L e hHL)
+
+/-- The honest-leader condition for the Byzantine extension: the leader of
+epoch `e` is not Byzantine. -/
+def HonestLeader (Byz : Finset Node) (L : Epoch → Node) (e : Epoch) : Prop :=
+  L e ∉ Byz
+
 end TlaDsl.Examples.Streamlet.Liveness
