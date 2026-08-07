@@ -671,6 +671,20 @@ while writing it: `tla_inv_step` read hypotheses from the term context
 instead of the goal context, so it failed on goal-local invariants — fixed
 with `withMainContext` (the same lesson as `tla_rcases_subst` in slice 5).
 
+### Streamlet is runnable: the executable step function (2026-08-07)
+
+`TlaDsl/Examples/StreamletExec.lean` brings the FLTS bridge to the flagship
+protocol — the roadmap's E1/E3 item. Streamlet's `Next` is a guarded
+disjunction, so the executable form is label-indexed: a `Step` is one
+protocol action (`Vote i b` or `Notarize b`), the step function applies
+the update when the guard holds (`VoteGuard`/`NotarizeGuard`, extracted
+from the bracket actions) and is the identity otherwise, and
+`step_spec_tr` proves every FLTS transition is a `[Next n]_vars`-step — so
+every `foldl` run of the step function is a protocol behavior. The
+per-action facts are the two one-liners `vote_step_fires` /
+`notarize_step_fires` ("under the guard, the action fires to the step")
+and the determinism lemmas.
+
 ## 4. The one-paragraph takeaway
 
 The DSL's notation is not the bottleneck anymore — the *proof plumbing* is:

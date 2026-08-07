@@ -273,7 +273,11 @@ and the extracted text under `docs/research/web/`.
   (`CorrectAct`/`[c| ... | ...]`), connecting to CSLib's FLP vocabulary;
   (c) an executable `FLTS`/`OmegaExecution` bridge so Streamlet's `Next`
   is also a runnable step function (the E1/E3 refinement path from the
-  reviewer thread).
+  reviewer thread) — **done**, in
+  [`TlaDsl/Examples/StreamletExec.lean`](../TlaDsl/Examples/StreamletExec.lean):
+  a label-indexed step function over `Vote`/`Notarize` with the guards
+  extracted from the bracket actions, and `step_spec_tr` proving every
+  FLTS transition is a `[Next n]_vars`-step.
 
 ## Acceptance criteria
 
