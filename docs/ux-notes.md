@@ -624,6 +624,18 @@ point with a worked protocol pair:
 * `conc_refines_abs_wf_lts`: the full canonical-form refinement with
   liveness, re-proved through the LTS layer.
 
+The deep LTS layer is now a **user-facing interface**: `LTSRefine.lean`
+gained the invariant-threaded simulation (`sim_inv_of_step`), the generic
+image-finiteness lemma for infinite-state specs
+(`specLTS_imageFinite_of_step`: injective frame + finitely many action
+successors), and the invariant-threaded refinement
+(`refinement_mapping_inv_lts`). The consensus case study's deep section
+then reads as protocol facts only — the invariant-carrying simulation, the
+image-finiteness (injective frame, two action successors), and the
+canonical-form refinement are each a few lines re-stating facts proved
+above, with the machinery in the library. The counter case study's
+image-finiteness proof was likewise shortened onto the generic lemma.
+
 ## 4. The one-paragraph takeaway
 
 The DSL's notation is not the bottleneck anymore — the *proof plumbing* is:

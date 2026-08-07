@@ -45,67 +45,45 @@ the increment targets) and the stutter disjunct contributes exactly one
 finite even though `Conc.St` is infinite. This is the structural
 finiteness hypothesis the deep A-L liveness theorem needs. -/
 lemma conc_imageFinite : (Tla.SpecLTS Conc.Next Conc.Vars).ImageFinite := by
-  intro s μ
-  cases μ
-  -- the successor set of `s`: `{s' | Next s s' ∨ Vars s' = Vars s}`
-  change Finite {s' : Conc.St | Tla.StutAction Conc.Next Conc.Vars s s'}
-  -- the stutter-successors are exactly the singleton `{s}`
-  have hstut : {s' : Conc.St | Conc.Vars s' = Conc.Vars s} = ({s} : Set Conc.St) := by
-    ext s'
-    constructor
-    · intro h
-      have hx : s'.x = s.x := by
-        simpa [Conc.Vars] using congrArg (fun p : Nat × Nat => p.1) h
-      have hf : s'.flag = s.flag := by
-        simpa [Conc.Vars] using congrArg (fun p : Nat × Nat => p.2) h
-      cases s' with
-      | mk x' f' =>
-          cases s with
-          | mk x0 f0 =>
-              have hx' : x' = x0 := by simpa using hx
-              have hf' : f' = f0 := by simpa using hf
-              simp [hx', hf']
-    · intro h
-      subst s'
-      simp
-  -- the action-successors are contained in a two-element set
-  let t1 : Conc.St := { x := s.x, flag := 1 }
-  let t2 : Conc.St := { x := s.x + 1, flag := 0 }
-  have hact : {s' : Conc.St | Conc.Next s s'} ⊆ ({t1, t2} : Set Conc.St) := by
-    intro s' hs'
-    tla_unfold
-    rcases hs' with hR | hI
-    · left
-      cases s' with
-      | mk x' f' =>
-          cases s with
-          | mk x0 f0 =>
-              have hx' : x' = x0 := by simpa using hR.2.1
-              have hf' : f' = 1 := by simpa using hR.2.2
-              simp [t1, hx', hf']
-    · right
-      cases s' with
-      | mk x' f' =>
-          cases s with
-          | mk x0 f0 =>
-              have hx' : x' = x0 + 1 := by simpa using hI.2.1
-              have hf' : f' = 0 := by simpa using hI.2.2
-              simp [t2, hx', hf']
-  -- the image is the union of the two finite pieces
-  change Finite {s' : Conc.St | Conc.Next s s' ∨ Conc.Vars s' = Conc.Vars s}
-  have hunion : {s' : Conc.St | Conc.Next s s' ∨ Conc.Vars s' = Conc.Vars s} =
-      {s' : Conc.St | Conc.Next s s'} ∪ {s' : Conc.St | Conc.Vars s' = Conc.Vars s} := by
-    ext s'
-    simp [Set.mem_union]
-  rw [hunion]
-  exact Set.Finite.union
-    (Set.Finite.subset (by
-      have hfin2 : Set.Finite ({t1, t2} : Set Conc.St) := by
-        exact (Set.finite_singleton t2).insert t1
-      exact hfin2) hact)
-    (by
-      rw [hstut]
-      exact Set.finite_singleton s)
+  apply Tla.specLTS_imageFinite_of_step
+  · -- the frame is injective: `(x, flag)` determines the state
+    intro s s' h
+    cases s with
+    | mk x f =>
+        cases s' with
+        | mk x' f' =>
+            have hx : x = x' := by
+              simpa [Conc.Vars] using congrArg Prod.fst h
+            have hf : f = f' := by
+              simpa [Conc.Vars] using congrArg Prod.snd h
+            subst x'
+            subst f'
+            rfl
+  · -- at most two action successors: the prepare and the increment targets
+    intro s
+    let t1 : Conc.St := { x := s.x, flag := 1 }
+    let t2 : Conc.St := { x := s.x + 1, flag := 0 }
+    have hsub : {s' : Conc.St | Conc.Next s s'} ⊆ ({t1, t2} : Set Conc.St) := by
+      intro s' hs'
+      tla_unfold
+      rcases hs' with hR | hI
+      · left
+        cases s' with
+        | mk x' f' =>
+            cases s with
+            | mk x0 f0 =>
+                have hx' : x' = x0 := by simpa using hR.2.1
+                have hf' : f' = 1 := by simpa using hR.2.2
+                simp [t1, hx', hf']
+      · right
+        cases s' with
+        | mk x' f' =>
+            cases s with
+            | mk x0 f0 =>
+                have hx' : x' = x0 + 1 := by simpa using hI.2.1
+                have hf' : f' = 0 := by simpa using hI.2.2
+                simp [t2, hx', hf']
+    exact Set.Finite.subset (by exact (Set.finite_singleton t2).insert t1) hsub
 
 /-- The full canonical-form refinement with liveness, re-proved through
 the LTS layer: the safety simulation plus the fairness preservation give

@@ -72,6 +72,30 @@ theorem sim_iff_step {σ τ : Type u} {α β : Type v}
     refine ⟨f s', ?_, rfl⟩
     simpa [SpecLTS, Cslib.LTS.Relation.toLTS] using h s s' hs'
 
+/-- The **invariant-threaded** step condition is a forward simulation on
+reachable states: when the step correspondence only holds under a protocol
+invariant `inv` (preserved by every step), the simulation relation carries
+the invariant along, so every transition from an invariant state maps to
+an abstract transition. This is the LTS form of
+`refinement_mapping_inv` — the piece that lets infinite-state protocols
+with guarded actions (Paxos-style prepare/accept) use the LTS layer. -/
+theorem sim_inv_of_step {σ τ : Type u} {α β : Type v}
+    (nextA : Action σ) (u : σ → α) (nextC : Action τ) (v : τ → β)
+    (f : τ → σ) (inv : StatePred τ)
+    (hstep : ∀ s s', inv s → StutAction nextC v s s' → StutAction nextA u (f s) (f s'))
+    (hinv : ∀ s s', inv s → StutAction nextC v s s' → inv s') :
+    Cslib.LTS.IsSimulation (SpecLTS nextC v) (SpecLTS nextA u)
+      (fun s t => f s = t ∧ inv s) := by
+  intro s t hrel μ s' htr
+  rcases hrel with ⟨rfl, hinvs⟩
+  cases μ
+  have hs' : StutAction nextC v s s' := by
+    simpa [SpecLTS, Cslib.LTS.Relation.toLTS] using htr
+  have hstep' : StutAction nextA u (f s) (f s') := hstep s s' hinvs hs'
+  refine ⟨f s', ?_, ?_⟩
+  · simpa [SpecLTS, Cslib.LTS.Relation.toLTS] using hstep'
+  · exact ⟨rfl, hinv s s' hinvs hs'⟩
+
 /-- A simulation preserves τ-runs: a τ-path from `s` to `s'` with `r s t`
 yields a τ-path from `t` to some `t'` with `r s' t'`. -/
 theorem tauSTr_map {σ τ : Type u} (lts₁ : Cslib.LTS σ Unit) (lts₂ : Cslib.LTS τ Unit)
@@ -142,6 +166,44 @@ theorem refinement_mapping_lts {σ τ : Type u} {α β : Type v}
       exact htr
     simpa [Cslib.ωSequence.map] using htr'
 
+/-- Invariant-threaded Abadi–Lamport safety refinement, in LTS vocabulary:
+when the step correspondence only holds on reachable states (a protocol
+invariant, preserved by every step), the invariant-carrying simulation of
+`sim_inv_of_step` gives the canonical-form refinement. -/
+theorem refinement_mapping_inv_lts {σ τ : Type u} {α β : Type v}
+    (initA : StatePred σ) (nextA : Action σ) (u : σ → α)
+    (initC : StatePred τ) (nextC : Action τ) (v : τ → β)
+    (inv : StatePred τ) (f : τ → σ)
+    (hinit : ∀ s, initC s → initA (f s))
+    (hinitinv : ∀ s, initC s → inv s)
+    (hstep : ∀ s s', inv s → StutAction nextC v s s' → StutAction nextA u (f s) (f s'))
+    (hinv : ∀ s s', inv s → StutAction nextC v s s' → inv s') :
+    RefinesVia f (tlaAnd (statePred initC) (stutAlways nextC v))
+      (tlaAnd (statePred initA) (stutAlways nextA u)) := by
+  have hsim : Cslib.LTS.IsSimulation (SpecLTS nextC v) (SpecLTS nextA u)
+      (fun s t => f s = t ∧ inv s) :=
+    sim_inv_of_step nextA u nextC v f inv hstep hinv
+  intro e he
+  constructor
+  · exact hinit (e 0) (by simpa [statePred] using he.1)
+  · rw [← specLTS_omegaExec_iff_stutAlways]
+    intro i
+    have hω : (SpecLTS nextC v).OmegaExecution e (Cslib.ωSequence.const ()) :=
+      (specLTS_omegaExec_iff_stutAlways nextC v e).2 he.2
+    have hinvAll : ∀ k, inv (e k) := by
+      intro k
+      induction k with
+      | zero => exact hinitinv (e 0) (by simpa [statePred] using he.1)
+      | succ k ih =>
+          have hsk : StutAction nextC v (e k) (e (k + 1)) := by
+            simpa [SpecLTS, Cslib.LTS.Relation.toLTS] using hω k
+          exact hinv (e k) (e (k + 1)) ih hsk
+    have htr' : (SpecLTS nextA u).Tr (f (e i)) () (f (e (i + 1))) := by
+      rcases hsim (e i) (f (e i)) ⟨rfl, hinvAll i⟩ () (e (i + 1)) (hω i) with ⟨t, htr, hrel⟩
+      rw [← hrel.1] at htr
+      exact htr
+    simpa [Cslib.ωSequence.map] using htr'
+
 /-- Abadi–Lamport refinement with liveness, in LTS vocabulary: the safety
 mapping conditions plus liveness-conjunct preservation give the full
 canonical-form refinement. -/
@@ -165,6 +227,36 @@ finiteness hypothesis of the deep A-L liveness theorem (CSLib
 theorem specLTS_imageFinite {σ : Type u} {α : Type v} [Finite σ]
     (next : Action σ) (v : σ → α) : (SpecLTS next v).ImageFinite :=
   inferInstance
+
+/-- Image-finiteness from the frame, without a finite state space: when
+the stuttering frame `v` is injective (so the stutter successor of `s` is
+exactly `s`) and every state has finitely many action successors, the spec
+LTS is image-finite — the structural finiteness hypothesis of the deep A-L
+liveness theorem for infinite-state specs. -/
+theorem specLTS_imageFinite_of_step {σ : Type u} {α : Type v}
+    (next : Action σ) (v : σ → α)
+    (hvinj : Function.Injective v)
+    (hfin : ∀ s, Finite {s' : σ | next s s'}) :
+    (SpecLTS next v).ImageFinite := by
+  intro s μ
+  cases μ
+  change Finite ({s' : σ | next s s' ∨ v s' = v s} : Set σ)
+  -- the stutter-successors are exactly the singleton `{s}`
+  have hstut : {s' : σ | v s' = v s} = ({s} : Set σ) := by
+    apply Set.Subset.antisymm
+    · intro s' hs'
+      exact hvinj hs'
+    · intro s' hs'
+      subst s'
+      rfl
+  have hunion : {s' : σ | next s s' ∨ v s' = v s} =
+      {s' : σ | next s s'} ∪ {s' : σ | v s' = v s} := by
+    ext s'
+    simp [Set.mem_union]
+  rw [hunion]
+  exact Set.Finite.union (hfin s) (by
+    rw [hstut]
+    exact Set.finite_singleton s)
 
 /-! ## Deep A-L liveness: liveness preservation under refinement -/
 

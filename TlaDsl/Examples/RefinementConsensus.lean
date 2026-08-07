@@ -3,6 +3,7 @@ import TlaDsl.Rules
 import TlaDsl.Coercion
 import TlaDsl.Tactic
 import TlaDsl.TlaVar
+import TlaDsl.LTSRefine
 
 open scoped Tla
 
@@ -464,5 +465,87 @@ theorem conc_leadsTo :
     (Tla.leadsTo_refines f (fun s : Abs.St => s.decided = none)
       (fun s : Abs.St => s.decided = some 1)
       Conc.SpecWF Abs.SpecWF conc_refines_abs_wf Abs.spec_leadsTo)
+
+/-! ## The deep LTS form
+
+The examples are the interface: the invariant-threaded simulation, the
+generic image-finiteness lemma and the invariant-threaded refinement
+theorem (all in `TlaDsl/LTSRefine.lean`) absorb the machinery, so the deep
+statements below are just the protocol facts from above, re-stated. -/
+
+/-- The invariant-threaded step correspondence is a forward simulation on
+reachable states. -/
+theorem conc_refines_abs_lts :
+    Cslib.LTS.IsSimulation (Tla.SpecLTS Conc.Next Conc.Vars)
+      (Tla.SpecLTS Abs.Next Abs.decided) (fun s t => f s = t ∧ Conc.Inv s) := by
+  exact Tla.sim_inv_of_step Abs.Next Abs.decided Conc.Next Conc.Vars f Conc.Inv
+    (by
+      intro s s' hinv hs
+      simpa [Tla.StutAction] using step_refines s s' hinv (by simpa [Tla.StutAction] using hs))
+    (by
+      intro s s' hinv hs
+      exact Conc.inv_step0 s s' (by simpa [Tla.StutAction] using hs) hinv)
+
+/-- The concrete LTS is image-finite even though its state space is
+infinite: the frame is injective and the action has at most two successors
+(the prepare and accept targets). -/
+lemma conc_imageFinite : (Tla.SpecLTS Conc.Next Conc.Vars).ImageFinite := by
+  apply Tla.specLTS_imageFinite_of_step
+  · -- the frame `(phase, value, decided)` determines the state
+    intro s s' h
+    cases s with
+    | mk ph v d =>
+        cases s' with
+        | mk ph' v' d' =>
+            have h1 : ph = ph' := by
+              simpa [Conc.Vars] using congrArg (fun p : Nat × Nat × Option Nat => p.1) h
+            have h2 : v = v' := by
+              simpa [Conc.Vars] using congrArg (fun p : Nat × Nat × Option Nat => p.2.1) h
+            have h3 : d = d' := by
+              simpa [Conc.Vars] using congrArg (fun p : Nat × Nat × Option Nat => p.2.2) h
+            subst ph'
+            subst v'
+            subst d'
+            rfl
+  · -- at most two action successors
+    intro s
+    let t1 : Conc.St := { phase := 1, value := 1, decided := s.decided }
+    let t2 : Conc.St := { phase := 0, value := s.value, decided := some s.value }
+    have hsub : {s' : Conc.St | Conc.Next s s'} ⊆ ({t1, t2} : Set Conc.St) := by
+      intro s' hs'
+      tla_unfold
+      rcases hs' with hP | hA
+      · left
+        cases s' with
+        | mk ph' v' d' =>
+            cases s with
+            | mk ph0 v0 d0 =>
+                have hph : ph' = 1 := by simpa using hP.2.1
+                have hv : v' = 1 := by simpa using hP.2.2.1
+                have hd : d' = d0 := by simpa using hP.2.2.2
+                simp [t1, hph, hv, hd]
+      · right
+        cases s' with
+        | mk ph' v' d' =>
+            cases s with
+            | mk ph0 v0 d0 =>
+                have hph : ph' = 0 := by simpa using hA.2.1
+                have hv : v' = v0 := by simpa using hA.2.2.1
+                have hd : d' = some v0 := by simpa using hA.2.2.2
+                simp [t2, hph, hv, hd]
+    exact Set.Finite.subset (by exact (Set.finite_singleton t2).insert t1) hsub
+
+/-- The canonical-form safety refinement, re-proved through the LTS layer
+with the invariant-threaded simulation. -/
+theorem conc_refines_abs_lts_refines : Tla.RefinesVia f Conc.Spec Abs.Spec := by
+  unfold Conc.Spec Abs.Spec
+  exact Tla.refinement_mapping_inv_lts Abs.Init Abs.Next Abs.decided Conc.Init Conc.Next Conc.Vars
+    Conc.Inv f init_refines Conc.inv_init0
+    (by
+      intro s s' hinv hs
+      simpa [Tla.StutAction] using step_refines s s' hinv (by simpa [Tla.StutAction] using hs))
+    (by
+      intro s s' hinv hs
+      exact Conc.inv_step0 s s' (by simpa [Tla.StutAction] using hs) hinv)
 
 end TlaDsl.Examples.PrepareAcceptConsensus
