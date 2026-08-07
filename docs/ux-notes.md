@@ -572,6 +572,37 @@ transfer: it works for any refinement mapping, so a new case study only
 needs the fairness-preservation proof (here the alternation argument) and
 the abstract liveness theorem.
 
+### Liveness refinement case study 2 (2026-08-07): prepare–accept consensus
+
+`TlaDsl/Examples/RefinementConsensus.lean` pushes the same pattern to a
+Paxos-flavoured protocol, exercising two library pieces the first case
+study did not:
+
+* **Abstract spec** (`Abs`): decide the value `1` in one step, guarded by
+  `decided = none`; WF proves `decided = none ↝ decided = some 1` (one
+  `tla_wf1` application).
+* **Concrete spec** (`Conc`): two rounds through a `phase` machine — prepare
+  (phase `0 → 1`, sets the value), then accept (phase `1 → 0`, commits
+  `some value`) — with WF on the composite action.
+* **Invariant-threaded safety**: the step correspondence only holds on
+  reachable states (`Inv`: phase ∈ {0, 1}, `decided` ∈ {none, some 1},
+  value = 1 when armed), so the refinement uses
+  `refinement_mapping_inv` — the case where the mapping's behavior is
+  itself a protocol invariant.
+* **Liveness**: `wf_conc_to_abs` shows the concrete fairness implies the
+  abstract one on the mapped behavior. The first angle step is a prepare,
+  the next is an accept (same `Nat.find` + frame-stability argument as
+  case study 1), so the concrete eventually decides; after that the
+  abstract angle action — guarded by `decided = none` — is disabled
+  forever, so the abstract fairness holds vacuously (per-suffix premise
+  false).
+* **Transfer**: `conc_leadsTo` derives the concrete
+  `decided = none ↝ decided = some 1` via `leadsTo_refines`.
+
+The generic frame-stability lemma from case study 1
+(`Tla.step_eq_of_all`, "the frame is constant over a run of unchanged
+steps") moved to `TlaDsl/Rules.lean` and is shared by both case studies.
+
 ## 4. The one-paragraph takeaway
 
 The DSL's notation is not the bottleneck anymore — the *proof plumbing* is:

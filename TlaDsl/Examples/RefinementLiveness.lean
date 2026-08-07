@@ -139,34 +139,13 @@ lemma enabled_all (s : St) : Tla.Enabled (Tla.AngleAction Next Vars) s := by
     tla_unfold
     simp [hf]
 
-/-- A generic "the frame is constant over a run of unchanged steps"
-lemma (used to bridge from the post-state of one angle step to the
-pre-state of the next). -/
-lemma step_eq_of_all {σ : Type u} {α : Type v} (e : Tla.Behavior σ) (v : σ → α) :
-    ∀ {a b : Nat}, a ≤ b →
-      (∀ i, a ≤ i → i < b → v (e (i + 1)) = v (e i)) → v (e b) = v (e a)
-  | a, b, hab, h => by
-      induction b with
-      | zero =>
-          have : a = 0 := by omega
-          subst a
-          rfl
-      | succ b ih =>
-          by_cases hb : a ≤ b
-          · have hstep : v (e (b + 1)) = v (e b) := h b (by omega) (by omega)
-            rw [hstep]
-            exact ih hb (fun i hi hlt => h i hi (by omega))
-          · have : a = b + 1 := by omega
-            subst a
-            rfl
-
 /-- In a concrete behavior, a non-angle step does not change the frame. -/
 lemma frame_stable_between (e : Tla.Behavior St)
     (hN : Tla.stutAlways Next Vars e) {a b : Nat} (hab : a ≤ b)
     (hno : ∀ i, a ≤ i → i < b →
       ¬ Tla.AngleAction Next Vars (e i) (e (i + 1))) :
     Vars (e b) = Vars (e a) := by
-  apply step_eq_of_all e Vars hab
+  apply Tla.step_eq_of_all e Vars hab
   intro i hi hlt
   have hstep : Next (e i) (e (i + 1)) ∨ Vars (e (i + 1)) = Vars (e i) := by
     simpa [Tla.stutAlways, Tla.always, Tla.actionPred, Tla.StutAction,

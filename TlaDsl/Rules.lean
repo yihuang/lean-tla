@@ -59,6 +59,28 @@ theorem leadsTo_trans_entails {σ : Type u} (P Q R : Pred σ) :
   refine ⟨k + m, ?_⟩
   simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hR
 
+/-- A generic "the frame is constant over a run of unchanged steps"
+lemma: if `v` is unchanged by every step in `[a, b)`, then `v (e b) =
+v (e a)`. Used to bridge from the post-state of one angle step to the
+pre-state of the next. -/
+theorem step_eq_of_all {σ : Type u} {α : Type v} (e : Behavior σ) (v : σ → α) :
+    ∀ {a b : Nat}, a ≤ b →
+      (∀ i, a ≤ i → i < b → v (e (i + 1)) = v (e i)) → v (e b) = v (e a)
+  | a, b, hab, h => by
+      induction b with
+      | zero =>
+          have : a = 0 := by omega
+          subst a
+          rfl
+      | succ b ih =>
+          by_cases hb : a ≤ b
+          · have hstep : v (e (b + 1)) = v (e b) := h b (by omega) (by omega)
+            rw [hstep]
+            exact ih hb (fun i hi hlt => h i hi (by omega))
+          · have : a = b + 1 := by omega
+            subst a
+            rfl
+
 /-! ## Liveness rules: WF1 and SF1 -/
 
 /-- Leads-to distributes over disjunction on the left. -/
