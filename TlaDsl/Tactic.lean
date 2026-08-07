@@ -180,7 +180,7 @@ invariant hypothesis, and for each field tries, in order:
 
 Only the fields the action genuinely changes remain, in the structure's
 field order, ready for bullets. -/
-elab "tla_inv_step" : tactic => do
+elab "tla_inv_step" : tactic => withMainContext do
   -- identify the invariant structure from the goal: `Inv ... s'`
   let mvar ← getMainGoal
   let goalType := (← instantiateMVars (← mvar.getType)).consumeMData

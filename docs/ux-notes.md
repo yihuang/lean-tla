@@ -658,6 +658,19 @@ This is the pattern a Streamlet-scale `Next` can follow later: give the
 step function, prove the action matches it, and the spec is both proved
 about and runnable from the same definition.
 
+### The spec-authoring walkthrough (2026-08-07)
+
+`TlaDsl/Examples/Tutorial.lean` runs the whole workflow on one small
+protocol — state + `tla_var`, the spec in brackets, an invariant with
+`tla_inv_step`, liveness with `tla_wf1`, the safety refinement with
+`refine_via`, and the liveness transfer with `Tla.leadsTo_refines` — each
+step naming the tool and its real-scale home. `docs/spec-authoring.md` is
+the accompanying guide, with the engine table (WF1 / rank / relational
+rank), the conventions, and pointers into the library. One real bug found
+while writing it: `tla_inv_step` read hypotheses from the term context
+instead of the goal context, so it failed on goal-local invariants — fixed
+with `withMainContext` (the same lesson as `tla_rcases_subst` in slice 5).
+
 ## 4. The one-paragraph takeaway
 
 The DSL's notation is not the bottleneck anymore — the *proof plumbing* is:
