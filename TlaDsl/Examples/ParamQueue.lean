@@ -156,55 +156,38 @@ theorem inv_inductive (t : Nat) (e : Tla.Behavior St)
 
 /-! ## The liveness theorem (Rule 11 instance) -/
 
+/-- The parameterized-queue spec: init, next, and per-owner poll fairness. -/
+def Spec : Tla.Pred St :=
+  Tla.tlaAnd (Tla.statePred Init)
+    (Tla.tlaAnd (Tla.always (Tla.actionPred Next))
+      (fun e => ∀ p : Nat, (Tla.always (Tla.eventually (Tla.actionPred (Poll p)))) e))
+
 /-- `(∀p, □◇ Poll p) ⊢ sent(t) ↝ recv(t)` for a message `t`, via the
 single ranking `δ = pend ∩ {τ ≤ t}` with the parameterized scheduler
 `ψ(p) = owner t = p ∧ t ∈ pend`. -/
 theorem param_queue_liveness (t : Nat) :
-    Tla.Entails
-      (Tla.tlaAnd (Tla.statePred Init)
-        (Tla.tlaAnd (Tla.always (Tla.actionPred Next))
-          (fun e => ∀ p : Nat, (Tla.always (Tla.eventually (Tla.actionPred (Poll p)))) e)))
+    Tla.Entails Spec
       (Tla.leadsTo (Tla.statePred (fun s => t ∈ s.sent))
         (Tla.statePred (fun s => t ∈ s.recv))) := by
-  intro e h
-  rcases h with ⟨hInit, hNextJ⟩
-  rcases hNextJ with ⟨hNext, hFair⟩
   refine Tla.rel_rank_param
     (p := fun s => t ∈ s.sent) (q := fun s => t ∈ s.recv)
     (φ := fun s => t ∈ s.sent ∧ t ∈ s.pend)
     (δs := deltas t) (ψs := psis t) (rs := rjs)
-    (H := Tla.tlaAnd (Tla.statePred Init)
-      (Tla.tlaAnd (Tla.always (Tla.actionPred Next))
-        (fun e => ∀ p : Nat, (Tla.always (Tla.eventually (Tla.actionPred (Poll p)))) e)))
-    ?_ ?_ ?_ ?_ e ⟨hInit, ⟨hNext, hFair⟩⟩
+    (H := Spec) ?_ ?_ ?_ ?_
   · -- S1: a sent message is received or still pending
-    intro e' hH k hp
-    rcases hH with ⟨hInit', hNext'⟩
-    rcases hNext' with ⟨hNext'', hFair'⟩
-    have hInit0 : Init (e' 0) := by
-      simpa [Tla.statePred, Cslib.ωSequence.drop] using hInit'
-    have hNextAll : ∀ m, Next (e' m) (e' (m + 1)) := by
-      intro m
-      have hm := hNext'' m
-      simpa [Tla.actionPred, Cslib.ωSequence.drop, Nat.add_comm] using hm
-    have hIk := inv_inductive t e' hInit0 hNextAll k
+    tla_spec_split
+    intro k hp
+    have hIk := inv_inductive t e hInit0 hNextAll k
     rcases hIk.2 hp with hr | hp'
     · left
-      exact Tla.eventually_imp (Tla.statePred (fun s => t ∈ s.recv)) e' k
+      exact Tla.eventually_imp (Tla.statePred (fun s => t ∈ s.recv)) e k
         (by simpa [Tla.statePred, Cslib.ωSequence.drop] using hr)
     · right
       exact ⟨hp, hp'⟩
   · -- P2: the parameterized L2 step
-    intro e' hH k hφ
-    rcases hH with ⟨hInit', hNext'⟩
-    rcases hNext' with ⟨hNext'', hFair'⟩
-    have hInit0 : Init (e' 0) := by
-      simpa [Tla.statePred, Cslib.ωSequence.drop] using hInit'
-    have hNextAll : ∀ m, Next (e' m) (e' (m + 1)) := by
-      intro m
-      have hm := hNext'' m
-      simpa [Tla.actionPred, Cslib.ωSequence.drop, Nat.add_comm] using hm
-    have hIk := inv_inductive t e' hInit0 hNextAll k
+    tla_spec_split
+    intro k hφ
+    have hIk := inv_inductive t e hInit0 hNextAll k
     rcases hIk with ⟨h1, h2⟩
     rcases hNextAll k with hsend | hpoll
     · -- a send
@@ -212,7 +195,7 @@ theorem param_queue_liveness (t : Nat) :
       rcases hsend' with ⟨hu, hp', hl', hs', hr', ho'⟩
       right
       constructor
-      · change t ∈ (e' (k + 1)).sent ∧ t ∈ (e' (k + 1)).pend
+      · change t ∈ (e (k + 1)).sent ∧ t ∈ (e (k + 1)).pend
         constructor
         · rw [hs']
           exact Finset.mem_insert.mpr (Or.inr hφ.1)
@@ -221,7 +204,7 @@ theorem param_queue_liveness (t : Nat) :
       · constructor
         · intro p i hnp
           fin_cases i
-          have htl : t ≤ (e' k).last := h1 t hφ.1
+          have htl : t ≤ (e k).last := h1 t hφ.1
           have hut : u > t := lt_of_le_of_lt htl hu
           intro x hx
           simp [deltas] at hx ⊢
@@ -236,14 +219,14 @@ theorem param_queue_liveness (t : Nat) :
             fin_cases i
             intro hreq hR
             rcases hR with ⟨h, hpoll', _hr'', _hl'', _hs'', _ho''⟩
-            let m := Finset.min' (owned p (e' k)) h
-            have htowned : t ∈ owned p (e' k) :=
+            let m := Finset.min' (owned p (e k)) h
+            have htowned : t ∈ owned p (e k) :=
               Finset.mem_filter.mpr ⟨hreq.1.2, hreq.1.1⟩
-            have hmle : m ≤ t := (Finset.isLeast_min' (owned p (e' k)) h).2 htowned
+            have hmle : m ≤ t := (Finset.isLeast_min' (owned p (e k)) h).2 htowned
             refine ⟨m, ?_, ?_⟩
             · simp [deltas]
-              exact ⟨(Finset.filter_subset (fun τ => (e' k).owner τ = p) (e' k).pend)
-                (Finset.min'_mem (owned p (e' k)) h), hmle⟩
+              exact ⟨(Finset.filter_subset (fun τ => (e k).owner τ = p) (e k).pend)
+                (Finset.min'_mem (owned p (e k)) h), hmle⟩
             · intro hδ
               simp [deltas] at hδ
               rw [hpoll'] at hδ
@@ -259,16 +242,16 @@ theorem param_queue_liveness (t : Nat) :
     · -- some process polls
       rcases hpoll with ⟨p', hp'⟩
       rcases hp' with ⟨h, hpoll', hr', hl', hs', ho'⟩
-      let m := Finset.min' (owned p' (e' k)) h
+      let m := Finset.min' (owned p' (e k)) h
       by_cases htm : t = m
       · left
-        have hrec : t ∈ (e' (k + 1)).recv := by
+        have hrec : t ∈ (e (k + 1)).recv := by
           rw [hr', htm]
-          exact Finset.mem_insert_self m (e' k).recv
+          exact Finset.mem_insert_self m (e k).recv
         have hqev : Tla.eventually (Tla.statePred (fun s => t ∈ s.recv))
-            ((e'.drop k).drop 1) := by
+            ((e.drop k).drop 1) := by
           simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using
-            (Tla.eventually_imp (Tla.statePred (fun s => t ∈ s.recv)) e' (k + 1)
+            (Tla.eventually_imp (Tla.statePred (fun s => t ∈ s.recv)) e (k + 1)
               (by simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_comm] using hrec))
         rcases hqev with ⟨t0, ht0⟩
         refine ⟨1 + t0, ?_⟩
@@ -276,7 +259,7 @@ theorem param_queue_liveness (t : Nat) :
           Nat.add_left_comm] using ht0
       · right
         constructor
-        · change t ∈ (e' (k + 1)).sent ∧ t ∈ (e' (k + 1)).pend
+        · change t ∈ (e (k + 1)).sent ∧ t ∈ (e (k + 1)).pend
           constructor
           · rw [hs']
             exact hφ.1
@@ -289,21 +272,21 @@ theorem param_queue_liveness (t : Nat) :
             simp [deltas] at hx ⊢
             constructor
             · rw [hpoll'] at hx
-              exact (Finset.erase_subset m (e' k).pend) hx.1
+              exact (Finset.erase_subset m (e k).pend) hx.1
             · exact hx.2
           · constructor
             · intro p i
               fin_cases i
               intro hreq hR
               rcases hR with ⟨h0, hpoll'', _hr'', _hl'', _hs'', _ho''⟩
-              let m0 := Finset.min' (owned p (e' k)) h0
-              have htowned : t ∈ owned p (e' k) :=
+              let m0 := Finset.min' (owned p (e k)) h0
+              have htowned : t ∈ owned p (e k) :=
                 Finset.mem_filter.mpr ⟨hreq.1.2, hreq.1.1⟩
-              have hmle : m0 ≤ t := (Finset.isLeast_min' (owned p (e' k)) h0).2 htowned
+              have hmle : m0 ≤ t := (Finset.isLeast_min' (owned p (e k)) h0).2 htowned
               refine ⟨m0, ?_, ?_⟩
               · simp [deltas]
-                exact ⟨(Finset.filter_subset (fun τ => (e' k).owner τ = p) (e' k).pend)
-                  (Finset.min'_mem (owned p (e' k)) h0), hmle⟩
+                exact ⟨(Finset.filter_subset (fun τ => (e k).owner τ = p) (e k).pend)
+                  (Finset.min'_mem (owned p (e k)) h0), hmle⟩
               · intro hδ
                 simp [deltas] at hδ
                 rw [hpoll''] at hδ
@@ -317,15 +300,14 @@ theorem param_queue_liveness (t : Nat) :
               · rw [hpoll']
                 exact Finset.mem_erase.mpr ⟨htm, hreq.1.2⟩
   · -- P3: a scheduled justice action eventually fires
-    intro e' hH k _hφ p i hψ
-    rcases hH with ⟨_hInit', hNext'⟩
-    rcases hNext' with ⟨_hNext'', hFair'⟩
+    tla_spec_split
+    intro k _hφ p i hψ
     fin_cases i
     right
-    exact hFair' p k
+    exact hJ1 p k
   · -- P4: the tracked message's owner is always scheduled while pending
-    intro e' _hH k hφ
+    intro e _hH k hφ
     right
-    exact ⟨(e' k).owner t, ⟨(0 : Fin 1), ⟨rfl, hφ.2⟩⟩⟩
+    exact ⟨(e k).owner t, ⟨(0 : Fin 1), ⟨rfl, hφ.2⟩⟩⟩
 
 end TlaDsl.Examples.ParamQueue

@@ -733,3 +733,68 @@ form instead of lifted lambdas. Slice 5 is done: the P5 gotchas are
 documented in `docs/gotchas.md` and two of them now have one-call
 utilities (`tla_rcases_subst`, `tla_drop_simpa`), so the remaining
 mechanical overhead is the temporal wrapper's suffix-level conclusions.
+
+## 5. Liveness-obligation automation (Rule 10/11): `tla_spec_split`
+
+The relational-ranking rules (`rel_rank_lex`/`rel_rank_param`/
+`rel_rank_param_global`) leave four obligations, each of the shape
+`∀ e, H e → ...` with `H` a nested `Tla.tlaAnd` of the spec's init,
+next-step and justice conjuncts. Every obligation used to begin with the
+same ~8-line destructuring boilerplate (rcases the nested conjunction,
+derive `Init (e 0)` and `∀ m, Next (e m) (e (m+1))` by suffix simpa), and
+the justice leaves were re-rcases'd per obligation. `tla_spec_split`
+(`TlaDsl/Tactic.lean`) now does all of it in one call:
+
+```lean
+  · -- S3: scheduled justice fires (from the two fairness assumptions)
+    tla_spec_split
+    intro k _hφ i hψ
+    fin_cases i
+    · right
+      exact hJ1 k
+    · right
+      exact hJ2 k
+```
+
+It binds the behavior as `e`, splits the nested conjunction (through spec
+*definitions* as well, via whnf), and derives the named facts the
+obligations need: `hInit0 : Init (e 0)` (via the new
+`Tla.statePred_at_zero`), `hNextAll : ∀ m, Next (e m) (e (m + 1))` (via
+`Tla.always_actionPred_next`), `hStutAll` for `stutAlways` specs (via
+`Tla.stutAlways_next`), and `hJ1`, `hJ2`, ... for the justice leaves, in
+left-to-right order. The remaining binders (`k hp`, `k hφ`, ...) are left
+for the user.
+
+The rule-10/11 examples were refactored onto it: `LexReordering`,
+`BoundedCascade` and `ParamQueue` now define a named `Spec` (the spec
+used to be inlined four times — once in the statement, once per rule
+argument site) and each obligation starts with `tla_spec_split`; the
+per-obligation boilerplate is gone. `Tactic.lean` also now imports
+`RelRank` (the `tla_rel_rank` macro previously referenced
+`relational_ranking_rule` without the import, so it could never expand).
+
+Two tactic-authoring gotchas discovered along the way (documented for the
+next tactic):
+
+1. **Quotation hygiene renames free identifiers.** `intro e hH`,
+   `have hInit0 := ...`, or `rcases h with ⟨hL, hR⟩` written with literal
+   names inside a `(tactic| ...)` quotation bind hygiene-scoped names
+   (`hInit0✝`), which the surrounding elaborator cannot then reference.
+   Splice every name you need later: `intro $(mkIdent \`e)` via
+   `MVarId.intro`, `rcases $hId:term with ⟨$(mkIdent hL), ...⟩`,
+   `have $(mkIdent \`hInit0) := ...`.
+2. **`getLCtx` is stale after `MVarId.intro`.** Meta-level classification
+   of the intro'd hypotheses must read the *main goal's* metavariable
+   declaration (`getMainGoal` → `getDecl` → `lctx`), not `getLCtx`, and
+   use the stored `LocalDecl.type` rather than `inferType` on the fvar —
+   both hit the elaborator's stale context and fail with "unknown free
+   variable".
+3. **`rcases`'s argument parser wants `elimTarget`** (a term), so a
+   dynamic target must be spliced as `$hId:term` with `hId : Ident`.
+4. **`apply`-style macros with adjacent `$p:term` splices merge them into
+   one application**, and named-argument splices into a rule with implicit
+   parameters do not get the spine-first elaboration `refine (p := ...)`
+   gets from a concrete goal. The rule-application macros were therefore
+   left out of this slice: the examples keep the direct
+   `refine Tla.rel_rank_lex (p := ...) ...` form, which is both reliable
+   and readable.

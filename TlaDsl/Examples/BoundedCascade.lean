@@ -279,63 +279,43 @@ theorem inv_inductive (t : Nat) (e : Tla.Behavior St)
 
 /-! ## The liveness theorem (Rule 10 instance with stable schedulers) -/
 
+/-- The bounded-cascade spec: init, next, and the two fairness
+assumptions. -/
+def Spec : Tla.Pred St :=
+  Tla.tlaAnd (Tla.statePred Init)
+    (Tla.tlaAnd (Tla.always (Tla.actionPred Next))
+      (Tla.tlaAnd (Tla.always (Tla.eventually (Tla.actionPred Poll1)))
+        (Tla.always (Tla.eventually (Tla.actionPred Poll2)))))
+
 /-- `(□◇ poll₁) ∧ (□◇ poll₂) ⊢ sent₁(t) ↝ recv₂(t)` for a message `t`,
 via the two-component lexicographic ranking `(δ₀, δ₁)` with the
 complementary schedulers `ψ₀ = ¬ψ₁` that prioritize the action unblocking
 the other. -/
 theorem cascade_liveness (t : Nat) :
-    Tla.Entails
-      (Tla.tlaAnd (Tla.statePred Init)
-        (Tla.tlaAnd (Tla.always (Tla.actionPred Next))
-          (Tla.tlaAnd (Tla.always (Tla.eventually (Tla.actionPred Poll1)))
-            (Tla.always (Tla.eventually (Tla.actionPred Poll2))))))
+    Tla.Entails Spec
       (Tla.leadsTo (Tla.statePred (fun s => t ∈ s.sent1))
         (Tla.statePred (fun s => t ∈ s.recv2))) := by
-  intro e h
-  rcases h with ⟨hInit, hNextJ⟩
-  rcases hNextJ with ⟨hNext, hJ⟩
-  rcases hJ with ⟨hJ1, hJ2⟩
   refine Tla.rel_rank_lex
     (p := fun s => t ∈ s.sent1) (q := fun s => t ∈ s.recv2)
     (φ := fun s => t ∈ s.sent1 ∧ (t ∈ s.pend1 ∨ t ∈ s.queue2))
     (δs := deltas t) (ψs := psis t) (rs := rjs)
-    (H := Tla.tlaAnd (Tla.statePred Init)
-      (Tla.tlaAnd (Tla.always (Tla.actionPred Next))
-        (Tla.tlaAnd (Tla.always (Tla.eventually (Tla.actionPred Poll1)))
-          (Tla.always (Tla.eventually (Tla.actionPred Poll2))))))
-    ?_ ?_ ?_ ?_ e ⟨hInit, ⟨hNext, ⟨hJ1, hJ2⟩⟩⟩
+    (H := Spec) ?_ ?_ ?_ ?_
   · -- S1: a sent message is received, in queue 1, or in queue 2
-    intro e' hH k hp
-    rcases hH with ⟨hInit', hNext'⟩
-    rcases hNext' with ⟨hNext'', hJ⟩
-    rcases hJ with ⟨_hJ1', _hJ2'⟩
-    have hInit0 : Init (e' 0) := by
-      simpa [Tla.statePred, Cslib.ωSequence.drop] using hInit'
-    have hNextAll : ∀ m, Next (e' m) (e' (m + 1)) := by
-      intro m
-      have hm := hNext'' m
-      simpa [Tla.actionPred, Cslib.ωSequence.drop, Nat.add_comm] using hm
-    have hIk := inv_inductive t e' hInit0 hNextAll k
+    tla_spec_split
+    intro k hp
+    have hIk := inv_inductive t e hInit0 hNextAll k
     rcases hIk.2.1 hp with hr | hp1 | hq
     · left
-      exact Tla.eventually_imp (Tla.statePred (fun s => t ∈ s.recv2)) e' k
+      exact Tla.eventually_imp (Tla.statePred (fun s => t ∈ s.recv2)) e k
         (by simpa [Tla.statePred, Cslib.ωSequence.drop] using hr)
     · right
       exact ⟨hp, Or.inl hp1⟩
     · right
       exact ⟨hp, Or.inr hq⟩
   · -- L2
-    intro e' hH k hφ
-    rcases hH with ⟨hInit', hNext'⟩
-    rcases hNext' with ⟨hNext'', hJ⟩
-    rcases hJ with ⟨hJ1', hJ2'⟩
-    have hInit0 : Init (e' 0) := by
-      simpa [Tla.statePred, Cslib.ωSequence.drop] using hInit'
-    have hNextAll : ∀ m, Next (e' m) (e' (m + 1)) := by
-      intro m
-      have hm := hNext'' m
-      simpa [Tla.actionPred, Cslib.ωSequence.drop, Nat.add_comm] using hm
-    have hIk := inv_inductive t e' hInit0 hNextAll k
+    tla_spec_split
+    intro k hφ
+    have hIk := inv_inductive t e hInit0 hNextAll k
     rcases hIk with ⟨h1, h2, h3, h4, h5, h6⟩
     rcases hNextAll k with hsend | hrest
     · -- a send
@@ -343,7 +323,7 @@ theorem cascade_liveness (t : Nat) :
       rcases hsend' with ⟨hu, hp1', hl', hs1', hq2s, hr2'⟩
       right
       constructor
-      · change t ∈ (e' (k + 1)).sent1 ∧ (t ∈ (e' (k + 1)).pend1 ∨ t ∈ (e' (k + 1)).queue2)
+      · change t ∈ (e (k + 1)).sent1 ∧ (t ∈ (e (k + 1)).pend1 ∨ t ∈ (e (k + 1)).queue2)
         constructor
         · rw [hs1']
           exact Finset.mem_insert.mpr (Or.inr hφ.1)
@@ -357,7 +337,7 @@ theorem cascade_liveness (t : Nat) :
       · constructor
         · intro i _hnp
           fin_cases i
-          · have htl : t ≤ (e' k).last := h1 t hφ.1
+          · have htl : t ≤ (e k).last := h1 t hφ.1
             have hut : u > t := lt_of_le_of_lt htl hu
             intro x hx
             simp [deltas, Delta0] at hx ⊢
@@ -366,7 +346,7 @@ theorem cascade_liveness (t : Nat) :
               rw [hp1'] at hx
               exact (Finset.mem_insert.mp hx.1).resolve_left hxne
             · exact hx.2
-          · have htl : t ≤ (e' k).last := h1 t hφ.1
+          · have htl : t ≤ (e k).last := h1 t hφ.1
             have hut : u > t := lt_of_le_of_lt htl hu
             intro x hx
             simp [deltas, Delta1] at hx ⊢
@@ -385,16 +365,16 @@ theorem cascade_liveness (t : Nat) :
             · intro _hreq hR
               exfalso
               rcases hR with ⟨h, hq2, _hp1'', hq2p, _hl'', _hs1'', _hr2''⟩
-              have hc : insert (Finset.min' (e' k).pend1 h) (∅ : Finset Nat) = (∅ : Finset Nat) := by
+              have hc : insert (Finset.min' (e k).pend1 h) (∅ : Finset Nat) = (∅ : Finset Nat) := by
                 rw [← hq2p, hq2s, hq2]
-              have hm : Finset.min' (e' k).pend1 h ∈ (∅ : Finset Nat) := by
+              have hm : Finset.min' (e k).pend1 h ∈ (∅ : Finset Nat) := by
                 rw [← hc]
                 simp
-              exact (Finset.notMem_empty (Finset.min' (e' k).pend1 h)) hm
+              exact (Finset.notMem_empty (Finset.min' (e k).pend1 h)) hm
             · intro _hreq hR
               exfalso
               rcases hR with ⟨h, hq2p', _hr2'', _hp1'', _hl'', _hs1''⟩
-              have hq2old : (e' k).queue2 = ∅ := by
+              have hq2old : (e k).queue2 = ∅ := by
                 rw [← hq2s, hq2p']
               rw [hq2old] at h
               simp at h
@@ -412,10 +392,10 @@ theorem cascade_liveness (t : Nat) :
     · rcases hrest with hp1step | hp2step
       · -- poll₁
         rcases hp1step with ⟨h, hq2, hp1', hq2p, hl', hs1', hr2'⟩
-        let m := Finset.min' (e' k).pend1 h
+        let m := Finset.min' (e k).pend1 h
         right
         constructor
-        · change t ∈ (e' (k + 1)).sent1 ∧ (t ∈ (e' (k + 1)).pend1 ∨ t ∈ (e' (k + 1)).queue2)
+        · change t ∈ (e (k + 1)).sent1 ∧ (t ∈ (e (k + 1)).pend1 ∨ t ∈ (e (k + 1)).queue2)
           constructor
           · rw [hs1']
             exact hφ.1
@@ -436,10 +416,10 @@ theorem cascade_liveness (t : Nat) :
               simp [deltas, Delta0] at hx ⊢
               constructor
               · rw [hp1'] at hx
-                exact (Finset.erase_subset m (e' k).pend1) hx.1
+                exact (Finset.erase_subset m (e k).pend1) hx.1
               · exact hx.2
             · -- δ₁ is conserved under ψ₁; poll₁ cannot fire under ψ₁
-              have hψ0 : psis t 0 (e' k) := by
+              have hψ0 : psis t 0 (e k) := by
                 simp [psis, hq2]
               exact False.elim (hnp ⟨(0 : Fin 2), ⟨by decide, hψ0⟩⟩)
           · constructor
@@ -447,15 +427,15 @@ theorem cascade_liveness (t : Nat) :
               fin_cases i
               · intro _hreq hR
                 rcases hR with ⟨_h, _hq2', _hp1'', _hq2p', _hl'', _hs1'', _hr2''⟩
-                have ht1 : t ∈ (e' k).pend1 := by
+                have ht1 : t ∈ (e k).pend1 := by
                   rcases hφ.2 with hpa | hq
                   · exact hpa
                   · rw [hq2] at hq
                     exact False.elim (Finset.notMem_empty t hq)
-                have hmle : m ≤ t := (Finset.isLeast_min' (e' k).pend1 h).2 ht1
+                have hmle : m ≤ t := (Finset.isLeast_min' (e k).pend1 h).2 ht1
                 refine ⟨m, ?_, ?_⟩
                 · simp [deltas, Delta0]
-                  exact ⟨Finset.min'_mem (e' k).pend1 h, hmle⟩
+                  exact ⟨Finset.min'_mem (e k).pend1 h, hmle⟩
                 · intro hδ
                   simp [deltas, Delta0] at hδ
                   rw [hp1'] at hδ
@@ -474,27 +454,27 @@ theorem cascade_liveness (t : Nat) :
               · intro _hreq hnr
                 exact False.elim (hnr ⟨h, hq2, hp1', hq2p, hl', hs1', hr2'⟩)
               · intro _hreq _hnr
-                have ht1 : t ∈ (e' k).pend1 := by
+                have ht1 : t ∈ (e k).pend1 := by
                   rcases hφ.2 with hpa | hq
                   · exact hpa
                   · rw [hq2] at hq
                     exact False.elim (Finset.notMem_empty t hq)
-                have hmle : m ≤ t := (Finset.isLeast_min' (e' k).pend1 h).2 ht1
+                have hmle : m ≤ t := (Finset.isLeast_min' (e k).pend1 h).2 ht1
                 refine ⟨m, ?_, hmle⟩
                 rw [hq2p]
                 exact Finset.mem_insert_self m ∅
       · -- poll₂
         rcases hp2step with ⟨h, hq2p', hr2', hp1', hl', hs1'⟩
-        let m := Finset.min' (e' k).queue2 h
+        let m := Finset.min' (e k).queue2 h
         by_cases htm : t = m
         · left
-          have hrec : t ∈ (e' (k + 1)).recv2 := by
+          have hrec : t ∈ (e (k + 1)).recv2 := by
             rw [hr2', htm]
-            exact Finset.mem_insert_self m (e' k).recv2
+            exact Finset.mem_insert_self m (e k).recv2
           have hqev : Tla.eventually (Tla.statePred (fun s => t ∈ s.recv2))
-              ((e'.drop k).drop 1) := by
+              ((e.drop k).drop 1) := by
             simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using
-              (Tla.eventually_imp (Tla.statePred (fun s => t ∈ s.recv2)) e' (k + 1)
+              (Tla.eventually_imp (Tla.statePred (fun s => t ∈ s.recv2)) e (k + 1)
                 (by simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_comm] using hrec))
           rcases hqev with ⟨t0, ht0⟩
           refine ⟨1 + t0, ?_⟩
@@ -502,7 +482,7 @@ theorem cascade_liveness (t : Nat) :
             Nat.add_left_comm] using ht0
         · right
           constructor
-          · change t ∈ (e' (k + 1)).sent1 ∧ (t ∈ (e' (k + 1)).pend1 ∨ t ∈ (e' (k + 1)).queue2)
+          · change t ∈ (e (k + 1)).sent1 ∧ (t ∈ (e (k + 1)).pend1 ∨ t ∈ (e (k + 1)).queue2)
             constructor
             · rw [hs1']
               exact hφ.1
@@ -510,8 +490,8 @@ theorem cascade_liveness (t : Nat) :
               · left
                 rw [hp1']
                 exact hpa
-              · have htmem : t ∈ (e' k).queue2 := hq
-                have hmmem : m ∈ (e' k).queue2 := Finset.min'_mem (e' k).queue2 h
+              · have htmem : t ∈ (e k).queue2 := hq
+                have hmmem : m ∈ (e k).queue2 := Finset.min'_mem (e k).queue2 h
                 have hteq : t = m := (Finset.card_le_one.1 h3) t htmem m hmmem
                 exact False.elim (htm hteq)
           · constructor
@@ -536,23 +516,23 @@ theorem cascade_liveness (t : Nat) :
                 · intro _hreq hR
                   exfalso
                   rcases hR with ⟨h1', _hq2, _hp1'', hq2'', _hl'', _hs1'', _hr2''⟩
-                  have hc : insert (Finset.min' (e' k).pend1 h1') (∅ : Finset Nat) = (∅ : Finset Nat) := by
+                  have hc : insert (Finset.min' (e k).pend1 h1') (∅ : Finset Nat) = (∅ : Finset Nat) := by
                     rw [← hq2'', hq2p']
-                  have hm : Finset.min' (e' k).pend1 h1' ∈ (∅ : Finset Nat) := by
+                  have hm : Finset.min' (e k).pend1 h1' ∈ (∅ : Finset Nat) := by
                     rw [← hc]
                     simp
-                  exact (Finset.notMem_empty (Finset.min' (e' k).pend1 h1')) hm
+                  exact (Finset.notMem_empty (Finset.min' (e k).pend1 h1')) hm
                 · intro hreq _hR
                   rcases hreq.1 with ⟨τ, hτ, hτle⟩
-                  have hmle : m ≤ t := le_trans ((Finset.isLeast_min' (e' k).queue2 h).2 hτ) hτle
+                  have hmle : m ≤ t := le_trans ((Finset.isLeast_min' (e k).queue2 h).2 hτ) hτle
                   refine ⟨m, ?_, ?_⟩
                   · simp [deltas, Delta1]
-                    exact ⟨Or.inr (Finset.min'_mem (e' k).queue2 h), hmle⟩
+                    exact ⟨Or.inr (Finset.min'_mem (e k).queue2 h), hmle⟩
                   · intro hδ
                     simp [deltas, Delta1] at hδ
                     rw [hp1', hq2p'] at hδ
-                    have hmp : ¬ m ∈ (e' k).pend1 := fun hp => h4 m hp
-                      (Finset.min'_mem (e' k).queue2 h)
+                    have hmp : ¬ m ∈ (e k).pend1 := fun hp => h4 m hp
+                      (Finset.min'_mem (e k).queue2 h)
                     rcases hδ.1 with hmp' | hem
                     · exact hmp hmp'
                     · exact Finset.notMem_empty m hem
@@ -565,19 +545,17 @@ theorem cascade_liveness (t : Nat) :
                 · intro _hreq hnr
                   exact False.elim (hnr ⟨h, hq2p', hr2', hp1', hl', hs1'⟩)
   · -- S3: scheduled justice fires (from the two fairness assumptions)
-    intro e' hH k _hφ i hψ
-    rcases hH with ⟨_hInit', hNext'⟩
-    rcases hNext' with ⟨_hNext'', hJ⟩
-    rcases hJ with ⟨hJ1', hJ2'⟩
+    tla_spec_split
+    intro k _hφ i hψ
     fin_cases i
     · right
-      exact hJ1' k
+      exact hJ1 k
     · right
-      exact hJ2' k
+      exact hJ2 k
   · -- S4: at least one scheduler is on
-    intro e' _hH k hφ
+    intro e _hH k hφ
     right
-    by_cases h : ∃ τ : Nat, τ ∈ (e' k).queue2 ∧ τ ≤ t
+    by_cases h : ∃ τ : Nat, τ ∈ (e k).queue2 ∧ τ ≤ t
     · exact ⟨(1 : Fin 2), by simpa [psis] using h⟩
     · exact ⟨(0 : Fin 2), by simpa [psis] using h⟩
 

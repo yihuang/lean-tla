@@ -615,62 +615,41 @@ theorem inv_inductive (t : Nat) (e : Tla.Behavior St)
 
 /-! ## The liveness theorem (Rule 10 instance) -/
 
+/-- The reordering spec: init, next, and the two fairness assumptions. -/
+def Spec : Tla.Pred St :=
+  Tla.tlaAnd (Tla.statePred Init)
+    (Tla.tlaAnd (Tla.always (Tla.actionPred Next))
+      (Tla.tlaAnd (Tla.always (Tla.eventually (Tla.actionPred Poll1A)))
+        (Tla.always (Tla.eventually (Tla.actionPred Poll2)))))
+
 /-- `(□◇ poll₁A) ∧ (□◇ poll₂) ⊢ sent₁(t) ↝ recv₂(t)` for a class-`A`
 message `t`, via the lexicographic ranking `(δ₀, δ₁)` with schedulers
 `ψ₀ = t ∈ pend₁`, `ψ₁ = t ∈ queue₂`. -/
 theorem reorder_liveness (t : Nat) :
-    Tla.Entails
-      (Tla.tlaAnd (Tla.statePred Init)
-        (Tla.tlaAnd (Tla.always (Tla.actionPred Next))
-          (Tla.tlaAnd (Tla.always (Tla.eventually (Tla.actionPred Poll1A)))
-            (Tla.always (Tla.eventually (Tla.actionPred Poll2))))))
+    Tla.Entails Spec
       (Tla.leadsTo (Tla.statePred (fun s => t ∈ s.sentA))
         (Tla.statePred (fun s => t ∈ s.recv2))) := by
-  intro e h
-  rcases h with ⟨hInit, hNextJ⟩
-  rcases hNextJ with ⟨hNext, hJ⟩
-  rcases hJ with ⟨hJ1, hJ2⟩
   refine Tla.rel_rank_lex
     (p := fun s => t ∈ s.sentA) (q := fun s => t ∈ s.recv2)
     (φ := fun s => t ∈ s.sentA ∧ (t ∈ s.pendA ∨ (∃ a : Nat, (a, t) ∈ s.queue2)))
     (δs := deltas t) (ψs := psis t) (rs := rjs)
-    (H := Tla.tlaAnd (Tla.statePred Init)
-      (Tla.tlaAnd (Tla.always (Tla.actionPred Next))
-        (Tla.tlaAnd (Tla.always (Tla.eventually (Tla.actionPred Poll1A)))
-          (Tla.always (Tla.eventually (Tla.actionPred Poll2))))))
-    ?_ ?_ ?_ ?_ e ⟨hInit, ⟨hNext, ⟨hJ1, hJ2⟩⟩⟩
+    (H := Spec) ?_ ?_ ?_ ?_
   · -- S1: a sent message is received, in queue 1, or in queue 2
-    intro e' hH k hp
-    rcases hH with ⟨hInit', hNext'⟩
-    rcases hNext' with ⟨hNext'', hJ⟩
-    rcases hJ with ⟨_hJ1', _hJ2'⟩
-    have hInit0 : Init (e' 0) := by
-      simpa [Tla.statePred, Cslib.ωSequence.drop] using hInit'
-    have hNextAll : ∀ m, Next (e' m) (e' (m + 1)) := by
-      intro m
-      have hm := hNext'' m
-      simpa [Tla.actionPred, Cslib.ωSequence.drop, Nat.add_comm] using hm
-    have hIk := inv_inductive t e' hInit0 hNextAll k
+    tla_spec_split
+    intro k hp
+    have hIk := inv_inductive t e hInit0 hNextAll k
     rcases hIk.2.1 hp with hr | hpa | hq
     · left
-      exact Tla.eventually_imp (Tla.statePred (fun s => t ∈ s.recv2)) e' k
+      exact Tla.eventually_imp (Tla.statePred (fun s => t ∈ s.recv2)) e k
         (by simpa [Tla.statePred, Cslib.ωSequence.drop] using hr)
     · right
       exact ⟨hp, Or.inl hpa⟩
     · right
       exact ⟨hp, Or.inr hq⟩
   · -- L2
-    intro e' hH k hφ
-    rcases hH with ⟨hInit', hNext'⟩
-    rcases hNext' with ⟨hNext'', hJ⟩
-    rcases hJ with ⟨hJ1', hJ2'⟩
-    have hInit0 : Init (e' 0) := by
-      simpa [Tla.statePred, Cslib.ωSequence.drop] using hInit'
-    have hNextAll : ∀ m, Next (e' m) (e' (m + 1)) := by
-      intro m
-      have hm := hNext'' m
-      simpa [Tla.actionPred, Cslib.ωSequence.drop, Nat.add_comm] using hm
-    have hIk := inv_inductive t e' hInit0 hNextAll k
+    tla_spec_split
+    intro k hφ
+    have hIk := inv_inductive t e hInit0 hNextAll k
     rcases hIk with ⟨h1, h2, h3, h4, h5, h6⟩
     rcases hNextAll k with hsendA | hrest
     · -- class-A send
@@ -678,7 +657,7 @@ theorem reorder_liveness (t : Nat) :
       rcases hsend' with ⟨hu, hpa', hla', hsa', hpb', hq2', han', hr2'⟩
       right
       constructor
-      · change t ∈ (e' (k + 1)).sentA ∧ (t ∈ (e' (k + 1)).pendA ∨ ∃ a, (a, t) ∈ (e' (k + 1)).queue2)
+      · change t ∈ (e (k + 1)).sentA ∧ (t ∈ (e (k + 1)).pendA ∨ ∃ a, (a, t) ∈ (e (k + 1)).queue2)
         constructor
         · rw [hsa']
           exact Finset.mem_insert.mpr (Or.inr hφ.1)
@@ -692,7 +671,7 @@ theorem reorder_liveness (t : Nat) :
       · constructor
         · intro i hnp
           fin_cases i
-          · have htl : t ≤ (e' k).last := h1 t hφ.1
+          · have htl : t ≤ (e k).last := h1 t hφ.1
             have hut : u > t := lt_of_le_of_lt htl hu
             intro x hx
             simp [deltas, Delta0] at hx ⊢
@@ -703,8 +682,8 @@ theorem reorder_liveness (t : Nat) :
             · exact hx.2
           · intro x hx
             simp [deltas, Delta1] at hx ⊢
-            have hArr : ArrT (e' (k + 1)) t = ArrT (e' k) t := by
-              change minArrival (e' (k + 1)).queue2 t = minArrival (e' k).queue2 t
+            have hArr : ArrT (e (k + 1)) t = ArrT (e k) t := by
+              change minArrival (e (k + 1)).queue2 t = minArrival (e k).queue2 t
               rw [hq2']
             rw [hq2', hArr] at hx
             exact hx
@@ -714,37 +693,37 @@ theorem reorder_liveness (t : Nat) :
             · intro hreq hR
               rcases hR with ⟨h, hp⟩
               rcases hp with ⟨hpa', _hla', _hsa', _hpb', _hq2', _han', _hr2'⟩
-              let m := Finset.min' (e' k).pendA h
-              have hmle : m ≤ t := (Finset.isLeast_min' (e' k).pendA h).2 hreq.1
+              let m := Finset.min' (e k).pendA h
+              have hmle : m ≤ t := (Finset.isLeast_min' (e k).pendA h).2 hreq.1
               refine ⟨m, ?_, ?_⟩
               · simp [deltas, Delta0]
-                exact ⟨Finset.min'_mem (e' k).pendA h, hmle⟩
+                exact ⟨Finset.min'_mem (e k).pendA h, hmle⟩
               · intro hδ
                 simp [deltas, Delta0] at hδ
                 rw [hpa'] at hδ
                 exact (Finset.mem_erase.mp hδ.1).1 rfl
             · intro hreq hR
               rcases hR with ⟨p, hp, hmin, hq2', _hr2', _han', _hpa', _hla', _hsa', _hpb'⟩
-              have hp' : (ArrT (e' k) t, t) ∈ (e' k).queue2 := by
-                change (minArrival (e' k).queue2 t, t) ∈ (e' k).queue2
+              have hp' : (ArrT (e k) t, t) ∈ (e k).queue2 := by
+                change (minArrival (e k).queue2 t, t) ∈ (e k).queue2
                 exact minArrival_mem (by simpa [psis] using hreq.1)
-              have hle1 : p.1 ≤ ArrT (e' k) t := hmin (ArrT (e' k) t, t) hp'
+              have hle1 : p.1 ≤ ArrT (e k) t := hmin (ArrT (e k) t, t) hp'
               refine ⟨p.1, ?_, ?_⟩
-              · have hmem : p.1 ∈ Delta1 (e' k) t := by
-                  change p.1 ∈ ((e' k).queue2.filter (fun q => q.1 ≤ ArrT (e' k) t)).image Prod.fst
+              · have hmem : p.1 ∈ Delta1 (e k) t := by
+                  change p.1 ∈ ((e k).queue2.filter (fun q => q.1 ≤ ArrT (e k) t)).image Prod.fst
                   exact Finset.mem_image.mpr ⟨p, ⟨Finset.mem_filter.mpr ⟨hp, hle1⟩, rfl⟩⟩
                 simpa [deltas] using hmem
               · intro hδ
                 rw [deltas] at hδ
-                change p.1 ∈ ((e' (k + 1)).queue2.filter (fun q => q.1 ≤ ArrT (e' (k + 1)) t)).image Prod.fst at hδ
+                change p.1 ∈ ((e (k + 1)).queue2.filter (fun q => q.1 ≤ ArrT (e (k + 1)) t)).image Prod.fst at hδ
                 rcases Finset.mem_image.mp hδ with ⟨q, hqmem, hqf⟩
                 have hq1 : q.1 = p.1 := hqf
-                have hqmem' : q ∈ (e' k).queue2 := by
-                  have hq' : q ∈ (e' (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
+                have hqmem' : q ∈ (e k).queue2 := by
+                  have hq' : q ∈ (e (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
                   rw [hq2'] at hq'
                   exact (Finset.mem_erase.mp hq').2
                 have hqne : q ≠ p := by
-                  have hq' : q ∈ (e' (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
+                  have hq' : q ∈ (e (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
                   rw [hq2'] at hq'
                   exact (Finset.mem_erase.mp hq').1
                 have hsame : q = p := h4 q hqmem' p hp hq1
@@ -752,12 +731,12 @@ theorem reorder_liveness (t : Nat) :
           · intro i
             fin_cases i
             · intro hreq hnr
-              have hψ' : t ∈ (e' (k + 1)).pendA := by
+              have hψ' : t ∈ (e (k + 1)).pendA := by
                 rw [hpa']
                 exact Finset.mem_insert.mpr (Or.inr hreq.1)
               simpa [psis] using hψ'
             · intro hreq hnr
-              have hψ' : ∃ a, (a, t) ∈ (e' (k + 1)).queue2 := by
+              have hψ' : ∃ a, (a, t) ∈ (e (k + 1)).queue2 := by
                 rw [hq2']
                 simpa [psis] using hreq.1
               simpa [psis] using hψ'
@@ -767,7 +746,7 @@ theorem reorder_liveness (t : Nat) :
         rcases hsend' with ⟨hu, hpb', hla', hpa', hsa', hq2', han', hr2'⟩
         right
         constructor
-        · change t ∈ (e' (k + 1)).sentA ∧ (t ∈ (e' (k + 1)).pendA ∨ ∃ a, (a, t) ∈ (e' (k + 1)).queue2)
+        · change t ∈ (e (k + 1)).sentA ∧ (t ∈ (e (k + 1)).pendA ∨ ∃ a, (a, t) ∈ (e (k + 1)).queue2)
           constructor
           · rw [hsa']
             exact hφ.1
@@ -787,8 +766,8 @@ theorem reorder_liveness (t : Nat) :
               exact hx
             · intro x hx
               simp [deltas, Delta1] at hx ⊢
-              have hArr : ArrT (e' (k + 1)) t = ArrT (e' k) t := by
-                change minArrival (e' (k + 1)).queue2 t = minArrival (e' k).queue2 t
+              have hArr : ArrT (e (k + 1)) t = ArrT (e k) t := by
+                change minArrival (e (k + 1)).queue2 t = minArrival (e k).queue2 t
                 rw [hq2']
               rw [hq2', hArr] at hx
               exact hx
@@ -798,37 +777,37 @@ theorem reorder_liveness (t : Nat) :
               · intro hreq hR
                 rcases hR with ⟨h, hp⟩
                 rcases hp with ⟨hpa', _hla', _hsa', _hpb', _hq2', _han', _hr2'⟩
-                let m := Finset.min' (e' k).pendA h
-                have hmle : m ≤ t := (Finset.isLeast_min' (e' k).pendA h).2 hreq.1
+                let m := Finset.min' (e k).pendA h
+                have hmle : m ≤ t := (Finset.isLeast_min' (e k).pendA h).2 hreq.1
                 refine ⟨m, ?_, ?_⟩
                 · simp [deltas, Delta0]
-                  exact ⟨Finset.min'_mem (e' k).pendA h, hmle⟩
+                  exact ⟨Finset.min'_mem (e k).pendA h, hmle⟩
                 · intro hδ
                   simp [deltas, Delta0] at hδ
                   rw [hpa'] at hδ
                   exact (Finset.mem_erase.mp hδ.1).1 rfl
               · intro hreq hR
                 rcases hR with ⟨p, hp, hmin, hq2', _hr2', _han', _hpa', _hla', _hsa', _hpb'⟩
-                have hp' : (ArrT (e' k) t, t) ∈ (e' k).queue2 := by
-                  change (minArrival (e' k).queue2 t, t) ∈ (e' k).queue2
+                have hp' : (ArrT (e k) t, t) ∈ (e k).queue2 := by
+                  change (minArrival (e k).queue2 t, t) ∈ (e k).queue2
                   exact minArrival_mem (by simpa [psis] using hreq.1)
-                have hle1 : p.1 ≤ ArrT (e' k) t := hmin (ArrT (e' k) t, t) hp'
+                have hle1 : p.1 ≤ ArrT (e k) t := hmin (ArrT (e k) t, t) hp'
                 refine ⟨p.1, ?_, ?_⟩
-                · have hmem : p.1 ∈ Delta1 (e' k) t := by
-                    change p.1 ∈ ((e' k).queue2.filter (fun q => q.1 ≤ ArrT (e' k) t)).image Prod.fst
+                · have hmem : p.1 ∈ Delta1 (e k) t := by
+                    change p.1 ∈ ((e k).queue2.filter (fun q => q.1 ≤ ArrT (e k) t)).image Prod.fst
                     exact Finset.mem_image.mpr ⟨p, ⟨Finset.mem_filter.mpr ⟨hp, hle1⟩, rfl⟩⟩
                   simpa [deltas] using hmem
                 · intro hδ
                   rw [deltas] at hδ
-                  change p.1 ∈ ((e' (k + 1)).queue2.filter (fun q => q.1 ≤ ArrT (e' (k + 1)) t)).image Prod.fst at hδ
+                  change p.1 ∈ ((e (k + 1)).queue2.filter (fun q => q.1 ≤ ArrT (e (k + 1)) t)).image Prod.fst at hδ
                   rcases Finset.mem_image.mp hδ with ⟨q, hqmem, hqf⟩
                   have hq1 : q.1 = p.1 := hqf
-                  have hqmem' : q ∈ (e' k).queue2 := by
-                    have hq' : q ∈ (e' (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
+                  have hqmem' : q ∈ (e k).queue2 := by
+                    have hq' : q ∈ (e (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
                     rw [hq2'] at hq'
                     exact (Finset.mem_erase.mp hq').2
                   have hqne : q ≠ p := by
-                    have hq' : q ∈ (e' (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
+                    have hq' : q ∈ (e (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
                     rw [hq2'] at hq'
                     exact (Finset.mem_erase.mp hq').1
                   have hsame : q = p := h4 q hqmem' p hp hq1
@@ -836,12 +815,12 @@ theorem reorder_liveness (t : Nat) :
             · intro i
               fin_cases i
               · intro hreq hnr
-                have hψ' : t ∈ (e' (k + 1)).pendA := by
+                have hψ' : t ∈ (e (k + 1)).pendA := by
                   rw [hpa']
                   exact hreq.1
                 simpa [psis] using hψ'
               · intro hreq hnr
-                have hψ' : ∃ a, (a, t) ∈ (e' (k + 1)).queue2 := by
+                have hψ' : ∃ a, (a, t) ∈ (e (k + 1)).queue2 := by
                   rw [hq2']
                   simpa [psis] using hreq.1
                 simpa [psis] using hψ'
@@ -849,19 +828,19 @@ theorem reorder_liveness (t : Nat) :
         · -- poll₁A
           rcases hp1a with ⟨h, hp⟩
           rcases hp with ⟨hpa', hla', hsa', hpb', hq2', han', hr2'⟩
-          let m := Finset.min' (e' k).pendA h
+          let m := Finset.min' (e k).pendA h
           right
           constructor
-          · change t ∈ (e' (k + 1)).sentA ∧ (t ∈ (e' (k + 1)).pendA ∨ ∃ a, (a, t) ∈ (e' (k + 1)).queue2)
+          · change t ∈ (e (k + 1)).sentA ∧ (t ∈ (e (k + 1)).pendA ∨ ∃ a, (a, t) ∈ (e (k + 1)).queue2)
             constructor
             · rw [hsa']
               exact hφ.1
             · rcases hφ.2 with hpa | hq
               · by_cases htm : t = m
                 · right
-                  refine ⟨(e' k).arrNext, ?_⟩
+                  refine ⟨(e k).arrNext, ?_⟩
                   rw [hq2', htm]
-                  exact Finset.mem_insert_self ((e' k).arrNext, m) (e' k).queue2
+                  exact Finset.mem_insert_self ((e k).arrNext, m) (e k).queue2
                 · left
                   rw [hpa']
                   exact Finset.mem_erase.mpr ⟨htm, hpa⟩
@@ -877,36 +856,36 @@ theorem reorder_liveness (t : Nat) :
                 simp [deltas, Delta0] at hx ⊢
                 constructor
                 · rw [hpa'] at hx
-                  exact (Finset.erase_subset m (e' k).pendA) hx.1
+                  exact (Finset.erase_subset m (e k).pendA) hx.1
                 · exact hx.2
-              · have htA : t ∉ (e' k).pendA := by
+              · have htA : t ∉ (e k).pendA := by
                   intro h
                   exact hnp ⟨(0 : Fin 2), by decide, by simpa [psis] using h⟩
-                have htq : ∃ a, (a, t) ∈ (e' k).queue2 := by
+                have htq : ∃ a, (a, t) ∈ (e k).queue2 := by
                   rcases hφ.2 with hpa | hq
                   · exact False.elim (htA hpa)
                   · exact hq
-                have hArr : ArrT (e' k) t < (e' k).arrNext := by
-                  have hp' : (ArrT (e' k) t, t) ∈ (e' k).queue2 := by
-                    change (minArrival (e' k).queue2 t, t) ∈ (e' k).queue2
+                have hArr : ArrT (e k) t < (e k).arrNext := by
+                  have hp' : (ArrT (e k) t, t) ∈ (e k).queue2 := by
+                    change (minArrival (e k).queue2 t, t) ∈ (e k).queue2
                     exact minArrival_mem htq
-                  simpa using (h3 (ArrT (e' k) t, t) hp')
+                  simpa using (h3 (ArrT (e k) t, t) hp')
                 have hne : m ≠ t := by
                   intro hmt
                   exact htA (by
                     rw [← hmt]
-                    exact Finset.min'_mem (e' k).pendA h)
+                    exact Finset.min'_mem (e k).pendA h)
                 intro x hx
                 simp [deltas, Delta1] at hx ⊢
-                have hArrE : ArrT (e' (k + 1)) t = ArrT (e' k) t := by
-                  change minArrival (e' (k + 1)).queue2 t = minArrival (e' k).queue2 t
+                have hArrE : ArrT (e (k + 1)) t = ArrT (e k) t := by
+                  change minArrival (e (k + 1)).queue2 t = minArrival (e k).queue2 t
                   rw [hq2']
                   exact minArrival_insert_ne hne
                 rw [hq2', hArrE] at hx
                 constructor
                 · rcases hx.1 with ⟨τ, hx1⟩
                   rcases Finset.mem_insert.mp hx1 with hxn | hxq
-                  · have hxf : x = (e' k).arrNext := congrArg Prod.fst hxn
+                  · have hxf : x = (e k).arrNext := congrArg Prod.fst hxn
                     rw [hxf] at hx
                     exfalso
                     omega
@@ -918,37 +897,37 @@ theorem reorder_liveness (t : Nat) :
                 · intro hreq hR
                   rcases hR with ⟨h, hp⟩
                   rcases hp with ⟨hpa', _hla', _hsa', _hpb', _hq2', _han', _hr2'⟩
-                  let m := Finset.min' (e' k).pendA h
-                  have hmle : m ≤ t := (Finset.isLeast_min' (e' k).pendA h).2 hreq.1
+                  let m := Finset.min' (e k).pendA h
+                  have hmle : m ≤ t := (Finset.isLeast_min' (e k).pendA h).2 hreq.1
                   refine ⟨m, ?_, ?_⟩
                   · simp [deltas, Delta0]
-                    exact ⟨Finset.min'_mem (e' k).pendA h, hmle⟩
+                    exact ⟨Finset.min'_mem (e k).pendA h, hmle⟩
                   · intro hδ
                     simp [deltas, Delta0] at hδ
                     rw [hpa'] at hδ
                     exact (Finset.mem_erase.mp hδ.1).1 rfl
                 · intro hreq hR
                   rcases hR with ⟨p, hp, hmin, hq2', _hr2', _han', _hpa', _hla', _hsa', _hpb'⟩
-                  have hp' : (ArrT (e' k) t, t) ∈ (e' k).queue2 := by
-                    change (minArrival (e' k).queue2 t, t) ∈ (e' k).queue2
+                  have hp' : (ArrT (e k) t, t) ∈ (e k).queue2 := by
+                    change (minArrival (e k).queue2 t, t) ∈ (e k).queue2
                     exact minArrival_mem (by simpa [psis] using hreq.1)
-                  have hle1 : p.1 ≤ ArrT (e' k) t := hmin (ArrT (e' k) t, t) hp'
+                  have hle1 : p.1 ≤ ArrT (e k) t := hmin (ArrT (e k) t, t) hp'
                   refine ⟨p.1, ?_, ?_⟩
-                  · have hmem : p.1 ∈ Delta1 (e' k) t := by
-                      change p.1 ∈ ((e' k).queue2.filter (fun q => q.1 ≤ ArrT (e' k) t)).image Prod.fst
+                  · have hmem : p.1 ∈ Delta1 (e k) t := by
+                      change p.1 ∈ ((e k).queue2.filter (fun q => q.1 ≤ ArrT (e k) t)).image Prod.fst
                       exact Finset.mem_image.mpr ⟨p, ⟨Finset.mem_filter.mpr ⟨hp, hle1⟩, rfl⟩⟩
                     simpa [deltas] using hmem
                   · intro hδ
                     rw [deltas] at hδ
-                    change p.1 ∈ ((e' (k + 1)).queue2.filter (fun q => q.1 ≤ ArrT (e' (k + 1)) t)).image Prod.fst at hδ
+                    change p.1 ∈ ((e (k + 1)).queue2.filter (fun q => q.1 ≤ ArrT (e (k + 1)) t)).image Prod.fst at hδ
                     rcases Finset.mem_image.mp hδ with ⟨q, hqmem, hqf⟩
                     have hq1 : q.1 = p.1 := hqf
-                    have hqmem' : q ∈ (e' k).queue2 := by
-                      have hq' : q ∈ (e' (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
+                    have hqmem' : q ∈ (e k).queue2 := by
+                      have hq' : q ∈ (e (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
                       rw [hq2'] at hq'
                       exact (Finset.mem_erase.mp hq').2
                     have hqne : q ≠ p := by
-                      have hq' : q ∈ (e' (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
+                      have hq' : q ∈ (e (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
                       rw [hq2'] at hq'
                       exact (Finset.mem_erase.mp hq').1
                     have hsame : q = p := h4 q hqmem' p hp hq1
@@ -958,7 +937,7 @@ theorem reorder_liveness (t : Nat) :
                 · intro hreq hnr
                   exact False.elim (hnr ⟨h, hpa', hla', hsa', hpb', hq2', han', hr2'⟩)
                 · intro hreq hnr
-                  have hq : ∃ a, (a, t) ∈ (e' k).queue2 := by
+                  have hq : ∃ a, (a, t) ∈ (e k).queue2 := by
                     simpa [psis] using hreq.1
                   rcases hq with ⟨a, hq⟩
                   refine ⟨a, ?_⟩
@@ -968,10 +947,10 @@ theorem reorder_liveness (t : Nat) :
           · -- poll₁B
             rcases hp1b with ⟨h, hp⟩
             rcases hp with ⟨hpb', hla', hpa', hsa', hq2', han', hr2'⟩
-            let m := Finset.min' (e' k).pendB h
+            let m := Finset.min' (e k).pendB h
             right
             constructor
-            · change t ∈ (e' (k + 1)).sentA ∧ (t ∈ (e' (k + 1)).pendA ∨ ∃ a, (a, t) ∈ (e' (k + 1)).queue2)
+            · change t ∈ (e (k + 1)).sentA ∧ (t ∈ (e (k + 1)).pendA ∨ ∃ a, (a, t) ∈ (e (k + 1)).queue2)
               constructor
               · rw [hsa']
                 exact hφ.1
@@ -991,34 +970,34 @@ theorem reorder_liveness (t : Nat) :
                   simp [deltas, Delta0] at hx ⊢
                   rw [hpa'] at hx
                   exact hx
-                · have htA : t ∉ (e' k).pendA := by
+                · have htA : t ∉ (e k).pendA := by
                     intro h
                     exact hnp ⟨(0 : Fin 2), by decide, by simpa [psis] using h⟩
-                  have htq : ∃ a, (a, t) ∈ (e' k).queue2 := by
+                  have htq : ∃ a, (a, t) ∈ (e k).queue2 := by
                     rcases hφ.2 with hpa | hq
                     · exact False.elim (htA hpa)
                     · exact hq
-                  have hArr : ArrT (e' k) t < (e' k).arrNext := by
-                    have hp' : (ArrT (e' k) t, t) ∈ (e' k).queue2 := by
-                      change (minArrival (e' k).queue2 t, t) ∈ (e' k).queue2
+                  have hArr : ArrT (e k) t < (e k).arrNext := by
+                    have hp' : (ArrT (e k) t, t) ∈ (e k).queue2 := by
+                      change (minArrival (e k).queue2 t, t) ∈ (e k).queue2
                       exact minArrival_mem htq
-                    simpa using (h3 (ArrT (e' k) t, t) hp')
+                    simpa using (h3 (ArrT (e k) t, t) hp')
                   have hne : m ≠ t := by
                     intro hmt
-                    have hmB : m ∈ (e' k).pendB := Finset.min'_mem (e' k).pendB h
-                    have hns : m ∉ (e' k).sentA := h5 m hmB
+                    have hmB : m ∈ (e k).pendB := Finset.min'_mem (e k).pendB h
+                    have hns : m ∉ (e k).sentA := h5 m hmB
                     exact hns (by rw [hmt]; exact hφ.1)
                   intro x hx
                   simp [deltas, Delta1] at hx ⊢
-                  have hArrE : ArrT (e' (k + 1)) t = ArrT (e' k) t := by
-                    change minArrival (e' (k + 1)).queue2 t = minArrival (e' k).queue2 t
+                  have hArrE : ArrT (e (k + 1)) t = ArrT (e k) t := by
+                    change minArrival (e (k + 1)).queue2 t = minArrival (e k).queue2 t
                     rw [hq2']
                     exact minArrival_insert_ne hne
                   rw [hq2', hArrE] at hx
                   constructor
                   · rcases hx.1 with ⟨τ, hx1⟩
                     rcases Finset.mem_insert.mp hx1 with hxn | hxq
-                    · have hxf : x = (e' k).arrNext := congrArg Prod.fst hxn
+                    · have hxf : x = (e k).arrNext := congrArg Prod.fst hxn
                       rw [hxf] at hx
                       exfalso
                       omega
@@ -1030,37 +1009,37 @@ theorem reorder_liveness (t : Nat) :
                   · intro hreq hR
                     rcases hR with ⟨h, hp⟩
                     rcases hp with ⟨hpa', _hla', _hsa', _hpb', _hq2', _han', _hr2'⟩
-                    let m := Finset.min' (e' k).pendA h
-                    have hmle : m ≤ t := (Finset.isLeast_min' (e' k).pendA h).2 hreq.1
+                    let m := Finset.min' (e k).pendA h
+                    have hmle : m ≤ t := (Finset.isLeast_min' (e k).pendA h).2 hreq.1
                     refine ⟨m, ?_, ?_⟩
                     · simp [deltas, Delta0]
-                      exact ⟨Finset.min'_mem (e' k).pendA h, hmle⟩
+                      exact ⟨Finset.min'_mem (e k).pendA h, hmle⟩
                     · intro hδ
                       simp [deltas, Delta0] at hδ
                       rw [hpa'] at hδ
                       exact (Finset.mem_erase.mp hδ.1).1 rfl
                   · intro hreq hR
                     rcases hR with ⟨p, hp, hmin, hq2', _hr2', _han', _hpa', _hla', _hsa', _hpb'⟩
-                    have hp' : (ArrT (e' k) t, t) ∈ (e' k).queue2 := by
-                      change (minArrival (e' k).queue2 t, t) ∈ (e' k).queue2
+                    have hp' : (ArrT (e k) t, t) ∈ (e k).queue2 := by
+                      change (minArrival (e k).queue2 t, t) ∈ (e k).queue2
                       exact minArrival_mem (by simpa [psis] using hreq.1)
-                    have hle1 : p.1 ≤ ArrT (e' k) t := hmin (ArrT (e' k) t, t) hp'
+                    have hle1 : p.1 ≤ ArrT (e k) t := hmin (ArrT (e k) t, t) hp'
                     refine ⟨p.1, ?_, ?_⟩
-                    · have hmem : p.1 ∈ Delta1 (e' k) t := by
-                        change p.1 ∈ ((e' k).queue2.filter (fun q => q.1 ≤ ArrT (e' k) t)).image Prod.fst
+                    · have hmem : p.1 ∈ Delta1 (e k) t := by
+                        change p.1 ∈ ((e k).queue2.filter (fun q => q.1 ≤ ArrT (e k) t)).image Prod.fst
                         exact Finset.mem_image.mpr ⟨p, ⟨Finset.mem_filter.mpr ⟨hp, hle1⟩, rfl⟩⟩
                       simpa [deltas] using hmem
                     · intro hδ
                       rw [deltas] at hδ
-                      change p.1 ∈ ((e' (k + 1)).queue2.filter (fun q => q.1 ≤ ArrT (e' (k + 1)) t)).image Prod.fst at hδ
+                      change p.1 ∈ ((e (k + 1)).queue2.filter (fun q => q.1 ≤ ArrT (e (k + 1)) t)).image Prod.fst at hδ
                       rcases Finset.mem_image.mp hδ with ⟨q, hqmem, hqf⟩
                       have hq1 : q.1 = p.1 := hqf
-                      have hqmem' : q ∈ (e' k).queue2 := by
-                        have hq' : q ∈ (e' (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
+                      have hqmem' : q ∈ (e k).queue2 := by
+                        have hq' : q ∈ (e (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
                         rw [hq2'] at hq'
                         exact (Finset.mem_erase.mp hq').2
                       have hqne : q ≠ p := by
-                        have hq' : q ∈ (e' (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
+                        have hq' : q ∈ (e (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
                         rw [hq2'] at hq'
                         exact (Finset.mem_erase.mp hq').1
                       have hsame : q = p := h4 q hqmem' p hp hq1
@@ -1068,12 +1047,12 @@ theorem reorder_liveness (t : Nat) :
                 · intro i
                   fin_cases i
                   · intro hreq hnr
-                    have hψ' : t ∈ (e' (k + 1)).pendA := by
+                    have hψ' : t ∈ (e (k + 1)).pendA := by
                       rw [hpa']
                       exact hreq.1
                     simpa [psis] using hψ'
                   · intro hreq hnr
-                    have hq : ∃ a, (a, t) ∈ (e' k).queue2 := by
+                    have hq : ∃ a, (a, t) ∈ (e k).queue2 := by
                       simpa [psis] using hreq.1
                     rcases hq with ⟨a, hq⟩
                     refine ⟨a, ?_⟩
@@ -1081,12 +1060,12 @@ theorem reorder_liveness (t : Nat) :
                     exact Finset.mem_insert.mpr (Or.inr hq)
           · -- poll₂
             rcases hp2 with ⟨p, hp, hmin, hq2', hr2', han', hpa', hla', hsa', hpb'⟩
-            by_cases hq : t ∈ (e' (k + 1)).recv2
+            by_cases hq : t ∈ (e (k + 1)).recv2
             · left
               have hqev : Tla.eventually (Tla.statePred (fun s => t ∈ s.recv2))
-                  ((e'.drop k).drop 1) := by
+                  ((e.drop k).drop 1) := by
                 simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using
-                  (Tla.eventually_imp (Tla.statePred (fun s => t ∈ s.recv2)) e' (k + 1)
+                  (Tla.eventually_imp (Tla.statePred (fun s => t ∈ s.recv2)) e (k + 1)
                     (by simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_comm] using hq))
               rcases hqev with ⟨t0, ht0⟩
               refine ⟨1 + t0, ?_⟩
@@ -1094,7 +1073,7 @@ theorem reorder_liveness (t : Nat) :
                 Nat.add_left_comm] using ht0
             · right
               constructor
-              · change t ∈ (e' (k + 1)).sentA ∧ (t ∈ (e' (k + 1)).pendA ∨ ∃ a, (a, t) ∈ (e' (k + 1)).queue2)
+              · change t ∈ (e (k + 1)).sentA ∧ (t ∈ (e (k + 1)).pendA ∨ ∃ a, (a, t) ∈ (e (k + 1)).queue2)
                 constructor
                 · rw [hsa']
                   exact hφ.1
@@ -1105,9 +1084,9 @@ theorem reorder_liveness (t : Nat) :
                   · right
                     have htm : t ≠ p.2 := by
                       intro htm
-                      have htR : t ∈ (e' (k + 1)).recv2 := by
+                      have htR : t ∈ (e (k + 1)).recv2 := by
                         rw [hr2', htm]
-                        exact Finset.mem_insert_self p.2 (e' k).recv2
+                        exact Finset.mem_insert_self p.2 (e k).recv2
                       exact hq htR
                     rcases hq' with ⟨a, hq'⟩
                     refine ⟨a, ?_⟩
@@ -1128,16 +1107,16 @@ theorem reorder_liveness (t : Nat) :
                       intro htm'
                       apply hq
                       rw [hr2', ← htm']
-                      exact Finset.mem_insert_self p.2 (e' k).recv2
-                    have hArrE : ArrT (e' (k + 1)) t = ArrT (e' k) t := by
-                      change minArrival (e' (k + 1)).queue2 t = minArrival (e' k).queue2 t
+                      exact Finset.mem_insert_self p.2 (e k).recv2
+                    have hArrE : ArrT (e (k + 1)) t = ArrT (e k) t := by
+                      change minArrival (e (k + 1)).queue2 t = minArrival (e k).queue2 t
                       rw [hq2']
                       exact minArrival_erase_ne htm'
                     rw [hq2', hArrE] at hx
                     constructor
                     · rcases hx.1 with ⟨τ, hx1⟩
                       refine ⟨τ, ?_⟩
-                      exact (Finset.erase_subset p (e' k).queue2) hx1
+                      exact (Finset.erase_subset p (e k).queue2) hx1
                     · exact hx.2
                 · constructor
                   · intro i
@@ -1145,37 +1124,37 @@ theorem reorder_liveness (t : Nat) :
                     · intro hreq hR
                       rcases hR with ⟨h, hp⟩
                       rcases hp with ⟨hpa', _hla', _hsa', _hpb', _hq2', _han', _hr2'⟩
-                      let m := Finset.min' (e' k).pendA h
-                      have hmle : m ≤ t := (Finset.isLeast_min' (e' k).pendA h).2 hreq.1
+                      let m := Finset.min' (e k).pendA h
+                      have hmle : m ≤ t := (Finset.isLeast_min' (e k).pendA h).2 hreq.1
                       refine ⟨m, ?_, ?_⟩
                       · simp [deltas, Delta0]
-                        exact ⟨Finset.min'_mem (e' k).pendA h, hmle⟩
+                        exact ⟨Finset.min'_mem (e k).pendA h, hmle⟩
                       · intro hδ
                         simp [deltas, Delta0] at hδ
                         rw [hpa'] at hδ
                         exact (Finset.mem_erase.mp hδ.1).1 rfl
                     · intro hreq hR
                       rcases hR with ⟨p, hp, hmin, hq2', _hr2', _han', _hpa', _hla', _hsa', _hpb'⟩
-                      have hp' : (ArrT (e' k) t, t) ∈ (e' k).queue2 := by
-                        change (minArrival (e' k).queue2 t, t) ∈ (e' k).queue2
+                      have hp' : (ArrT (e k) t, t) ∈ (e k).queue2 := by
+                        change (minArrival (e k).queue2 t, t) ∈ (e k).queue2
                         exact minArrival_mem (by simpa [psis] using hreq.1)
-                      have hle1 : p.1 ≤ ArrT (e' k) t := hmin (ArrT (e' k) t, t) hp'
+                      have hle1 : p.1 ≤ ArrT (e k) t := hmin (ArrT (e k) t, t) hp'
                       refine ⟨p.1, ?_, ?_⟩
-                      · have hmem : p.1 ∈ Delta1 (e' k) t := by
-                          change p.1 ∈ ((e' k).queue2.filter (fun q => q.1 ≤ ArrT (e' k) t)).image Prod.fst
+                      · have hmem : p.1 ∈ Delta1 (e k) t := by
+                          change p.1 ∈ ((e k).queue2.filter (fun q => q.1 ≤ ArrT (e k) t)).image Prod.fst
                           exact Finset.mem_image.mpr ⟨p, ⟨Finset.mem_filter.mpr ⟨hp, hle1⟩, rfl⟩⟩
                         simpa [deltas] using hmem
                       · intro hδ
                         rw [deltas] at hδ
-                        change p.1 ∈ ((e' (k + 1)).queue2.filter (fun q => q.1 ≤ ArrT (e' (k + 1)) t)).image Prod.fst at hδ
+                        change p.1 ∈ ((e (k + 1)).queue2.filter (fun q => q.1 ≤ ArrT (e (k + 1)) t)).image Prod.fst at hδ
                         rcases Finset.mem_image.mp hδ with ⟨q, hqmem, hqf⟩
                         have hq1 : q.1 = p.1 := hqf
-                        have hqmem' : q ∈ (e' k).queue2 := by
-                          have hq' : q ∈ (e' (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
+                        have hqmem' : q ∈ (e k).queue2 := by
+                          have hq' : q ∈ (e (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
                           rw [hq2'] at hq'
                           exact (Finset.mem_erase.mp hq').2
                         have hqne : q ≠ p := by
-                          have hq' : q ∈ (e' (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
+                          have hq' : q ∈ (e (k + 1)).queue2 := (Finset.mem_filter.mp hqmem).1
                           rw [hq2'] at hq'
                           exact (Finset.mem_erase.mp hq').1
                         have hsame : q = p := h4 q hqmem' p hp hq1
@@ -1183,24 +1162,22 @@ theorem reorder_liveness (t : Nat) :
                   · intro i
                     fin_cases i
                     · intro hreq hnr
-                      have hψ' : t ∈ (e' (k + 1)).pendA := by
+                      have hψ' : t ∈ (e (k + 1)).pendA := by
                         rw [hpa']
                         exact hreq.1
                       simpa [psis] using hψ'
                     · intro hreq hnr
                       exact False.elim (hnr ⟨p, hp, hmin, hq2', hr2', han', hpa', hla', hsa', hpb'⟩)
   · -- S3: scheduled justice fires (from the two fairness assumptions)
-    intro e' hH k _hφ i hψ
-    rcases hH with ⟨_hInit', hNext'⟩
-    rcases hNext' with ⟨_hNext'', hJ⟩
-    rcases hJ with ⟨hJ1', hJ2'⟩
+    tla_spec_split
+    intro k _hφ i hψ
     fin_cases i
     · right
-      exact hJ1' k
+      exact hJ1 k
     · right
-      exact hJ2' k
+      exact hJ2 k
   · -- S4: at least one scheduler is on
-    intro e' _hH k hφ
+    intro e _hH k hφ
     rcases hφ.2 with hpa | hq
     · right
       exact ⟨(0 : Fin 2), by simpa [psis] using hpa⟩

@@ -1,4 +1,5 @@
 import TlaDsl.Rules
+import TlaDsl.RelRank
 import TlaDsl.Meta
 import TlaDsl.Prime
 import TlaDsl.Pretty
@@ -92,6 +93,112 @@ macro "tla_leads_to_cases" h1:ident h2:ident h3:ident hcase:term : tactic =>
 obligations; `tla_grind` discharges the purely algebraic ones. -/
 macro "refine_via " f:term : tactic =>
   `(tactic| (apply Tla.refinement_mapping _ _ _ _ _ _ $f <;> try tla_grind))
+
+/-- **Spec-splitting for liveness obligations.** The relational-ranking
+rules (Rule 6/10/11) leave obligations of the shape `∀ e, H e → ...` where
+`H` is the spec: a nested `Tla.tlaAnd` of the init, the next-step and the
+justice conjuncts. `tla_spec_split` binds the behavior as `e` and the spec
+hypothesis as `hH`, walks the nested conjunction, and derives the named
+facts the obligations need:
+
+* `hInit0 : Init (e 0)` from a `Tla.statePred Init` leaf;
+* `hNextAll : ∀ m, Next (e m) (e (m + 1))` from a
+  `Tla.always (Tla.actionPred Next)` leaf, or
+  `hStutAll : ∀ m, Tla.StutAction Next vars (e m) (e (m + 1))` from a
+  `Tla.stutAlways Next vars` leaf;
+* `hJ1`, `hJ2`, ... for every other leaf (the justice conjuncts), in
+  left-to-right order.
+
+The remaining binders (`k hp`, `k hφ`, `k _hφ i hψ`, ...) are left for the
+user, together with the invariant induction and the per-step case split —
+exactly the parts that are example-specific. -/
+elab "tla_spec_split" : tactic => withMainContext do
+  let g ← getMainGoal
+  -- bind the behavior and the spec hypothesis with exact names
+  let (_, g) ← liftMetaM (g.intro `e)
+  let (_, g) ← liftMetaM (g.intro `hH)
+  setGoals [g]
+  let eId := mkIdent `e
+  -- walk the nested `Tla.tlaAnd` right-spine with an explicit stack of
+  -- hypothesis names, classifying each leaf by its (un-reduced) type
+  let mut stack : Array Name := #[`hH]
+  let mut jIdx : Nat := 0
+  while !stack.isEmpty do
+    let hCur := stack.back!
+    stack := stack.pop
+    -- look up the hypothesis in the *main goal's* metavariable context
+    -- (`getLCtx` is stale here: it does not reflect `MVarId.intro`-created
+    -- hypotheses)
+    let hType ← do
+      let mg ← getMainGoal
+      let mdecl ← liftMetaM mg.getDecl
+      let some hDecl ← mdecl.lctx.findDeclM? (fun d =>
+          pure (if d.userName == hCur then some d else none))
+        | throwError "tla_spec_split: hypothesis `{hCur}` not found"
+      -- the type is read from the stored declaration (`inferType` on the
+      -- fvar would hit the stale elaborator context)
+      liftMetaM (instantiateMVars hDecl.type)
+    -- `hTypeW` reduces spec *definitions* (`H e` → the nested `tlaAnd`).
+    -- A leaf is recognized by its un-reduced head; in particular a
+    -- `statePred` leaf must not be split just because its predicate
+    -- unfolds to a conjunction (`Init (e 0)` is often one).
+    let hTypeW ← liftMetaM (whnf hType)
+    let isLeaf : Bool := match hType.getAppFn with
+      | .const n _ => n == ``Tla.statePred || n == ``Tla.always || n == ``Tla.stutAlways
+      | _ => false
+    let isAnd : Bool := !isLeaf && (match hTypeW.getAppFn with
+      | .const n _ => n == ``And
+      | _ => false)
+    if isAnd then
+      let hL ← mkFreshUserName `hL
+      let hR ← mkFreshUserName `hR
+      let hId : Ident := mkIdent hCur
+      evalTactic (← `(tactic|
+        rcases $hId:term with ⟨$(mkIdent hL), $(mkIdent hR)⟩))
+      -- push right first so the left conjunct is processed next
+      stack := (stack.push hR).push hL
+    else
+      match hType.getAppFn with
+      | .const n' _ =>
+          if n' == ``Tla.statePred then
+            evalTactic (← `(tactic| have $(mkIdent `hInit0) :=
+              Tla.statePred_at_zero _ $eId $(mkIdent hCur)))
+          else if n' == ``Tla.always then
+            let inner := hType.getAppArgs[1]!
+            match inner.getAppFn with
+            | .const n'' _ =>
+                if n'' == ``Tla.actionPred then
+                  match inner.getAppArgs[1]!.getAppFn with
+                  | .const n''' _ =>
+                      if n''' == ``Tla.StutAction then
+                        evalTactic (← `(tactic| have $(mkIdent `hStutAll) :=
+                          Tla.stutAlways_next _ _ $eId $(mkIdent hCur)))
+                      else
+                        evalTactic (← `(tactic| have $(mkIdent `hNextAll) :=
+                          Tla.always_actionPred_next _ $eId $(mkIdent hCur)))
+                  | _ =>
+                      jIdx := jIdx + 1
+                      let nm := Name.mkSimple ("hJ" ++ toString jIdx)
+                      evalTactic (← `(tactic| have $(mkIdent nm) := $(mkIdent hCur)))
+                else
+                  jIdx := jIdx + 1
+                  let nm := Name.mkSimple ("hJ" ++ toString jIdx)
+                  evalTactic (← `(tactic| have $(mkIdent nm) := $(mkIdent hCur)))
+            | _ =>
+                jIdx := jIdx + 1
+                let nm := Name.mkSimple ("hJ" ++ toString jIdx)
+                evalTactic (← `(tactic| have $(mkIdent nm) := $(mkIdent hCur)))
+          else if n' == ``Tla.stutAlways then
+            evalTactic (← `(tactic| have $(mkIdent `hStutAll) :=
+              Tla.stutAlways_next _ _ $eId $(mkIdent hCur)))
+          else
+            jIdx := jIdx + 1
+            let nm := Name.mkSimple ("hJ" ++ toString jIdx)
+            evalTactic (← `(tactic| have $(mkIdent nm) := $(mkIdent hCur)))
+      | _ =>
+          jIdx := jIdx + 1
+          let nm := Name.mkSimple ("hJ" ++ toString jIdx)
+          evalTactic (← `(tactic| have $(mkIdent nm) := $(mkIdent hCur)))
 
 /-- The invariant-threaded variant of `refine_via`: applies
 `refinement_mapping_inv`, additionally requiring the concrete invariant

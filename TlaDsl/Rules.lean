@@ -564,4 +564,28 @@ theorem sf_enabled_infOcc_iff {σ : Type u} [Finite σ] (e : Behavior σ) (a : A
   rw [sf_enabled_frequently_iff]
   exact frequently_enabled_finite e a
 
+/-- A `Tla.statePred` leaf of a spec hypothesis evaluated at the behavior
+gives the state predicate at the first state. -/
+theorem statePred_at_zero {σ : Type u} (p : StatePred σ) (e : Behavior σ) :
+    Tla.statePred p e → p (e 0) := by
+  intro h
+  simpa [Tla.statePred] using h
+
+/-- A `Tla.always (Tla.actionPred a)` leaf of a spec hypothesis gives the
+action at every consecutive pair of states. -/
+theorem always_actionPred_next {σ : Type u} (a : Action σ) (e : Behavior σ) :
+    Tla.always (Tla.actionPred a) e → ∀ m : Nat, a (e m) (e (m + 1)) := by
+  intro h m
+  have hm := h m
+  simpa [Tla.actionPred, Cslib.ωSequence.drop, Nat.add_comm] using hm
+
+/-- A `Tla.stutAlways a v` leaf gives the stuttering-closed action at
+every consecutive pair of states. -/
+theorem stutAlways_next {σ : Type u} {α : Type v} (a : Action σ) (v : σ → α)
+    (e : Behavior σ) : Tla.stutAlways a v e → ∀ m : Nat,
+      Tla.StutAction a v (e m) (e (m + 1)) := by
+  intro h m
+  have hm := h m
+  simpa [Tla.actionPred, Cslib.ωSequence.drop, Nat.add_comm] using hm
+
 end Tla
