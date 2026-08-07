@@ -109,6 +109,23 @@ theorem quorum_overlap_honest {n : Nat} {Byz Q1 Q2 : Finset Node}
     exact Nat.mul_le_mul_left 3 hcard
   omega
 
+/-- Every Byzantine quorum contains an **honest** node: `> 2n/3` voters
+cannot all be among the `< n/3` Byzantine nodes. This is the fact that
+makes the liveness proof go through — every notarization argument can pick
+an honest voter to interrogate. -/
+theorem quorum_honest_member {n : Nat} {Byz Q : Finset Node}
+    (hByz : ByzOk n Byz) (hQ : QuorumByz n Q) : ∃ i : Node, i ∉ Byz ∧ i ∈ Q := by
+  rcases hByz with ⟨_, hb⟩
+  rcases hQ with ⟨_, hq⟩
+  by_contra h
+  have hsub : Q ⊆ Byz := by
+    intro i hi
+    by_contra hnb
+    exact h ⟨i, hnb, hi⟩
+  have hcard : Q.card ≤ Byz.card := Finset.card_le_card hsub
+  have hle : 3 * Q.card ≤ 3 * Byz.card := Nat.mul_le_mul_left 3 hcard
+  omega
+
 /-! ## The Byzantine model -/
 
 /-- `b` is notarized by epoch `e`: a Byzantine quorum voted for it. -/

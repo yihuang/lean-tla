@@ -286,8 +286,19 @@ and the extracted text under `docs/research/web/`.
   honest-guarded `Vote`, the honest-restricted invariant (`VoteLenMonoByz`),
   and the Byzantine versions of Lemma 10 (unique notarization),
   finality-no-conflict, and Theorem 12 (two final chains are
-  prefix-comparable). The liveness half (honest-leader epochs under a
-  leader schedule) remains, as does the CSLib FLP vocabulary link;
+  prefix-comparable) — **liveness done**, in
+  [`TlaDsl/Examples/StreamletByzLiveness.lean`](../TlaDsl/Examples/StreamletByzLiveness.lean):
+  the honest liveness model's state and proof chain with Byzantine
+  quorums (`> 2n/3`), honest-guarded `Propose` (`L e ∉ Byz`) and `Vote`
+  (`i ∉ Byz`) actions, honest-restricted invariants (Byzantine pre-votes
+  are unconstrained), and the honest-voter selection that makes every
+  notarization argument Byzantine-proof: `quorum_honest_member` — every
+  quorum contains a node outside the `< n/3` Byzantine set. The whole
+  chain (Fact 3, longest-chain bound, Lemma 5, Theorem 6) is re-proved
+  with the honest voter doing the work, and `liveness_spec_byz` proves
+  `HByz n Byz L ⊢ cur = e0 ↝ FinalSomeByz` for any `ByzOk n Byz` — the
+  Byzantine analogue of Theorem 13 under an explicit honest leader
+  schedule. The CSLib FLP vocabulary link remains;
   (c) an executable `FLTS`/`OmegaExecution` bridge so Streamlet's `Next`
   is also a runnable step function (the E1/E3 refinement path from the
   reviewer thread) — **done**, in
