@@ -603,6 +603,27 @@ The generic frame-stability lemma from case study 1
 (`Tla.step_eq_of_all`, "the frame is constant over a run of unchanged
 steps") moved to `TlaDsl/Rules.lean` and is shared by both case studies.
 
+### Deep liveness refinement through the LTS layer (2026-08-07)
+
+`TlaDsl/Examples/RefinementLivenessLTS.lean` re-derives the two-phase
+counter case study through CSLib's LTS machinery (`TlaDsl/LTSRefine.lean`),
+closing the reviewer's "no link to CSLib's `imageFinite`/`finiteState`"
+point with a worked protocol pair:
+
+* `conc_refines_abs_lts`: the DSL step correspondence is exactly a forward
+  simulation between the spec LTSs (`sim_iff_step`) — the concrete spec's
+  ω-executions map to the abstract ones (trace inclusion);
+* `conc_refines_abs_sat_lts`: the same correspondence with τ-stutter runs
+  absorbed (`sim_saturate_of_step`), the executable-refinement shape;
+* `conc_imageFinite`: the concrete LTS is image-finite even though its
+  state space is infinite — the action contributes at most two successors
+  and the stutter contributes exactly one (`Vars` is injective), so every
+  successor set is finite. This is the structural finiteness hypothesis of
+  the deep A-L liveness theorem, proved directly (the `[Finite σ]` shortcut
+  does not apply to infinite-state specs);
+* `conc_refines_abs_wf_lts`: the full canonical-form refinement with
+  liveness, re-proved through the LTS layer.
+
 ## 4. The one-paragraph takeaway
 
 The DSL's notation is not the bottleneck anymore — the *proof plumbing* is:
