@@ -636,6 +636,28 @@ canonical-form refinement are each a few lines re-stating facts proved
 above, with the machinery in the library. The counter case study's
 image-finiteness proof was likewise shortened onto the generic lemma.
 
+### The spec is runnable: FLTS bridge (2026-08-07)
+
+`RefinementLivenessLTS.lean` gains an "executable step function" section
+(the E1 shape from the BFT design notes, and the FLTS item from the
+north-star reuse list): the counter's `Next` is a deterministic step
+function, so the same spec is CSLib's functional LTS.
+
+* `step` — the transition function (prepare from `flag = 0`, increment
+  otherwise) and `next_iff_step` — the action fires exactly to `step s`;
+* `stutAction_iff_step_or_self` — `[Next]_Vars`-steps are either the
+  deterministic action step or a stutter, which (since `Vars` is
+  injective) is the state itself;
+* `flts` + `spec_tr_iff_flts_or_stutter` — the spec LTS is the FLTS LTS
+  plus the stutter self-loops, so every `foldl` run of `step` is a
+  `[Next]_Vars` behavior (`flts_tr_sub_spec`);
+* `flts_refines_abs_lts` — the executable runs refine the abstract spec
+  too (the FLTS LTS simulates the abstract spec LTS).
+
+This is the pattern a Streamlet-scale `Next` can follow later: give the
+step function, prove the action matches it, and the spec is both proved
+about and runnable from the same definition.
+
 ## 4. The one-paragraph takeaway
 
 The DSL's notation is not the bottleneck anymore — the *proof plumbing* is:
