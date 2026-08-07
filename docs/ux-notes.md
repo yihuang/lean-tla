@@ -540,6 +540,38 @@ theorem context, not the goal's intro'd variables. Recorded in
 All four original slices are now done; the one-paragraph takeaway below is
 the current state of the DSL's proof UX.
 
+### Liveness refinement case study (2026-08-07)
+
+`TlaDsl/Examples/RefinementLiveness.lean` runs the Abadi–Lamport
+liveness-refinement pattern end to end:
+
+* **Abstract spec** (`Abs`): a counter with `x' = x + 1`, weak fairness on
+  the increment. `Abs.step` is one `tla_wf1` application; `Abs.leadsTo`
+  chains two WF1 steps through `leads_to_via_nat` (rank `2 - x`) to get
+  `x = 0 ↝ x = 2`.
+* **Concrete spec** (`Conc`): each increment is a two-phase handshake
+  through an internal flag (`flag = 0 → flag = 1` raising, invisible to
+  `x`; then `flag ≠ 0 → x + 1`), with weak fairness on the composite
+  action.
+* **Safety**: `conc_refines_abs` proves the concrete refines the abstract
+  by projecting away the flag (`refine_via`); a raise phase is a
+  `x`-stutter.
+* **Liveness**: `wf_conc_to_abs` proves the concrete fairness implies the
+  abstract fairness on the mapped behavior — the substantive part. The
+  proof uses `Nat.find` for "the first angle step after a raise" and a
+  generic `step_eq_of_all` frame-stability lemma to show the handshake
+  steps alternate: after a raise the next angle step is an increment, so
+  infinitely many handshake steps yield infinitely many `x`-changes.
+* **Transfer**: `conc_leadsTo` derives the concrete `x = 0 ↝ x = 2` from
+  the abstract one via the new library theorem `Tla.leadsTo_refines`
+  (`Meta.lean`): safety refinement + abstract leads-to ⇒ the refined
+  leads-to `P ∘ f ↝ Q ∘ f` on the concrete behaviors.
+
+The library addition (`leadsTo_refines`) is the reusable A-L liveness
+transfer: it works for any refinement mapping, so a new case study only
+needs the fairness-preservation proof (here the alternation argument) and
+the abstract liveness theorem.
+
 ## 4. The one-paragraph takeaway
 
 The DSL's notation is not the bottleneck anymore — the *proof plumbing* is:

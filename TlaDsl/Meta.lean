@@ -554,6 +554,30 @@ theorem refinement_mapping_liveness {σ τ : Type u} {α β : Type v}
   intro e he
   exact ⟨refinement_mapping initA nextA u initC nextC v f hinit hstep e ⟨he.1.1, he.1.2⟩, hL e he.2⟩
 
+/-- **A-L liveness transfer through refinement.** If the concrete spec
+refines the abstract one via `f` (every concrete behavior maps to an
+abstract behavior) and the abstract spec proves `P ↝ Q`, then the concrete
+spec proves the refined leads-to `P ∘ f ↝ Q ∘ f`. This is the liveness
+half of the Abadi–Lamport method: the safety mapping lifts the abstract
+leads-to back to the concrete behaviors. -/
+theorem leadsTo_refines {σ τ : Type u} (f : τ → σ) (P Q : StatePred σ)
+    (conc : Pred τ) (abs : Pred σ)
+    (href : RefinesVia f conc abs)
+    (hlive : abs ⊢ leadsTo (statePred P) (statePred Q)) :
+    conc ⊢ leadsTo (statePred (fun s => P (f s))) (statePred (fun s => Q (f s))) := by
+  intro e he n hp
+  have hmap : abs (Cslib.ωSequence.map f e) := href e he
+  have hp' : (statePred P) ((Cslib.ωSequence.map f e).drop n) := by
+    simpa [statePred, Cslib.ωSequence.map, Cslib.ωSequence.drop, Nat.add_comm] using hp
+  have hlt : leadsTo (statePred P) (statePred Q) (Cslib.ωSequence.map f e) :=
+    hlive (Cslib.ωSequence.map f e) hmap
+  have himp : tlaImp (statePred P) (eventually (statePred Q))
+      ((Cslib.ωSequence.map f e).drop n) := hlt n
+  rcases himp hp' with ⟨j, hj⟩
+  refine ⟨j, ?_⟩
+  simpa [statePred, Cslib.ωSequence.map, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+    Nat.add_left_comm] using hj
+
 /-- Refinement is transitive. -/
 theorem refines_via_trans {σ τ υ : Type u} (f : τ → σ) (g : υ → τ)
     (conc : Pred υ) (mid : Pred τ) (abs : Pred σ)
