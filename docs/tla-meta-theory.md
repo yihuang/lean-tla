@@ -184,14 +184,24 @@ formula itself evaluated on the projected behavior (`L = F ∘ proj`).
 | `realizes_stut_history` | for `StutInvFull F`, `F` is stuttering-equivalent to the ∃-hidden history spec (`RealizesStut`) |
 | `canonical_exist_stut_inv` | the existential canonical realization is itself stuttering-invariant |
 | `representation_theorem` | at the quotient level: `hF.lift` (the descent of `F` to `StutQuotFull`) equals the descent of the existential canonical realization — on the stuttering quotient the formula *is* `∃h : Init ∧ □[N]_h ∧ L` |
+| `stutinv_full_histSpec` | the history canonical spec is itself stuttering-invariant: `nstutinv_full_histN` (the transition is nearly stuttering-invariant) and `stutinv_full_histL` (via `SimFull.map_proj` in `TlaDsl/ProjSim.lean`), so **both** sides of the equivalence are formulas of the full stuttering theory |
 
-This closes reviewer point 2. Remaining meta-theory items: the action
-algebra (`Enabled (A ∨ B)`, `NstutInv` for `∧`/`∨`, `WF_v(A ∨ B)`), and
-the deep Abadi–Lamport liveness theorem with structural hypotheses
-(`imageFinite`/`finiteState`) — plus, for full closure, showing the
-history canonical spec itself is stuttering-invariant (projection does
-not literally preserve `Compress`, so that needs a compression-under-
-projection lemma).
+The closure needs the fact that projection preserves the full stuttering
+equivalence — not literal `Compress` preservation (projection *merges*
+adjacent blocks), but `Compress (map proj e) = Compress (projCompress e)`
+(the compression of the projection is the compression of the projected
+block values). That is `compress_proj` in
+[`TlaDsl/ProjSim.lean`](../TlaDsl/ProjSim.lean), proved from the block
+machinery (`BlockStart_map_proj` + `nextBlock_map_proj`: the first visible
+change after a block start is the start of the first block whose projected
+value differs), with `eq_of_final`/`compress_constant_of_final` handling
+the final-block case. `SimFull.map_proj` then makes `map proj` a
+`SimFull` morphism.
+
+**Reviewer points 2–4 are closed; point 5's deep A-L liveness (with
+`imageFinite`/`finiteState` structural hypotheses) is in `TlaDsl/LTSRefine.lean`**
+(`leads_to_refines`, `refinement_mapping_liveness_deep`,
+`refinement_mapping_liveness_deep_justice`, `frequently_refines_finite`).
 
 ### 3. Rank-function leads-to — **done**
 

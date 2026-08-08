@@ -1,5 +1,6 @@
 import TlaDsl.Meta
 import TlaDsl.SimBridge
+import TlaDsl.ProjSim
 
 open Classical
 
@@ -557,6 +558,55 @@ theorem representation_theorem {σ : Type u} (F : Pred σ) (hF : StutInvFull F) 
       (canonical_exist_stut_inv (histInit σ) (histN σ) (histL F)) q) ?_ q
   intro e
   simpa [StutInvFull.lift, CanonicalExist] using propext (realizes_stut_history F hF e)
+
+/-! ## Closure: the history canonical spec is stuttering-invariant
+
+The representation equivalence `F ≅ ∃h : Init ∧ □[N]_h ∧ L` relates two
+stuttering-invariant formulas: `F` by hypothesis, and the canonical spec
+itself. Projecting away the hidden component can only merge adjacent
+blocks, so `map proj` preserves `SimFull` (`SimFull.map_proj` in
+`TlaDsl/ProjSim.lean`), which makes the liveness conjunct `L = F ∘ proj`
+stuttering-invariant; the safety part is stuttering-invariant by the
+standard action theorems.
+-/
+
+/-- The history transition `h' = h ++ [s']` is nearly stuttering invariant
+(full equivalence): it only mentions the first two states. -/
+theorem nstutinv_full_histN (σ : Type u) : NstutInvFull (histN σ) := by
+  intro e f hfirst htail
+  have he0₁ : (e 0).1 = (f 0).1 := congrArg Prod.fst hfirst
+  have he0₂ : (e 0).2 = (f 0).2 := congrArg Prod.snd hfirst
+  have hfirst' : (e.drop 1) 0 = (f.drop 1) 0 := SimFull.first htail
+  have he1₁ : (e 1).1 = (f 1).1 := by
+    simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+      Nat.add_left_comm] using congrArg Prod.fst hfirst'
+  have he1₂ : (e 1).2 = (f 1).2 := by
+    simpa [Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+      Nat.add_left_comm] using congrArg Prod.snd hfirst'
+  constructor <;> intro h
+  · simpa [histN, he0₁, he0₂, he1₁, he1₂] using h
+  · simpa [histN, he0₁, he0₂, he1₁, he1₂] using h
+
+/-- The liveness conjunct of the history spec, `L = F ∘ proj`, is
+stuttering-invariant whenever `F` is. -/
+theorem stutinv_full_histL {σ : Type u} (F : Pred σ) (hF : StutInvFull F) :
+    StutInvFull (histL F) := by
+  intro e' e'' hsim
+  unfold histL
+  exact hF (Cslib.ωSequence.map proj e') (Cslib.ωSequence.map proj e'')
+    (SimFull.map_proj hsim)
+
+/-- The history canonical spec is itself stuttering-invariant, so both
+sides of the representation equivalence `F ≅ ∃h : Init ∧ □[N]_h ∧ L` are
+formulas of the full stuttering theory. -/
+theorem stutinv_full_histSpec {σ : Type u} (F : Pred σ) (hF : StutInvFull F) :
+    StutInvFull (histSpec F) := by
+  unfold histSpec Spec
+  exact stutinv_full_and (stutinv_full_statePred (histInit σ))
+    (stutinv_full_and
+      (stutinv_full_stutAlways (histN σ) (fun s : State σ (History σ) => s)
+        (nstutinv_full_histN σ))
+      (stutinv_full_histL F hF))
 
 end Canonical
 
