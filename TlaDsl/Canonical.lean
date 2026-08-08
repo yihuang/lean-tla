@@ -36,6 +36,12 @@ implication, nested operators) need the full history construction — a
 hidden variable per subformula with a consistency action — which is the
 general quotient-based statement: `StutInvFull` formulas descend to
 `StutQuotFull`, and every such formula has a canonical realization.
+
+The general statement is proved below, and it does not need the
+per-operator decomposition at all: the *history construction* (Lamport /
+Abadi–Lamport) handles every formula at once — the hidden variable is the
+finite prefix of the visible behavior, and the liveness conjunct is the
+formula itself evaluated on the projected behavior.
 -/
 
 namespace Canonical
@@ -422,6 +428,135 @@ theorem realizes_and {σ : Type u} {H1 H2 : Type w}
         · simp [eG]
           exact hS.2.2.2
     exact ⟨(hF e).2 ⟨eF, hSF, hprojF⟩, (hG e).2 ⟨eG, hSG, hprojG⟩⟩
+
+/-! ## The representation theorem: the general history construction
+
+Lamport's representation theorem in full: *every* stuttering-invariant
+formula `F` is stuttering-equivalent to an ∃-hidden canonical spec
+`∃h : Init ∧ □[N]_h ∧ L`. The construction is the classic history
+variable: the hidden value at time `n` is the finite prefix of the
+visible behavior, `Init` starts the history at the first visible state,
+`N` appends the new visible state at every step, and the liveness
+conjunct `L` is the original formula evaluated on the projected
+behavior.
+
+* `realizes_history` — every `F` (no assumption needed) is *exactly*
+  realized by the history spec: the projection of a history behavior is
+  the visible behavior itself;
+* `realizes_stut_history` — for stuttering-invariant `F`, the same spec
+  realizes `F` up to stuttering (`RealizesStut`);
+* `representation_theorem` — at the level of the stuttering quotient, the
+  descent of `F` equals the descent of the existential canonical
+  realization: on `StutQuotFull σ` the formula *is*
+  `∃h : Init ∧ □[N]_h ∧ L`.
+-/
+
+/-- The hidden value of the history construction: the finite prefix of
+the visible behavior up to the current time. -/
+abbrev History (σ : Type u) := List σ
+
+/-- `Init` of the history spec: the history starts as the singleton of
+the initial visible state. -/
+def histInit (σ : Type u) : StatePred (State σ (History σ)) :=
+  fun s => s.2 = [s.1]
+
+/-- `N` of the history spec: every step appends the new visible state to
+the history. -/
+def histN (σ : Type u) : Action (State σ (History σ)) :=
+  fun s s' => s'.2 = s.2 ++ [s'.1]
+
+/-- The liveness conjunct: the original formula evaluated on the
+projected visible behavior. -/
+def histL {σ : Type u} (F : Pred σ) : Pred (State σ (History σ)) :=
+  fun e' => F (Cslib.ωSequence.map proj e')
+
+/-- The history canonical spec for `F`: `Init ∧ □[N]_h ∧ F`. -/
+def histSpec {σ : Type u} (F : Pred σ) : Pred (State σ (History σ)) :=
+  Spec (histInit σ) (histN σ) (histL F)
+
+/-- The history at `n + 1` appends the visible state at `n + 1`. -/
+lemma hist_append {σ : Type u} (e : Behavior σ) (n : Nat) :
+    (List.range (n + 1 + 1)).map e = (List.range (n + 1)).map e ++ [e (n + 1)] := by
+  rw [List.range_succ (n := n + 1)]
+  simp [List.map_append]
+
+/-- Every formula is exactly realized by the history canonical spec: the
+projection of the history behavior is the visible behavior itself, so no
+stuttering-invariance assumption is needed. -/
+theorem realizes_history {σ : Type u} (F : Pred σ) :
+    Realizes F (histInit σ) (histN σ) (histL F) := by
+  intro e
+  constructor
+  · intro hFe
+    let e' : Behavior (State σ (History σ)) :=
+      fun n => (e n, List.range (n + 1) |>.map e)
+    refine ⟨e', ?_, ?_⟩
+    · constructor
+      · simp [histInit, statePred, e', List.range_succ]
+      · constructor
+        · intro n
+          have hN : histN σ (e' n) (e' (n + 1)) := by
+            simp [histN, e', hist_append]
+          simp [actionPred, StutAction, Cslib.ωSequence.drop, Nat.add_comm]
+          exact Or.inl hN
+        · have hmap : Cslib.ωSequence.map proj e' = e := by
+            ext n
+            simp [e', proj]
+          simpa [histL, hmap]
+    · ext n
+      simp [e', proj]
+  · rintro ⟨e', hS, hproj⟩
+    simpa [histL, hproj] using hS.2.2
+
+/-- The existential realization of a canonical spec: `e` is realized when
+some hidden behavior whose projection is stuttering-equivalent to `e`
+satisfies the spec. -/
+def CanonicalExist {σ : Type u} {H : Type w}
+    (Init : StatePred (State σ H)) (N : Action (State σ H)) (L : Pred (State σ H)) : Pred σ :=
+  fun e => ∃ e' : Behavior (State σ H), Spec Init N L e' ∧
+    SimFull (Cslib.ωSequence.map proj e') e
+
+/-- Stuttering realization: `F` is stuttering-equivalent to the
+existential canonical realization. -/
+def RealizesStut {σ : Type u} {H : Type w} (F : Pred σ)
+    (Init : StatePred (State σ H)) (N : Action (State σ H)) (L : Pred (State σ H)) : Prop :=
+  ∀ e : Behavior σ, F e ↔ CanonicalExist Init N L e
+
+/-- For stuttering-invariant `F`, the history spec realizes `F` up to
+stuttering. -/
+theorem realizes_stut_history {σ : Type u} (F : Pred σ) (hF : StutInvFull F) :
+    RealizesStut F (histInit σ) (histN σ) (histL F) := by
+  intro e
+  constructor
+  · intro hFe
+    rcases (realizes_history F e).1 hFe with ⟨e', hS, hproj⟩
+    exact ⟨e', hS, by simpa [hproj] using SimFull.refl e⟩
+  · rintro ⟨e', hS, hsim⟩
+    exact (hF (Cslib.ωSequence.map proj e') e hsim).1 (by simpa [histL] using hS.2.2)
+
+/-- The existential canonical realization is stuttering-invariant. -/
+theorem canonical_exist_stut_inv {σ : Type u} {H : Type w}
+    (Init : StatePred (State σ H)) (N : Action (State σ H)) (L : Pred (State σ H)) :
+    StutInvFull (CanonicalExist Init N L) := by
+  intro e f hsim
+  constructor <;> intro hE
+  · rcases hE with ⟨e', hS, hproj⟩
+    exact ⟨e', hS, SimFull.trans hproj hsim⟩
+  · rcases hE with ⟨e', hS, hproj⟩
+    exact ⟨e', hS, SimFull.trans hproj (SimFull.symm hsim)⟩
+
+/-- The representation theorem at the quotient level: a stuttering-
+invariant formula descends to `StutQuotFull`, and its descent is exactly
+the existential canonical realization built from the history variable —
+on the stuttering quotient, the formula *is* `∃h : Init ∧ □[N]_h ∧ L`. -/
+theorem representation_theorem {σ : Type u} (F : Pred σ) (hF : StutInvFull F) :
+    hF.lift = StutInvFull.lift
+      (canonical_exist_stut_inv (histInit σ) (histN σ) (histL F)) := by
+  funext q
+  refine Quot.ind (β := fun q => hF.lift q = StutInvFull.lift
+      (canonical_exist_stut_inv (histInit σ) (histN σ) (histL F)) q) ?_ q
+  intro e
+  simpa [StutInvFull.lift, CanonicalExist] using propext (realizes_stut_history F hF e)
 
 end Canonical
 

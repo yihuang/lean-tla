@@ -154,13 +154,14 @@ quotient embeds into the existing `StutQuotFull`), and the
 `doubled` does not. So `SimFull` is exactly the closure of `Sim` under
 infinitely many stutter steps.*
 
-### 2. Canonical form / representation theorem — **tractable slice done**
+### 2. Canonical form / representation theorem — **done**
 
 Lamport's representation theorem (every stuttering-invariant formula ≅
-`∃ x, Init ∧ □[N]_x ∧ L`) needs a constructive encoding of the formula's
-behavior into a hidden variable. The tractable slice is now proved in
-`TlaDsl/Canonical.lean` as a *behavioral realization*: `Realizes F Init N L`
-holds when every `F`-behavior is the projection of a canonical behavior on
+`∃ h, Init ∧ □[N]_h ∧ L`) is proved in `TlaDsl/Canonical.lean` in two
+layers.
+
+The tractable slice is a *behavioral realization* `Realizes F Init N L`:
+every `F`-behavior is the projection of a canonical behavior on
 `State σ H = σ × H` and vice versa. Proved for the operator closure:
 
 | Operator | Hidden value | Canonical spec |
@@ -170,12 +171,27 @@ holds when every `F`-behavior is the projection of a canonical behavior on
 | `◇⌜p⌝` | `Bool` | `Init = x = p`, `N = x' = x ∨ p`, `L = ◇(x = true)` (`realizes_diamond`) |
 | `F ∧ G` | `H1 × H2` | component-wise `Init`/`N`/`L` with a product transition that lets either component step while the other stutters (`realizes_and`) |
 
-The remaining Boolean/temporal combinations (negation, disjunction,
-implication, nested operators) need the full history construction — a
-hidden variable per subformula with a consistency action — which is the
-general quotient-based statement: `StutInvFull` formulas descend to
-`StutQuotFull` (`TlaDsl/SimFull.lean`), and every such formula has a
-canonical realization.
+The general theorem uses the classic **history-variable construction**
+(Lamport / Abadi–Lamport) and handles *every* formula at once — no
+per-operator decomposition needed. The hidden value at time `n` is the
+finite prefix `[s₀, …, sₙ]` of the visible behavior:
+`Init = h = [s]`, `N = h' = h ++ [s']`, and the liveness conjunct is the
+formula itself evaluated on the projected behavior (`L = F ∘ proj`).
+
+| Theorem | Statement |
+|---|---|
+| `realizes_history` | every `F` (no assumption) is *exactly* realized by the history spec — the projection of a history behavior is the visible behavior itself |
+| `realizes_stut_history` | for `StutInvFull F`, `F` is stuttering-equivalent to the ∃-hidden history spec (`RealizesStut`) |
+| `canonical_exist_stut_inv` | the existential canonical realization is itself stuttering-invariant |
+| `representation_theorem` | at the quotient level: `hF.lift` (the descent of `F` to `StutQuotFull`) equals the descent of the existential canonical realization — on the stuttering quotient the formula *is* `∃h : Init ∧ □[N]_h ∧ L` |
+
+This closes reviewer point 2. Remaining meta-theory items: the action
+algebra (`Enabled (A ∨ B)`, `NstutInv` for `∧`/`∨`, `WF_v(A ∨ B)`), and
+the deep Abadi–Lamport liveness theorem with structural hypotheses
+(`imageFinite`/`finiteState`) — plus, for full closure, showing the
+history canonical spec itself is stuttering-invariant (projection does
+not literally preserve `Compress`, so that needs a compression-under-
+projection lemma).
 
 ### 3. Rank-function leads-to — **done**
 
