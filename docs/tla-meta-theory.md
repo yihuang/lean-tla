@@ -154,14 +154,28 @@ quotient embeds into the existing `StutQuotFull`), and the
 `doubled` does not. So `SimFull` is exactly the closure of `Sim` under
 infinitely many stutter steps.*
 
-### 2. Canonical form / representation theorem — **not started (scoped)**
+### 2. Canonical form / representation theorem — **tractable slice done**
 
 Lamport's representation theorem (every stuttering-invariant formula ≅
 `∃ x, Init ∧ □[N]_x ∧ L`) needs a constructive encoding of the formula's
-behavior into a hidden variable. Tractable slice: prove the theorem for the
-DSL's operator closure — `□⌜p⌝`, `◇⌜p⌝`, boolean and temporal combinations —
-with the canonical spec built per operator, then state the general
-quotient-based version. This is the largest remaining meta-theory item.
+behavior into a hidden variable. The tractable slice is now proved in
+`TlaDsl/Canonical.lean` as a *behavioral realization*: `Realizes F Init N L`
+holds when every `F`-behavior is the projection of a canonical behavior on
+`State σ H = σ × H` and vice versa. Proved for the operator closure:
+
+| Operator | Hidden value | Canonical spec |
+|---|---|---|
+| `⌜p⌝` | `Unit` | `Init = p ∧ x = ()`, `N = True` (`realizes_statePred`) |
+| `□⌜p⌝` | `Bool` | `Init = p ∧ x = true`, `N = x' = x ∧ p` (`realizes_box`) |
+| `◇⌜p⌝` | `Bool` | `Init = x = p`, `N = x' = x ∨ p`, `L = ◇(x = true)` (`realizes_diamond`) |
+| `F ∧ G` | `H1 × H2` | component-wise `Init`/`N`/`L` with a product transition that lets either component step while the other stutters (`realizes_and`) |
+
+The remaining Boolean/temporal combinations (negation, disjunction,
+implication, nested operators) need the full history construction — a
+hidden variable per subformula with a consistency action — which is the
+general quotient-based statement: `StutInvFull` formulas descend to
+`StutQuotFull` (`TlaDsl/SimFull.lean`), and every such formula has a
+canonical realization.
 
 ### 3. Rank-function leads-to — **done**
 
