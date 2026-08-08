@@ -729,6 +729,28 @@ theorem nstutinv_full_unchanged {σ : Type u} {α : Type v} (v : σ → α) :
   · simpa [Unchanged, hv1, hv0] using h
   · simpa [Unchanged, hv1, hv0] using h
 
+/-- Near-stuttering invariance (full) is preserved by action conjunction. -/
+theorem nstutinv_full_and {σ : Type u} {A B : Action σ} (hA : NstutInvFull A)
+    (hB : NstutInvFull B) : NstutInvFull (actAnd A B) := by
+  intro e f hfirst htail
+  constructor
+  · rintro ⟨hAe, hBe⟩
+    exact ⟨(hA e f hfirst htail).1 hAe, (hB e f hfirst htail).1 hBe⟩
+  · rintro ⟨hAf, hBf⟩
+    exact ⟨(hA e f hfirst htail).2 hAf, (hB e f hfirst htail).2 hBf⟩
+
+/-- Near-stuttering invariance (full) is preserved by action disjunction. -/
+theorem nstutinv_full_or {σ : Type u} {A B : Action σ} (hA : NstutInvFull A)
+    (hB : NstutInvFull B) : NstutInvFull (actOr A B) := by
+  intro e f hfirst htail
+  constructor
+  · rintro (hAe | hBe)
+    · exact Or.inl ((hA e f hfirst htail).1 hAe)
+    · exact Or.inr ((hB e f hfirst htail).1 hBe)
+  · rintro (hAf | hBf)
+    · exact Or.inl ((hA e f hfirst htail).2 hAf)
+    · exact Or.inr ((hB e f hfirst htail).2 hBf)
+
 theorem nstutinv_full_angle {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α)
     (hA : NstutInvFull A) : NstutInvFull (AngleAction A v) := by
   intro e f hfirst htail

@@ -255,7 +255,18 @@ disjunction-fairness rule `wf_or_of_wf` (WF of `A` plus `Enabled ⟨A∨B⟩ ⇒
 Enabled ⟨A⟩` gives WF of `A∨B`). The reviewer's suggested
 `WF(A) ∧ WF(B) ⊢ WF(A ∨ B)` is **not** valid: the components can alternate
 enablement while the union stays enabled, so neither is ever
-eventually-always enabled and no fairness fires — documented in the lemma.
+eventually-always enabled and no fairness fires. This is now *proved* in
+`TlaDsl/Counterexamples.lean` (`wf_or_counterexample`, kernel-checked: the
+parity actions on the identity behavior give both WF's vacuously while the
+union is always enabled and never fires). The rest of the algebra:
+
+| Theorem | Statement |
+|---|---|
+| `angle_or` / `angle_and` | `⟨A∨B⟩_v = ⟨A⟩_v ∨ ⟨B⟩_v`, `⟨A∧B⟩_v = ⟨A⟩_v ∧ ⟨B⟩_v` |
+| `enabled_angle_and` | `Enabled ⟨A∧B⟩_v ⇒ Enabled ⟨A⟩_v ∧ Enabled ⟨B⟩_v` |
+| `nstutinv_full_and` / `nstutinv_full_or` | `NstutInvFull` (the `SimFull` analogue) is preserved by `∧`/`∨` — closing reviewer point 4's gap for the full equivalence |
+| `sf_implies_wf` | strong fairness implies weak fairness |
+| `sf_or` | **strong** fairness does distribute over `∨`: `SF_v(A) ∧ SF_v(B) ⊢ SF_v(A ∨ B)` — "infinitely often enabled" distributes over `∨` (via `frequently_or_distrib`), which is exactly why the WF version fails |
 
 ### 5. Deep Abadi–Lamport liveness with structural hypotheses — **LTS layer done, deep theorem next**
 

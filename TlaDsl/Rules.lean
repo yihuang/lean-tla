@@ -419,6 +419,54 @@ theorem wf_or_of_wf {σ : Type u} {α : Type v} (A B : Action σ) (v : σ → α
     simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hh
   simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hj'
 
+/-- `⟨A ∨ B⟩_v` is the disjunction of the angle actions. -/
+theorem angle_or {σ : Type u} {α : Type v} (A B : Action σ) (v : σ → α) (s s' : σ) :
+    AngleAction (actOr A B) v s s' ↔
+      AngleAction A v s s' ∨ AngleAction B v s s' := by
+  constructor
+  · rintro ⟨hAB, hchg⟩
+    rcases hAB with hA' | hB'
+    · exact Or.inl ⟨hA', hchg⟩
+    · exact Or.inr ⟨hB', hchg⟩
+  · rintro (hA' | hB')
+    · exact ⟨Or.inl hA'.1, hA'.2⟩
+    · exact ⟨Or.inr hB'.1, hB'.2⟩
+
+/-- `⟨A ∧ B⟩_v` is the conjunction of the angle actions. -/
+theorem angle_and {σ : Type u} {α : Type v} (A B : Action σ) (v : σ → α) (s s' : σ) :
+    AngleAction (actAnd A B) v s s' ↔
+      AngleAction A v s s' ∧ AngleAction B v s s' := by
+  constructor
+  · rintro ⟨hAB, hchg⟩
+    exact ⟨⟨hAB.1, hchg⟩, ⟨hAB.2, hchg⟩⟩
+  · rintro ⟨hA', hB'⟩
+    exact ⟨⟨hA'.1, hB'.1⟩, hA'.2⟩
+
+/-- `Enabled ⟨A ∧ B⟩` implies both angle-enablements (the converse would
+need a common witness). -/
+theorem enabled_angle_and {σ : Type u} {α : Type v} (A B : Action σ) (v : σ → α) (s : σ) :
+    Enabled (AngleAction (actAnd A B) v) s →
+      Enabled (AngleAction A v) s ∧ Enabled (AngleAction B v) s := by
+  rintro ⟨s', hAB, hchg⟩
+  exact ⟨⟨s', hAB.1, hchg⟩, ⟨s', hAB.2, hchg⟩⟩
+
+/-- Strong fairness implies weak fairness: "enabled infinitely often" is
+stronger than "eventually always enabled", so every `WF` obligation is an
+`SF` obligation. -/
+theorem sf_implies_wf {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α) :
+    Entails (SF_v A v) (WF_v A v) := by
+  intro e h k hWFprem
+  have hprem : always (eventually (statePred (Enabled (AngleAction A v)))) (e.drop k) := by
+    intro n
+    have hEn := hWFprem n
+    refine ⟨0, ?_⟩
+    simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+      Nat.add_left_comm] using hEn
+  have hfire : eventually (actionPred (AngleAction A v)) (e.drop k) := by
+    have h1 := h k
+    simpa [SF_v, tlaImp] using h1 hprem
+  exact hfire
+
 /-! ## Bridge to CSLib's `LeadsTo` -/
 
 /-- The bridge: TlaDsl's leads-to over state predicates is exactly CSLib's
@@ -523,6 +571,82 @@ theorem sf_enabled_frequently_iff {σ : Type u} (e : Behavior σ) (a : Action σ
   · intro h n
     rcases h n with ⟨k, hnk, hk⟩
     exact ⟨k - n, by simpa [Nat.add_sub_of_le hnk] using hk⟩
+
+/-- Strong fairness distributes over action disjunction: if both `A` and
+`B` are strongly fair, so is `A ∨ B`. This is the disjunction law that
+weak fairness lacks: "infinitely often enabled" distributes over `∨` (in
+every suffix, an `A∨B`-enablement is an `A`- or a `B`-enablement, so one
+of the two occurs infinitely often), whereas "eventually always enabled"
+does not — which is why `WF(A) ∧ WF(B) ⊢ WF(A ∨ B)` fails (the components
+can alternate enablement while the union stays enabled). -/
+theorem sf_or {σ : Type u} {α : Type v} (A B : Action σ) (v : σ → α) :
+    Entails (tlaAnd (SF_v A v) (SF_v B v)) (SF_v (actOr A B) v) := by
+  intro e h k hInf
+  -- `Enabled ⟨A ∨ B⟩` occurs infinitely often at positions ≥ k
+  have hFreq : ∃ᶠ j in atTop, Enabled (AngleAction (actOr A B) v) (e (k + j)) := by
+    rw [frequently_atTop]
+    intro n
+    rcases hInf n with ⟨m, hm⟩
+    refine ⟨m + n, ?_, ?_⟩
+    · omega
+    simpa [statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+      Nat.add_left_comm] using hm
+  -- ... so one of the components is enabled infinitely often
+  have hSplit : (∃ᶠ j in atTop, Enabled (AngleAction A v) (e (k + j))) ∨
+      (∃ᶠ j in atTop, Enabled (AngleAction B v) (e (k + j))) := by
+    have hFreq' : ∃ᶠ j in atTop, Enabled (AngleAction A v) (e (k + j)) ∨
+        Enabled (AngleAction B v) (e (k + j)) := by
+      simpa [enabled_angle_or] using hFreq
+    exact (frequently_or_distrib (f := atTop)).1 hFreq'
+  rcases hSplit with hAinf | hBinf
+  · -- `A` enabled infinitely often: SF(A) fires an A-step
+    have hprem : always (eventually (statePred (Enabled (AngleAction A v)))) (e.drop k) := by
+      intro n
+      have hAinf' : ∀ n : Nat, ∃ p : Nat, n ≤ p ∧
+          Enabled (AngleAction A v) (e (k + p)) := by
+        rw [frequently_atTop] at hAinf
+        exact hAinf
+      rcases hAinf' n with ⟨p, hnp, hp⟩
+      rcases Nat.exists_eq_add_of_le hnp with ⟨d, hd⟩
+      refine ⟨d, ?_⟩
+      simpa [statePred, Cslib.ωSequence.drop, hd, Nat.add_assoc, Nat.add_comm,
+        Nat.add_left_comm] using hp
+    have hAfire : eventually (actionPred (AngleAction A v)) (e.drop k) := by
+      have h1 := h.1 k
+      simpa [SF_v, tlaImp] using h1 hprem
+    rcases hAfire with ⟨j, hj⟩
+    refine ⟨j, ?_⟩
+    have hh : AngleAction (actOr A B) v (e (k + j)) (e (k + j + 1)) := by
+      have hAA : AngleAction A v (e (k + j)) (e (k + j + 1)) := by
+        simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+          Nat.add_left_comm] using hj
+      exact (angle_or A B v (e (k + j)) (e (k + j + 1))).2 (Or.inl hAA)
+    simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+      Nat.add_left_comm] using hh
+  · -- `B` enabled infinitely often: symmetric
+    have hprem : always (eventually (statePred (Enabled (AngleAction B v)))) (e.drop k) := by
+      intro n
+      have hBinf' : ∀ n : Nat, ∃ p : Nat, n ≤ p ∧
+          Enabled (AngleAction B v) (e (k + p)) := by
+        rw [frequently_atTop] at hBinf
+        exact hBinf
+      rcases hBinf' n with ⟨p, hnp, hp⟩
+      rcases Nat.exists_eq_add_of_le hnp with ⟨d, hd⟩
+      refine ⟨d, ?_⟩
+      simpa [statePred, Cslib.ωSequence.drop, hd, Nat.add_assoc, Nat.add_comm,
+        Nat.add_left_comm] using hp
+    have hBfire : eventually (actionPred (AngleAction B v)) (e.drop k) := by
+      have h1 := h.2 k
+      simpa [SF_v, tlaImp] using h1 hprem
+    rcases hBfire with ⟨j, hj⟩
+    refine ⟨j, ?_⟩
+    have hh : AngleAction (actOr A B) v (e (k + j)) (e (k + j + 1)) := by
+      have hBB : AngleAction B v (e (k + j)) (e (k + j + 1)) := by
+        simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+          Nat.add_left_comm] using hj
+      exact (angle_or A B v (e (k + j)) (e (k + j + 1))).2 (Or.inr hBB)
+    simpa [actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+      Nat.add_left_comm] using hh
 
 /-- SF1 stated with the frequently-flavoured enablement premise (infinitely
 often enabled, matching `ωSequence.Temporal`/`InfOcc` conventions). The
