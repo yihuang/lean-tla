@@ -130,4 +130,31 @@ lemma step_spec_tr (n : Nat) (s : St) (l : Step) :
         rw [hstep]
         simp [Tla.SpecLTS, Cslib.LTS.Relation.toLTS, Tla.StutAction]
 
+/-! ## The runnable layer, through the generic FLTS bridge -/
+
+/-- The executable step function is a forward simulation into the spec
+LTS: every FLTS transition is a `[Next n]_vars`-step (the E1/E3
+executable-refinement simulation). -/
+theorem flts_sim_spec (n : Nat) :
+    Cslib.LTS.IsSimulation (Tla.forgetLabels (flts n).toLTS)
+      (Tla.SpecLTS (Next n) vars) (fun s t => t = s) :=
+  Tla.flts_sim_spec (Next n) vars (flts n) (fun s l => step_spec_tr n s l)
+
+/-- Every FLTS run of the executable step function is a protocol behavior:
+`foldl`-runs over any label sequence satisfy `□[Next n]_vars` — the E1/E3
+"every run is a behavior" theorem. -/
+theorem flts_run_behavior (n : Nat) {ss : Cslib.ωSequence St} {μs : Cslib.ωSequence Step}
+    (hω : (flts n).toLTS.OmegaExecution ss μs) :
+    Tla.stutAlways (Next n) vars ss :=
+  Tla.flts_omegaExec_behavior (Next n) vars (flts n) (fun s l => step_spec_tr n s l) hω
+
+/-- The executable LTS is deterministic (a step function) and therefore
+image-finite — CSLib's `deterministic_imageFinite`, the structural
+finiteness of the runnable layer. -/
+theorem flts_deterministic (n : Nat) : (flts n).toLTS.Deterministic :=
+  inferInstance
+
+theorem flts_imageFinite (n : Nat) : (flts n).toLTS.ImageFinite :=
+  inferInstance
+
 end TlaDsl.Examples.Streamlet

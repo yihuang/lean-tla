@@ -234,7 +234,18 @@ canonical-form `refinement_mapping_liveness_deep`; `frequently_refines_finite`
 is the finite-state transfer (CSLib's `frequently_in_finite_type` pigeonhole:
 an infinitely-often concrete state property transfers to the mapped abstract
 behavior), and `action_frequently_refines` transfers "fires infinitely
-often" across an action mapping (the fairness ingredient).
+often" across an action mapping (the fairness ingredient). *Update: the
+executable layer is bridged too.* An executable step function is an FLTS
+(CSLib `FLTS`); `flts_sim_spec` proves the executable-refinement simulation
+— every FLTS transition is a spec-LTS transition (the reviewer's
+"executable-refinement = FLTS → LTS simulation"), `flts_omegaExec_behavior`
+proves every `foldl` run over the labels is a `□⟨next⟩_v`-behavior, and
+`flts_deterministic`/`flts_imageFinite` instantiate CSLib's
+`deterministic_imageFinite` on the runnable layer. The deep theorem gained
+the justice ingredient: `refinement_mapping_liveness_deep_justice` derives
+both the abstract `□◇ A'` (via `frequently_refines_justice`) and the
+abstract `p ↝ q` (via `leads_to_refines`) from the concrete ones.
+`StreamletExec.lean` instantiates all of it for Streamlet's step function.
 
 ### CSLib reuse (reviewer table) — **bridge done, lattice complete**
 

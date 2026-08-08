@@ -4,6 +4,7 @@ import Cslib.Foundations.Semantics.LTS.Relation
 import Cslib.Foundations.Semantics.LTS.OmegaExecution
 import Cslib.Foundations.Semantics.LTS.Simulation
 import Cslib.Foundations.Semantics.LTS.HasTau
+import Cslib.Foundations.Semantics.FLTS.FLTSToLTS
 import Cslib.Foundations.Data.OmegaSequence.InfOcc
 
 namespace Tla
@@ -331,5 +332,104 @@ theorem action_frequently_refines {σ τ : Type u}
   apply Frequently.mono hA
   intro i hi
   simpa [Cslib.ωSequence.map] using hmap (e i) (e (i + 1)) hi
+
+/-! ## The executable layer: FLTS ↔ spec LTS -/
+
+/-- Forgetting the labels of an LTS: every transition becomes an internal
+(stutter) transition. This is how an executable step function (one label
+per protocol step) is compared with the spec LTS, whose single label is
+already `τ`. -/
+def forgetLabels {σ : Type u} {L : Type w} (lts : Cslib.LTS σ L) : Cslib.LTS σ Unit where
+  Tr s _ s' := ∃ μ : L, lts.Tr s μ s'
+
+@[simp]
+theorem forgetLabels_tr {σ : Type u} {L : Type w} (lts : Cslib.LTS σ L) {s s' : σ} :
+    (forgetLabels lts).Tr s () s' ↔ ∃ μ : L, lts.Tr s μ s' := by rfl
+
+/-- An executable step function is a forward simulation into the spec LTS:
+every FLTS transition (any label) is a spec transition. This is the
+reviewer's "executable-refinement = FLTS → LTS simulation", instantiated
+from the per-step fact `∀ s l, SpecLTS.Tr s () (flts.tr s l)`. -/
+theorem flts_sim_spec {σ : Type u} {α : Type v} {L : Type w}
+    (next : Action σ) (v : σ → α) (flts : Cslib.FLTS σ L)
+    (hstep : ∀ s l, (SpecLTS next v).Tr s () (flts.tr s l)) :
+    Cslib.LTS.IsSimulation (forgetLabels (flts.toLTS)) (SpecLTS next v)
+      (fun s t => t = s) := by
+  intro s t hrel μ s' htr
+  subst t
+  rcases htr with ⟨l, htrl⟩
+  have heq : flts.tr s l = s' := by
+    simpa [Cslib.FLTS.toLTS, Cslib.FLTS.toLTS_tr] using htrl
+  have htr' : (SpecLTS next v).Tr s () (flts.tr s l) := hstep s l
+  refine ⟨s', ?_, rfl⟩
+  simpa [heq] using htr'
+
+/-- Every FLTS ω-execution (a `foldl` run over the labels) is a spec
+behavior: the executable step function's runs are exactly
+`□⟨next⟩_v`-behaviors. This is the ω-version of the per-step fact — the
+"every run of the step function is a protocol behavior" theorem. -/
+theorem flts_omegaExec_behavior {σ : Type u} {α : Type v} {L : Type w}
+    (next : Action σ) (v : σ → α) (flts : Cslib.FLTS σ L)
+    (hstep : ∀ s l, (SpecLTS next v).Tr s () (flts.tr s l))
+    {ss : Cslib.ωSequence σ} {μs : Cslib.ωSequence L}
+    (hω : (flts.toLTS).OmegaExecution ss μs) : stutAlways next v ss := by
+  rw [← specLTS_omegaExec_iff_stutAlways]
+  intro i
+  have htr' : (SpecLTS next v).Tr (ss i) () (flts.tr (ss i) (μs i)) := hstep (ss i) (μs i)
+  have heq : flts.tr (ss i) (μs i) = ss (i + 1) := by
+    simpa [Cslib.FLTS.toLTS, Cslib.FLTS.toLTS_tr] using hω i
+  rwa [heq] at htr'
+
+/-! ## Deep liveness refinement with the justice ingredient -/
+
+/-- Fairness transfer in TLA vocabulary: a concrete justice action firing
+infinitely often (`□◇ A`) maps to `□◇ A'` along the abstract behavior when
+every `A`-step maps to an `A'`-step. This is the liveness ingredient of
+deep refinement — the mapped justice that an abstract-side liveness proof
+(`rel_rank_lex`, `wf1`, ...) consumes. -/
+theorem frequently_refines_justice {σ τ : Type u}
+    (f : τ → σ) (A : Action τ) (A' : Action σ) (e : Behavior τ)
+    (hmap : ∀ s s', A s s' → A' (f s) (f s'))
+    (hA : Tla.always (Tla.eventually (Tla.actionPred A)) e) :
+    Tla.always (Tla.eventually (Tla.actionPred A')) (Cslib.ωSequence.map f e) := by
+  intro i
+  rcases hA i with ⟨j, hj⟩
+  refine ⟨j, ?_⟩
+  have hj' : A (e (i + j)) (e (i + j + 1)) := by
+    simpa [Tla.actionPred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
+      Nat.add_left_comm] using hj
+  simpa [Tla.actionPred, Cslib.ωSequence.drop, Cslib.ωSequence.map, Nat.add_assoc,
+    Nat.add_comm, Nat.add_left_comm] using hmap (e (i + j)) (e (i + j + 1)) hj'
+
+/-- **Deep A-L liveness refinement with the justice ingredient**: the
+canonical-form refinement where both the abstract liveness `p ↝ q` and the
+abstract justice `□◇ A'` are *derived* — the latter by the fairness
+transfer `frequently_refines_justice` from the concrete `□◇ A`, the former
+by `leads_to_refines` from the concrete `p∘f ↝ q∘f`. This is the deep
+theorem beyond the bare composition form: the liveness conjuncts of the
+abstract spec come from the concrete ones, not from hand-given
+preservation premises. -/
+theorem refinement_mapping_liveness_deep_justice {σ τ : Type u} {α β : Type v}
+    (initA : StatePred σ) (nextA : Action σ) (u : σ → α)
+    (initC : StatePred τ) (nextC : Action τ) (v : τ → β)
+    (A : Action τ) (A' : Action σ) (f : τ → σ) (p q : StatePred σ)
+    (hinit : ∀ s, initC s → initA (f s))
+    (hstep : ∀ s s', StutAction nextC v s s' → StutAction nextA u (f s) (f s'))
+    (hmap : ∀ s s', A s s' → A' (f s) (f s'))
+    (hlt : ∀ e : Behavior τ, tlaAnd (statePred initC) (stutAlways nextC v) e →
+      leadsTo (statePred (fun s => p (f s))) (statePred (fun s => q (f s))) e) :
+    RefinesVia f
+      (tlaAnd (tlaAnd (statePred initC) (stutAlways nextC v))
+        (tlaAnd (always (eventually (actionPred A)))
+          (leadsTo (statePred (fun s => p (f s))) (statePred (fun s => q (f s))))))
+      (tlaAnd (tlaAnd (statePred initA) (stutAlways nextA u))
+        (tlaAnd (always (eventually (actionPred A')))
+          (leadsTo (statePred p) (statePred q)))) := by
+  intro e he
+  constructor
+  · exact refinement_mapping_lts initA nextA u initC nextC v f hinit hstep e ⟨he.1.1, he.1.2⟩
+  · constructor
+    · exact frequently_refines_justice f A A' e hmap he.2.1
+    · exact leads_to_refines initC nextC v f p q hlt e ⟨he.1.1, he.1.2⟩
 
 end Tla
