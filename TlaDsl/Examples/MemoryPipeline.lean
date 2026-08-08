@@ -1,5 +1,6 @@
 import TlaDsl.Basic
 import TlaDsl.Notation
+import TlaDsl.Coercion
 import TlaDsl.RelRank
 import TlaDsl.Tactic
 import Mathlib.Tactic.FinCases
@@ -296,10 +297,7 @@ theorem inv_inductive (t : Nat) (e : Tla.Behavior St)
 /-- The memory-pipeline spec: init, next, per-controller completion
 fairness, and retire fairness. -/
 def Spec : Tla.Pred St :=
-  Tla.tlaAnd (Tla.statePred Init)
-    (Tla.tlaAnd (Tla.always (Tla.actionPred Next))
-      (Tla.tlaAnd (fun e => ∀ c : Nat, (Tla.always (Tla.eventually (Tla.actionPred (Complete c)))) e)
-        (Tla.always (Tla.eventually (Tla.actionPred Retire)))))
+  [t| Init ∧ □ Next ∧ (∀ c : Nat, □◇ Complete c) ∧ □◇ Retire]
 
 /-- `(∀c, □◇ Complete c) ∧ (□◇ Retire) ⊢ issued(t) ↝ retired(t)` via the
 two-component ranking with the global preemption of the retire component. -/

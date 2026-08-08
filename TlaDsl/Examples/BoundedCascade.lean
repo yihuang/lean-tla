@@ -1,5 +1,6 @@
 import TlaDsl.Basic
 import TlaDsl.Notation
+import TlaDsl.Coercion
 import TlaDsl.RelRank
 import TlaDsl.Tactic
 import Mathlib.Tactic.FinCases
@@ -282,10 +283,7 @@ theorem inv_inductive (t : Nat) (e : Tla.Behavior St)
 /-- The bounded-cascade spec: init, next, and the two fairness
 assumptions. -/
 def Spec : Tla.Pred St :=
-  Tla.tlaAnd (Tla.statePred Init)
-    (Tla.tlaAnd (Tla.always (Tla.actionPred Next))
-      (Tla.tlaAnd (Tla.always (Tla.eventually (Tla.actionPred Poll1)))
-        (Tla.always (Tla.eventually (Tla.actionPred Poll2)))))
+  [t| Init ∧ □ Next ∧ □◇ Poll1 ∧ □◇ Poll2]
 
 /-- `(□◇ poll₁) ∧ (□◇ poll₂) ⊢ sent₁(t) ↝ recv₂(t)` for a message `t`,
 via the two-component lexicographic ranking `(δ₀, δ₁)` with the

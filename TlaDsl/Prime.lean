@@ -596,9 +596,21 @@ partial def liftFormula (stx : TSyntax `term) : MacroM (TSyntax `term) :=
   | `(∃ $x:ident, $b) => do
       let lb ← liftFormula b
       `(tlaExists (fun $x:ident => $lb))
+  | `(∃ $x:ident : $T, $b) => do
+      let lb ← liftFormula b
+      `(tlaExists (fun $x:ident : $T => $lb))
+  | `(∃ $x:ident ∈ $S, $b) => do
+      let lb ← liftFormula b
+      `(tlaExists (fun $x:ident => $x ∈ $S ∧ $lb))
   | `(∀ $x:ident, $b) => do
       let lb ← liftFormula b
       `(tlaForall (fun $x:ident => $lb))
+  | `(∀ $x:ident : $T, $b) => do
+      let lb ← liftFormula b
+      `(tlaForall (fun $x:ident : $T => $lb))
+  | `(∀ $x:ident ∈ $S, $b) => do
+      let lb ← liftFormula b
+      `(tlaForall (fun $x:ident => $x ∈ $S → $lb))
   | `($a ∧ $b) => do
       let la ← liftFormula a
       let lb ← liftFormula b

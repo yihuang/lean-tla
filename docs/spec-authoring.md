@@ -48,6 +48,22 @@ def SpecWF : Tla.Pred StConc := [t| (Init ∧ □[Next]_Vars) ∧ Tla.WF_v Next 
   state (and pre/post states for actions) and lift every identifier of
   state-function type, so `x'` is the post-state value of `x`. Anything
   Lean elaborates works inside — operators, `∀/∃` binders, `∈`, named
+
+`[t| ...]` is the temporal formula: state predicates and actions lift
+invisibly (`Init` becomes `⌜Init⌝`, a bare `Next` becomes `□ actionPred
+Next`), so a fairness spec reads like TLA:
+
+```lean
+def Spec : Tla.Pred St := [t| Init ∧ □ Next ∧ □◇ Poll1A ∧ □◇ Poll2]
+def SpecParam : Tla.Pred St := [t| Init ∧ □ Next ∧ ∀ p : Nat, □◇ Poll p]
+```
+
+* `□` is `always`, `◇` is `eventually`, `□[A]_v` is the stuttering-closed
+  `stutAlways A v` (the canonical TLA step form), and typed `∀`/`∃`
+  binders become the temporal `tlaForall`/`tlaExists` — so parameterized
+  fairness (`∀ p, □◇ Poll p`) needs no lambda boilerplate. The invisible
+  lifting is the two `Coe` instances in `TlaDsl/Coercion.lean` (state
+  predicates via `statePred`, actions via `actionPred`).
   state-first predicates (`NotarizedBy n b e` inside `[p| ...]`).
 * `[t| ...]` rewrites the propositional connectives to the temporal ones;
   `□[Next]_Vars` is stuttering closure, `WF_v` weak fairness.

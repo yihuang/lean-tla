@@ -1,5 +1,6 @@
 import TlaDsl.Basic
 import TlaDsl.Notation
+import TlaDsl.Coercion
 import TlaDsl.RelRank
 import TlaDsl.Tactic
 import Mathlib.Tactic.FinCases
@@ -158,9 +159,7 @@ theorem inv_inductive (t : Nat) (e : Tla.Behavior St)
 
 /-- The parameterized-queue spec: init, next, and per-owner poll fairness. -/
 def Spec : Tla.Pred St :=
-  Tla.tlaAnd (Tla.statePred Init)
-    (Tla.tlaAnd (Tla.always (Tla.actionPred Next))
-      (fun e => ∀ p : Nat, (Tla.always (Tla.eventually (Tla.actionPred (Poll p)))) e))
+  [t| Init ∧ □ Next ∧ ∀ p : Nat, □◇ Poll p]
 
 /-- `(∀p, □◇ Poll p) ⊢ sent(t) ↝ recv(t)` for a message `t`, via the
 single ranking `δ = pend ∩ {τ ≤ t}` with the parameterized scheduler

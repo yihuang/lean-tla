@@ -808,3 +808,41 @@ next tactic):
    **comma-separated** in the syntax declaration; and the state type is
    `Entails`'s *first* application argument (`@Tla.Entails σ F G`), not
    the second.
+
+## 6. Temporal spec notation: specs read like TLA
+
+The `[t| ...]` bracket already handled `Init ∧ □[Next]_vars`; the missing
+piece was that **actions didn't lift to temporal formulas**. The second
+`Coe` in `TlaDsl/Coercion.lean` (`Coe (σ → σ → Prop) (Behavior σ → Prop)`
+via `actionPred`, next to the existing state-predicate one) makes bare
+actions work in temporal position, so the `Spec` definitions in the
+rule-10/11 examples collapsed from a four-line `tlaAnd`/`always`/`actionPred`
+chain to one line:
+
+```lean
+def Spec : Tla.Pred St := [t| Init ∧ □ Next ∧ □◇ Poll1A ∧ □◇ Poll2]
+def SpecParam : Tla.Pred St := [t| Init ∧ □ Next ∧ ∀ p : Nat, □◇ Poll p]
+```
+
+`liftFormula` (the `[t|]` macro) gained the **typed** `∀ x : T, ...` /
+`∃ x : T, ...` (and set-bounded `∈`) forms, which now become
+`tlaForall`/`tlaExists` instead of falling through to a Pi type. Note the
+semantics-preserving choice: the examples keep `□ Next` (plain
+`always (actionPred Next)`); the stuttering-closed `□[N]_v` is the
+canonical TLA form (`Tutorial.lean` uses it) but would add stutter cases
+to every step proof, so it is documented rather than forced on the
+existing examples.
+
+## Backlog
+
+- **L2 per-step automation** — the conserve/reduce/stability clause bodies
+  of the four rule-10/11 obligations are still hand-proved (~500 lines in
+  `LexReordering`). A `tla_l2_step`-style tactic would split the `L2Step`
+  structure and grind the algebraic clauses, leaving the genuinely
+  mathematical ones (which are real proofs, so the payoff is partial).
+- **Suffix-level temporal wrapper automation** — the Streamlet
+  `epoch_step`/`window_progress` proofs are full of
+  `(e.drop k) j ↔ e (k + j)` conversions. A tactic that makes the
+  suffix/offset rewriting automatic (beyond `tla_drop_simpa`'s
+  per-call `simpa` sets) would cut the temporal wrapper's remaining
+  mechanical overhead.
