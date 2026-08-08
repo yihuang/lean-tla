@@ -835,11 +835,48 @@ existing examples.
 
 ## Backlog
 
-- **L2 per-step automation** — the conserve/reduce/stability clause bodies
-  of the four rule-10/11 obligations are still hand-proved (~500 lines in
-  `LexReordering`). A `tla_l2_step`-style tactic would split the `L2Step`
-  structure and grind the algebraic clauses, leaving the genuinely
-  mathematical ones (which are real proofs, so the payoff is partial).
+*Empty — the automation backlog is cleared. The remaining big items are
+meta-theory (Sim↔SimFull quotient, representation theorem) and the BFT
+fairness bridge, tracked in `north-star.md`/`tla-meta-theory.md`.*
+
+## 8. L2 per-step automation: `tla_l2_step` / `tla_l2_step_param`
+
+The last mechanical chunk of the relational-ranking examples was the
+`L2Step` obligation structure: `right; constructor`, the
+`φ' ∧ (conserve ∧ (reduce ∧ stability))` nesting, and per-component
+`intro i; fin_cases i` on every clause — repeated per action case. The
+two macros now do the whole structure in one call, leaving the `φ'`
+preservation goal (unsplit) and the per-component clause goals in order:
+
+```lean
+      tla_l2_step        -- plain Rule 10
+      tla_l2_step_param p  -- parameterized Rule 11 (parameter name given)
+      · -- φ' preserved (unsplit)
+        change ...
+        constructor
+        · ...
+        · ...
+      · -- δ₀ conserved
+        intro hnp ...
+      · -- δ₁ conserved
+        ...
+      · -- δ₀ reduced when ... fires
+        intro hreq hR ...
+      · -- δ₁ reduced ...
+        ...
+      · -- ψ₀ stable
+        intro hreq hnr ...
+      · -- ψ₁ stable
+        ...
+```
+
+All four rule-10/11 examples (`LexReordering`, `BoundedCascade`,
+`ParamQueue`, `MemoryPipeline`) were refactored onto it — the nested
+clause structure is gone, the parameterized variant takes the parameter
+name (`p`, `c`) so the clause bodies keep their own variable. The macros
+require `Mathlib.Tactic.FinCases` (now imported by `Tactic.lean`), and the
+goal-order trick (`swap`/`rotate_left`) exists so the blanket `constructor`
+never splits the `φ'` goal's internal disjunctions.
 
 ## 7. Suffix-level temporal wrapper automation: `tla_suffix`
 

@@ -3,6 +3,7 @@ import TlaDsl.RelRank
 import TlaDsl.Meta
 import TlaDsl.Prime
 import TlaDsl.Pretty
+import Mathlib.Tactic.FinCases
 
 import Lean
 
@@ -252,6 +253,40 @@ elab "tla_rel_rank_param " p:term ", " q:term ", " φ:term ", " δs:term ", " ψ
 memory-pipeline example. -/
 elab "tla_rel_rank_param_global " p:term ", " q:term ", " φ:term ", " δs:term ", " ψs:term ", " rs:term ", " H:term : tactic =>
   relRankCore ``Tla.rel_rank_param_global p q φ δs ψs rs H
+
+/-- **L2 per-step structure** (plain Rule 10 form). Inside an `L2Step`
+obligation after the step split, `tla_l2_step` assumes the step does not
+reach `q` (`right`), splits the `φ' ∧ (conserve ∧ (reduce ∧ stability))`
+nesting, and `intro i; fin_cases i` on each clause — leaving, in order:
+the `φ'`-preservation goal (unsplit), then the per-component conserve,
+reduce and stability goals (`intro hnp` / `intro hreq hR` /
+`intro hreq hnr` each). Requires `Mathlib.Tactic.FinCases` in scope. -/
+macro "tla_l2_step" : tactic =>
+  `(tactic| (
+    right
+    constructor
+    swap
+    constructor
+    rotate_left 1
+    constructor
+    rotate_left 2
+    all_goals try (intro i; fin_cases i)
+  ))
+
+/-- **L2 per-step structure** (parameterized Rule 11 form): the clauses
+quantify over the parameter `p` first (`∀ p, ∀ i, ...`), so the intros are
+`intro $p i; fin_cases i`; otherwise identical to `tla_l2_step`. -/
+macro "tla_l2_step_param " p:ident : tactic =>
+  `(tactic| (
+    right
+    constructor
+    swap
+    constructor
+    rotate_left 1
+    constructor
+    rotate_left 2
+    all_goals try (intro $p i; fin_cases i)
+  ))
 
 /-- The invariant-threaded variant of `refine_via`: applies
 `refinement_mapping_inv`, additionally requiring the concrete invariant

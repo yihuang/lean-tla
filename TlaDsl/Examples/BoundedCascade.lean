@@ -318,8 +318,7 @@ theorem cascade_liveness (t : Nat) :
     · -- a send
       rcases hsend with ⟨u, hsend'⟩
       rcases hsend' with ⟨hu, hp1', hl', hs1', hq2s, hr2'⟩
-      right
-      constructor
+      tla_l2_step
       · change t ∈ (e (k + 1)).sent1 ∧ (t ∈ (e (k + 1)).pend1 ∨ t ∈ (e (k + 1)).queue2)
         constructor
         · rw [hs1']
@@ -331,67 +330,66 @@ theorem cascade_liveness (t : Nat) :
           · right
             rw [hq2s]
             exact hq
-      · constructor
-        · intro i _hnp
-          fin_cases i
-          · have htl : t ≤ (e k).last := h1 t hφ.1
-            have hut : u > t := lt_of_le_of_lt htl hu
-            intro x hx
-            simp [deltas, Delta0] at hx ⊢
-            constructor
-            · have hxne : x ≠ u := ne_of_lt (lt_of_le_of_lt hx.2 hut)
-              rw [hp1'] at hx
-              exact (Finset.mem_insert.mp hx.1).resolve_left hxne
-            · exact hx.2
-          · have htl : t ≤ (e k).last := h1 t hφ.1
-            have hut : u > t := lt_of_le_of_lt htl hu
-            intro x hx
-            simp [deltas, Delta1] at hx ⊢
-            constructor
-            · rcases hx.1 with hx1 | hx2
-              · rw [hp1'] at hx1
-                rcases Finset.mem_insert.mp hx1 with hxu | hx1'
-                · exact False.elim ((ne_of_lt (lt_of_le_of_lt hx.2 hut)) hxu)
-                · exact Or.inl hx1'
-              · rw [hq2s] at hx2
-                exact Or.inr hx2
-            · exact hx.2
-        · constructor
-          · intro i
-            fin_cases i
-            · intro _hreq hR
-              exfalso
-              rcases hR with ⟨h, hq2, _hp1'', hq2p, _hl'', _hs1'', _hr2''⟩
-              have hc : insert (Finset.min' (e k).pend1 h) (∅ : Finset Nat) = (∅ : Finset Nat) := by
-                rw [← hq2p, hq2s, hq2]
-              have hm : Finset.min' (e k).pend1 h ∈ (∅ : Finset Nat) := by
-                rw [← hc]
-                simp
-              exact (Finset.notMem_empty (Finset.min' (e k).pend1 h)) hm
-            · intro _hreq hR
-              exfalso
-              rcases hR with ⟨h, hq2p', _hr2'', _hp1'', _hl'', _hs1''⟩
-              have hq2old : (e k).queue2 = ∅ := by
-                rw [← hq2s, hq2p']
-              rw [hq2old] at h
-              simp at h
-          · intro i
-            fin_cases i
-            · intro hreq _hnr hex
-              rcases hex with ⟨τ, hτ, hτle⟩
-              rw [hq2s] at hτ
-              exact hreq.1 ⟨τ, hτ, hτle⟩
-            · intro hreq _hnr
-              rcases hreq.1 with ⟨τ, hτ, hτle⟩
-              refine ⟨τ, ?_, hτle⟩
-              rw [hq2s]
-              exact hτ
+      · -- δ₀ conserved
+        intro _hnp
+        have htl : t ≤ (e k).last := h1 t hφ.1
+        have hut : u > t := lt_of_le_of_lt htl hu
+        intro x hx
+        simp [deltas, Delta0] at hx ⊢
+        constructor
+        · have hxne : x ≠ u := ne_of_lt (lt_of_le_of_lt hx.2 hut)
+          rw [hp1'] at hx
+          exact (Finset.mem_insert.mp hx.1).resolve_left hxne
+        · exact hx.2
+      · -- δ₁ conserved
+        intro _hnp
+        have htl : t ≤ (e k).last := h1 t hφ.1
+        have hut : u > t := lt_of_le_of_lt htl hu
+        intro x hx
+        simp [deltas, Delta1] at hx ⊢
+        constructor
+        · rcases hx.1 with hx1 | hx2
+          · rw [hp1'] at hx1
+            rcases Finset.mem_insert.mp hx1 with hxu | hx1'
+            · exact False.elim ((ne_of_lt (lt_of_le_of_lt hx.2 hut)) hxu)
+            · exact Or.inl hx1'
+          · rw [hq2s] at hx2
+            exact Or.inr hx2
+        · exact hx.2
+      · -- δ₀ reduced when poll₁ fires
+        intro _hreq hR
+        exfalso
+        rcases hR with ⟨h, hq2, _hp1'', hq2p, _hl'', _hs1'', _hr2''⟩
+        have hc : insert (Finset.min' (e k).pend1 h) (∅ : Finset Nat) = (∅ : Finset Nat) := by
+          rw [← hq2p, hq2s, hq2]
+        have hm : Finset.min' (e k).pend1 h ∈ (∅ : Finset Nat) := by
+          rw [← hc]
+          simp
+        exact (Finset.notMem_empty (Finset.min' (e k).pend1 h)) hm
+      · -- δ₁ reduced when poll₂ fires
+        intro _hreq hR
+        exfalso
+        rcases hR with ⟨h, hq2p', _hr2'', _hp1'', _hl'', _hs1''⟩
+        have hq2old : (e k).queue2 = ∅ := by
+          rw [← hq2s, hq2p']
+        rw [hq2old] at h
+        simp at h
+      · -- ψ₀ stable
+        intro hreq _hnr hex
+        rcases hex with ⟨τ, hτ, hτle⟩
+        rw [hq2s] at hτ
+        exact hreq.1 ⟨τ, hτ, hτle⟩
+      · -- ψ₁ stable
+        intro hreq _hnr
+        rcases hreq.1 with ⟨τ, hτ, hτle⟩
+        refine ⟨τ, ?_, hτle⟩
+        rw [hq2s]
+        exact hτ
     · rcases hrest with hp1step | hp2step
       · -- poll₁
         rcases hp1step with ⟨h, hq2, hp1', hq2p, hl', hs1', hr2'⟩
         let m := Finset.min' (e k).pend1 h
-        right
-        constructor
+        tla_l2_step
         · change t ∈ (e (k + 1)).sent1 ∧ (t ∈ (e (k + 1)).pend1 ∨ t ∈ (e (k + 1)).queue2)
           constructor
           · rw [hs1']
@@ -406,60 +404,58 @@ theorem cascade_liveness (t : Nat) :
                 exact Finset.mem_erase.mpr ⟨htm, hpa⟩
             · rw [hq2] at hq
               exact False.elim (Finset.notMem_empty t hq)
-        · constructor
-          · intro i hnp
-            fin_cases i
-            · intro x hx
-              simp [deltas, Delta0] at hx ⊢
-              constructor
-              · rw [hp1'] at hx
-                exact (Finset.erase_subset m (e k).pend1) hx.1
-              · exact hx.2
-            · -- δ₁ is conserved under ψ₁; poll₁ cannot fire under ψ₁
-              have hψ0 : psis t 0 (e k) := by
-                simp [psis, hq2]
-              exact False.elim (hnp ⟨(0 : Fin 2), ⟨by decide, hψ0⟩⟩)
-          · constructor
-            · intro i
-              fin_cases i
-              · intro _hreq hR
-                rcases hR with ⟨_h, _hq2', _hp1'', _hq2p', _hl'', _hs1'', _hr2''⟩
-                have ht1 : t ∈ (e k).pend1 := by
-                  rcases hφ.2 with hpa | hq
-                  · exact hpa
-                  · rw [hq2] at hq
-                    exact False.elim (Finset.notMem_empty t hq)
-                have hmle : m ≤ t := (Finset.isLeast_min' (e k).pend1 h).2 ht1
-                refine ⟨m, ?_, ?_⟩
-                · simp [deltas, Delta0]
-                  exact ⟨Finset.min'_mem (e k).pend1 h, hmle⟩
-                · intro hδ
-                  simp [deltas, Delta0] at hδ
-                  rw [hp1'] at hδ
-                  exact (Finset.mem_erase.mp hδ.1).1 rfl
-              · intro _hreq hR
-                exfalso
-                rcases hR with ⟨h2', hq2p', _hr2'', _hp1'', _hl'', _hs1''⟩
-                have hc : insert m (∅ : Finset Nat) = (∅ : Finset Nat) := by
-                  rw [← hq2p, hq2p']
-                have hm : m ∈ (∅ : Finset Nat) := by
-                  rw [← hc]
-                  simp
-                exact (Finset.notMem_empty m) hm
-            · intro i
-              fin_cases i
-              · intro _hreq hnr
-                exact False.elim (hnr ⟨h, hq2, hp1', hq2p, hl', hs1', hr2'⟩)
-              · intro _hreq _hnr
-                have ht1 : t ∈ (e k).pend1 := by
-                  rcases hφ.2 with hpa | hq
-                  · exact hpa
-                  · rw [hq2] at hq
-                    exact False.elim (Finset.notMem_empty t hq)
-                have hmle : m ≤ t := (Finset.isLeast_min' (e k).pend1 h).2 ht1
-                refine ⟨m, ?_, hmle⟩
-                rw [hq2p]
-                exact Finset.mem_insert_self m ∅
+        · -- δ₀ conserved
+          intro hnp x hx
+          simp [deltas, Delta0] at hx ⊢
+          constructor
+          · rw [hp1'] at hx
+            exact (Finset.erase_subset m (e k).pend1) hx.1
+          · exact hx.2
+        · -- δ₁ is conserved under ψ₁; poll₁ cannot fire under ψ₁
+          intro hnp
+          have hψ0 : psis t 0 (e k) := by
+            simp [psis, hq2]
+          exact False.elim (hnp ⟨(0 : Fin 2), ⟨by decide, hψ0⟩⟩)
+        · -- δ₀ reduced when poll₁ fires
+          intro _hreq hR
+          rcases hR with ⟨_h, _hq2', _hp1'', _hq2p', _hl'', _hs1'', _hr2''⟩
+          have ht1 : t ∈ (e k).pend1 := by
+            rcases hφ.2 with hpa | hq
+            · exact hpa
+            · rw [hq2] at hq
+              exact False.elim (Finset.notMem_empty t hq)
+          have hmle : m ≤ t := (Finset.isLeast_min' (e k).pend1 h).2 ht1
+          refine ⟨m, ?_, ?_⟩
+          · simp [deltas, Delta0]
+            exact ⟨Finset.min'_mem (e k).pend1 h, hmle⟩
+          · intro hδ
+            simp [deltas, Delta0] at hδ
+            rw [hp1'] at hδ
+            exact (Finset.mem_erase.mp hδ.1).1 rfl
+        · -- δ₁ reduced when poll₂ fires
+          intro _hreq hR
+          exfalso
+          rcases hR with ⟨h2', hq2p', _hr2'', _hp1'', _hl'', _hs1''⟩
+          have hc : insert m (∅ : Finset Nat) = (∅ : Finset Nat) := by
+            rw [← hq2p, hq2p']
+          have hm : m ∈ (∅ : Finset Nat) := by
+            rw [← hc]
+            simp
+          exact (Finset.notMem_empty m) hm
+        · -- ψ₀ stable
+          intro _hreq hnr
+          exact False.elim (hnr ⟨h, hq2, hp1', hq2p, hl', hs1', hr2'⟩)
+        · -- ψ₁ stable
+          intro _hreq _hnr
+          have ht1 : t ∈ (e k).pend1 := by
+            rcases hφ.2 with hpa | hq
+            · exact hpa
+            · rw [hq2] at hq
+              exact False.elim (Finset.notMem_empty t hq)
+          have hmle : m ≤ t := (Finset.isLeast_min' (e k).pend1 h).2 ht1
+          refine ⟨m, ?_, hmle⟩
+          rw [hq2p]
+          exact Finset.mem_insert_self m ∅
       · -- poll₂
         rcases hp2step with ⟨h, hq2p', hr2', hp1', hl', hs1'⟩
         let m := Finset.min' (e k).queue2 h
@@ -477,8 +473,7 @@ theorem cascade_liveness (t : Nat) :
           refine ⟨1 + t0, ?_⟩
           simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
             Nat.add_left_comm] using ht0
-        · right
-          constructor
+        · tla_l2_step
           · change t ∈ (e (k + 1)).sent1 ∧ (t ∈ (e (k + 1)).pend1 ∨ t ∈ (e (k + 1)).queue2)
             constructor
             · rw [hs1']
@@ -491,56 +486,54 @@ theorem cascade_liveness (t : Nat) :
                 have hmmem : m ∈ (e k).queue2 := Finset.min'_mem (e k).queue2 h
                 have hteq : t = m := (Finset.card_le_one.1 h3) t htmem m hmmem
                 exact False.elim (htm hteq)
-          · constructor
-            · intro i _hnp
-              fin_cases i
-              · intro x hx
-                simp [deltas, Delta0] at hx ⊢
-                rw [hp1'] at hx
-                exact hx
-              · intro x hx
-                simp [deltas, Delta1] at hx ⊢
-                constructor
-                · rcases hx.1 with hx1 | hx2
-                  · rw [hp1'] at hx1
-                    exact Or.inl hx1
-                  · rw [hq2p'] at hx2
-                    exact False.elim (Finset.notMem_empty x hx2)
-                · exact hx.2
-            · constructor
-              · intro i
-                fin_cases i
-                · intro _hreq hR
-                  exfalso
-                  rcases hR with ⟨h1', _hq2, _hp1'', hq2'', _hl'', _hs1'', _hr2''⟩
-                  have hc : insert (Finset.min' (e k).pend1 h1') (∅ : Finset Nat) = (∅ : Finset Nat) := by
-                    rw [← hq2'', hq2p']
-                  have hm : Finset.min' (e k).pend1 h1' ∈ (∅ : Finset Nat) := by
-                    rw [← hc]
-                    simp
-                  exact (Finset.notMem_empty (Finset.min' (e k).pend1 h1')) hm
-                · intro hreq _hR
-                  rcases hreq.1 with ⟨τ, hτ, hτle⟩
-                  have hmle : m ≤ t := le_trans ((Finset.isLeast_min' (e k).queue2 h).2 hτ) hτle
-                  refine ⟨m, ?_, ?_⟩
-                  · simp [deltas, Delta1]
-                    exact ⟨Or.inr (Finset.min'_mem (e k).queue2 h), hmle⟩
-                  · intro hδ
-                    simp [deltas, Delta1] at hδ
-                    rw [hp1', hq2p'] at hδ
-                    have hmp : ¬ m ∈ (e k).pend1 := fun hp => h4 m hp
-                      (Finset.min'_mem (e k).queue2 h)
-                    rcases hδ.1 with hmp' | hem
-                    · exact hmp hmp'
-                    · exact Finset.notMem_empty m hem
-              · intro i
-                fin_cases i
-                · intro _hreq _hnr hex
-                  rcases hex with ⟨τ, hτ, _hτle⟩
-                  rw [hq2p'] at hτ
-                  exact Finset.notMem_empty τ hτ
-                · intro _hreq hnr
-                  exact False.elim (hnr ⟨h, hq2p', hr2', hp1', hl', hs1'⟩)
+          · -- δ₀ conserved
+            intro _hnp x hx
+            simp [deltas, Delta0] at hx ⊢
+            rw [hp1'] at hx
+            exact hx
+          · -- δ₁ conserved
+            intro _hnp x hx
+            simp [deltas, Delta1] at hx ⊢
+            constructor
+            · rcases hx.1 with hx1 | hx2
+              · rw [hp1'] at hx1
+                exact Or.inl hx1
+              · rw [hq2p'] at hx2
+                exact False.elim (Finset.notMem_empty x hx2)
+            · exact hx.2
+          · -- δ₀ reduced when poll₁ fires
+            intro _hreq hR
+            exfalso
+            rcases hR with ⟨h1', _hq2, _hp1'', hq2'', _hl'', _hs1'', _hr2''⟩
+            have hc : insert (Finset.min' (e k).pend1 h1') (∅ : Finset Nat) = (∅ : Finset Nat) := by
+              rw [← hq2'', hq2p']
+            have hm : Finset.min' (e k).pend1 h1' ∈ (∅ : Finset Nat) := by
+              rw [← hc]
+              simp
+            exact (Finset.notMem_empty (Finset.min' (e k).pend1 h1')) hm
+          · -- δ₁ reduced when poll₂ fires
+            intro hreq _hR
+            rcases hreq.1 with ⟨τ, hτ, hτle⟩
+            have hmle : m ≤ t := le_trans ((Finset.isLeast_min' (e k).queue2 h).2 hτ) hτle
+            refine ⟨m, ?_, ?_⟩
+            · simp [deltas, Delta1]
+              exact ⟨Or.inr (Finset.min'_mem (e k).queue2 h), hmle⟩
+            · intro hδ
+              simp [deltas, Delta1] at hδ
+              rw [hp1', hq2p'] at hδ
+              have hmp : ¬ m ∈ (e k).pend1 := fun hp => h4 m hp
+                (Finset.min'_mem (e k).queue2 h)
+              rcases hδ.1 with hmp' | hem
+              · exact hmp hmp'
+              · exact Finset.notMem_empty m hem
+          · -- ψ₀ stable
+            intro _hreq _hnr hex
+            rcases hex with ⟨τ, hτ, _hτle⟩
+            rw [hq2p'] at hτ
+            exact Finset.notMem_empty τ hτ
+          · -- ψ₁ stable
+            intro _hreq hnr
+            exact False.elim (hnr ⟨h, hq2p', hr2', hp1', hl', hs1'⟩)
   · -- S3: scheduled justice fires (from the two fairness assumptions)
     tla_spec_split
     intro k _hφ i hψ

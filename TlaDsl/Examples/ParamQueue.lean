@@ -191,52 +191,47 @@ theorem param_queue_liveness (t : Nat) :
     · -- a send
       rcases hsend with ⟨u, hsend'⟩
       rcases hsend' with ⟨hu, hp', hl', hs', hr', ho'⟩
-      right
-      constructor
+      tla_l2_step_param p
       · change t ∈ (e (k + 1)).sent ∧ t ∈ (e (k + 1)).pend
         constructor
         · rw [hs']
           exact Finset.mem_insert.mpr (Or.inr hφ.1)
         · rw [hp']
           exact Finset.mem_insert.mpr (Or.inr hφ.2)
-      · constructor
-        · intro p i hnp
-          fin_cases i
-          have htl : t ≤ (e k).last := h1 t hφ.1
-          have hut : u > t := lt_of_le_of_lt htl hu
-          intro x hx
-          simp [deltas] at hx ⊢
-          constructor
-          · rw [hp'] at hx
-            rcases Finset.mem_insert.mp hx.1 with hxu | hx1
-            · exact False.elim ((ne_of_lt (lt_of_le_of_lt hx.2 hut)) hxu)
-            · exact hx1
-          · exact hx.2
-        · constructor
-          · intro p i
-            fin_cases i
-            intro hreq hR
-            rcases hR with ⟨h, hpoll', _hr'', _hl'', _hs'', _ho''⟩
-            let m := Finset.min' (owned p (e k)) h
-            have htowned : t ∈ owned p (e k) :=
-              Finset.mem_filter.mpr ⟨hreq.1.2, hreq.1.1⟩
-            have hmle : m ≤ t := (Finset.isLeast_min' (owned p (e k)) h).2 htowned
-            refine ⟨m, ?_, ?_⟩
-            · simp [deltas]
-              exact ⟨(Finset.filter_subset (fun τ => (e k).owner τ = p) (e k).pend)
-                (Finset.min'_mem (owned p (e k)) h), hmle⟩
-            · intro hδ
-              simp [deltas] at hδ
-              rw [hpoll'] at hδ
-              exact (Finset.mem_erase.mp hδ.1).1 rfl
-          · intro p i
-            fin_cases i
-            intro hreq hnr
-            constructor
-            · rw [ho']
-              exact hreq.1.1
-            · rw [hp']
-              exact Finset.mem_insert.mpr (Or.inr hreq.1.2)
+      · -- δ conserved
+        intro hnp
+        have htl : t ≤ (e k).last := h1 t hφ.1
+        have hut : u > t := lt_of_le_of_lt htl hu
+        intro x hx
+        simp [deltas] at hx ⊢
+        constructor
+        · rw [hp'] at hx
+          rcases Finset.mem_insert.mp hx.1 with hxu | hx1
+          · exact False.elim ((ne_of_lt (lt_of_le_of_lt hx.2 hut)) hxu)
+          · exact hx1
+        · exact hx.2
+      · -- δ reduced when `Poll p` fires
+        intro hreq hR
+        rcases hR with ⟨h, hpoll', _hr'', _hl'', _hs'', _ho''⟩
+        let m := Finset.min' (owned p (e k)) h
+        have htowned : t ∈ owned p (e k) :=
+          Finset.mem_filter.mpr ⟨hreq.1.2, hreq.1.1⟩
+        have hmle : m ≤ t := (Finset.isLeast_min' (owned p (e k)) h).2 htowned
+        refine ⟨m, ?_, ?_⟩
+        · simp [deltas]
+          exact ⟨(Finset.filter_subset (fun τ => (e k).owner τ = p) (e k).pend)
+            (Finset.min'_mem (owned p (e k)) h), hmle⟩
+        · intro hδ
+          simp [deltas] at hδ
+          rw [hpoll'] at hδ
+          exact (Finset.mem_erase.mp hδ.1).1 rfl
+      · -- ψ stable
+        intro hreq hnr
+        constructor
+        · rw [ho']
+          exact hreq.1.1
+        · rw [hp']
+          exact Finset.mem_insert.mpr (Or.inr hreq.1.2)
     · -- some process polls
       rcases hpoll with ⟨p', hp'⟩
       rcases hp' with ⟨h, hpoll', hr', hl', hs', ho'⟩
@@ -255,48 +250,42 @@ theorem param_queue_liveness (t : Nat) :
         refine ⟨1 + t0, ?_⟩
         simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
           Nat.add_left_comm] using ht0
-      · right
-        constructor
+      · tla_l2_step_param p
         · change t ∈ (e (k + 1)).sent ∧ t ∈ (e (k + 1)).pend
           constructor
           · rw [hs']
             exact hφ.1
           · rw [hpoll']
             exact Finset.mem_erase.mpr ⟨htm, hφ.2⟩
-        · constructor
-          · intro p i hnp
-            fin_cases i
-            intro x hx
-            simp [deltas] at hx ⊢
-            constructor
-            · rw [hpoll'] at hx
-              exact (Finset.erase_subset m (e k).pend) hx.1
-            · exact hx.2
-          · constructor
-            · intro p i
-              fin_cases i
-              intro hreq hR
-              rcases hR with ⟨h0, hpoll'', _hr'', _hl'', _hs'', _ho''⟩
-              let m0 := Finset.min' (owned p (e k)) h0
-              have htowned : t ∈ owned p (e k) :=
-                Finset.mem_filter.mpr ⟨hreq.1.2, hreq.1.1⟩
-              have hmle : m0 ≤ t := (Finset.isLeast_min' (owned p (e k)) h0).2 htowned
-              refine ⟨m0, ?_, ?_⟩
-              · simp [deltas]
-                exact ⟨(Finset.filter_subset (fun τ => (e k).owner τ = p) (e k).pend)
-                  (Finset.min'_mem (owned p (e k)) h0), hmle⟩
-              · intro hδ
-                simp [deltas] at hδ
-                rw [hpoll''] at hδ
-                exact (Finset.mem_erase.mp hδ.1).1 rfl
-            · intro p i
-              fin_cases i
-              intro hreq hnr
-              constructor
-              · rw [ho']
-                exact hreq.1.1
-              · rw [hpoll']
-                exact Finset.mem_erase.mpr ⟨htm, hreq.1.2⟩
+        · -- δ conserved
+          intro hnp x hx
+          simp [deltas] at hx ⊢
+          constructor
+          · rw [hpoll'] at hx
+            exact (Finset.erase_subset m (e k).pend) hx.1
+          · exact hx.2
+        · -- δ reduced when `Poll p` fires
+          intro hreq hR
+          rcases hR with ⟨h0, hpoll'', _hr'', _hl'', _hs'', _ho''⟩
+          let m0 := Finset.min' (owned p (e k)) h0
+          have htowned : t ∈ owned p (e k) :=
+            Finset.mem_filter.mpr ⟨hreq.1.2, hreq.1.1⟩
+          have hmle : m0 ≤ t := (Finset.isLeast_min' (owned p (e k)) h0).2 htowned
+          refine ⟨m0, ?_, ?_⟩
+          · simp [deltas]
+            exact ⟨(Finset.filter_subset (fun τ => (e k).owner τ = p) (e k).pend)
+              (Finset.min'_mem (owned p (e k)) h0), hmle⟩
+          · intro hδ
+            simp [deltas] at hδ
+            rw [hpoll''] at hδ
+            exact (Finset.mem_erase.mp hδ.1).1 rfl
+        · -- ψ stable
+          intro hreq hnr
+          constructor
+          · rw [ho']
+            exact hreq.1.1
+          · rw [hpoll']
+            exact Finset.mem_erase.mpr ⟨htm, hreq.1.2⟩
   · -- P3: a scheduled justice action eventually fires
     tla_spec_split
     intro k _hφ p i hψ

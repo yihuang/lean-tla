@@ -330,8 +330,7 @@ theorem memory_pipeline_liveness (t : Nat) :
     · -- an issue
       rcases hissue with ⟨u, hissue'⟩
       rcases hissue' with ⟨hu, hissued', hl', hpending', hdone', hretired', _hdest'⟩
-      right
-      constructor
+      tla_l2_step_param c
       · change t ∈ (e (k + 1)).issued ∧
           ((∃ c : Nat, (c, t) ∈ (e (k + 1)).pending) ∨ t ∈ (e (k + 1)).done)
         constructor
@@ -346,78 +345,75 @@ theorem memory_pipeline_liveness (t : Nat) :
           · right
             rw [hdone']
             exact hd
-      · constructor
-        · intro c i _hnp
-          fin_cases i
-          · have htl : t ≤ (e k).last := h1 t hφ.1
-            have hut : u > t := lt_of_le_of_lt htl hu
-            intro x hx
-            change x ∈ ((e (k + 1)).pending.filter (fun p => p.2 ≤ t)).image Prod.snd at hx
-            rcases Finset.mem_image.mp hx with ⟨p, hp, hpx⟩
-            rcases Finset.mem_filter.mp hp with ⟨hp1, hp2⟩
-            rw [hpending'] at hp1
-            rcases Finset.mem_insert.mp hp1 with hpu | hp1'
-            · rw [hpu] at hp2
-              exact False.elim ((not_le_of_gt hut) hp2)
-            · change x ∈ ((e k).pending.filter (fun p => p.2 ≤ t)).image Prod.snd
-              exact Finset.mem_image.mpr ⟨p, ⟨Finset.mem_filter.mpr ⟨hp1', hp2⟩, hpx⟩⟩
-          · intro x hx
-            simp [deltas, Delta1] at hx ⊢
-            rw [hdone'] at hx
-            exact hx
-        · constructor
-          · intro c i
-            fin_cases i
-            · intro hreq hR
-              rcases hR with ⟨h0, hpending'', _hdone'', _hissued'', _hlast'', _hretired''⟩
-              let m0 := Finset.min' (cops c (e k)) h0
-              rcases hreq.1 with ⟨τ, hτle, hτpair⟩
-              have hτcops : τ ∈ cops c (e k) := by
-                exact Finset.mem_image.mpr ⟨(c, τ),
-                  ⟨Finset.mem_filter.mpr ⟨hτpair, rfl⟩, rfl⟩⟩
-              have hmle : m0 ≤ t := le_trans ((Finset.isLeast_min' (cops c (e k)) h0).2 hτcops) hτle
-              have hmpair : (c, m0) ∈ (e k).pending :=
-                cops_mem_pending c (e k) (Finset.min'_mem (cops c (e k)) h0)
-              have hmem : m0 ∈ deltas t 0 (e k) := by
-                change m0 ∈ ((e k).pending.filter (fun p => p.2 ≤ t)).image Prod.snd
-                exact Finset.mem_image.mpr ⟨(c, m0), ⟨Finset.mem_filter.mpr ⟨hmpair, hmle⟩, rfl⟩⟩
-              have hnotmem : m0 ∉ deltas t 0 (e (k + 1)) := by
-                intro hδ
-                change m0 ∈ ((e (k + 1)).pending.filter (fun p => p.2 ≤ t)).image Prod.snd at hδ
-                rcases Finset.mem_image.mp hδ with ⟨p, hp, hpx⟩
-                rcases Finset.mem_filter.mp hp with ⟨hp1, _hp2⟩
-                rw [hpending''] at hp1
-                have hpne : p ≠ (c, m0) := (Finset.mem_erase.mp hp1).1
-                have hpold : p ∈ (e k).pending := (Finset.mem_erase.mp hp1).2
-                have hpeq : p = (c, m0) := h3 p hpold (c, m0) hmpair hpx
-                exact hpne hpeq
-              exact ⟨m0, hmem, hnotmem⟩
-            · intro _hreq hR
-              exfalso
-              rcases hR with ⟨h2, hdone'', _hretired'', _hpending'', _hissued'', _hlast''⟩
-              have hc : (e k).done.erase (Finset.min' (e k).done h2) = (e k).done := by
-                rw [← hdone'', hdone']
-              have hm : Finset.min' (e k).done h2 ∈
-                  (e k).done.erase (Finset.min' (e k).done h2) := by
-                rw [hc]
-                exact Finset.min'_mem (e k).done h2
-              exact (Finset.mem_erase.mp hm).1 rfl
-          · intro c i
-            fin_cases i
-            · intro hreq _hnr
-              rcases hreq.1 with ⟨τ, hτle, hτpair⟩
-              refine ⟨τ, hτle, ?_⟩
-              rw [hpending']
-              exact Finset.mem_insert.mpr (Or.inr hτpair)
-            · intro hreq _hnr
-              simpa [psis, hdone'] using hreq.1
+      · -- δ₀ conserved
+        intro _hnp x hx
+        have htl : t ≤ (e k).last := h1 t hφ.1
+        have hut : u > t := lt_of_le_of_lt htl hu
+        change x ∈ ((e (k + 1)).pending.filter (fun p => p.2 ≤ t)).image Prod.snd at hx
+        rcases Finset.mem_image.mp hx with ⟨p, hp, hpx⟩
+        rcases Finset.mem_filter.mp hp with ⟨hp1, hp2⟩
+        rw [hpending'] at hp1
+        rcases Finset.mem_insert.mp hp1 with hpu | hp1'
+        · rw [hpu] at hp2
+          exact False.elim ((not_le_of_gt hut) hp2)
+        · change x ∈ ((e k).pending.filter (fun p => p.2 ≤ t)).image Prod.snd
+          exact Finset.mem_image.mpr ⟨p, ⟨Finset.mem_filter.mpr ⟨hp1', hp2⟩, hpx⟩⟩
+      · -- δ₁ conserved
+        intro _hnp x hx
+        simp [deltas, Delta1] at hx ⊢
+        rw [hdone'] at hx
+        exact hx
+      · -- δ₀ reduced when `Complete c` fires
+        intro hreq hR
+        rcases hR with ⟨h0, hpending'', _hdone'', _hissued'', _hlast'', _hretired''⟩
+        let m0 := Finset.min' (cops c (e k)) h0
+        rcases hreq.1 with ⟨τ, hτle, hτpair⟩
+        have hτcops : τ ∈ cops c (e k) := by
+          exact Finset.mem_image.mpr ⟨(c, τ),
+            ⟨Finset.mem_filter.mpr ⟨hτpair, rfl⟩, rfl⟩⟩
+        have hmle : m0 ≤ t := le_trans ((Finset.isLeast_min' (cops c (e k)) h0).2 hτcops) hτle
+        have hmpair : (c, m0) ∈ (e k).pending :=
+          cops_mem_pending c (e k) (Finset.min'_mem (cops c (e k)) h0)
+        have hmem : m0 ∈ deltas t 0 (e k) := by
+          change m0 ∈ ((e k).pending.filter (fun p => p.2 ≤ t)).image Prod.snd
+          exact Finset.mem_image.mpr ⟨(c, m0), ⟨Finset.mem_filter.mpr ⟨hmpair, hmle⟩, rfl⟩⟩
+        have hnotmem : m0 ∉ deltas t 0 (e (k + 1)) := by
+          intro hδ
+          change m0 ∈ ((e (k + 1)).pending.filter (fun p => p.2 ≤ t)).image Prod.snd at hδ
+          rcases Finset.mem_image.mp hδ with ⟨p, hp, hpx⟩
+          rcases Finset.mem_filter.mp hp with ⟨hp1, _hp2⟩
+          rw [hpending''] at hp1
+          have hpne : p ≠ (c, m0) := (Finset.mem_erase.mp hp1).1
+          have hpold : p ∈ (e k).pending := (Finset.mem_erase.mp hp1).2
+          have hpeq : p = (c, m0) := h3 p hpold (c, m0) hmpair hpx
+          exact hpne hpeq
+        exact ⟨m0, hmem, hnotmem⟩
+      · -- δ₁ reduced when `Retire` fires
+        intro _hreq hR
+        exfalso
+        rcases hR with ⟨h2, hdone'', _hretired'', _hpending'', _hissued'', _hlast''⟩
+        have hc : (e k).done.erase (Finset.min' (e k).done h2) = (e k).done := by
+          rw [← hdone'', hdone']
+        have hm : Finset.min' (e k).done h2 ∈
+            (e k).done.erase (Finset.min' (e k).done h2) := by
+          rw [hc]
+          exact Finset.min'_mem (e k).done h2
+        exact (Finset.mem_erase.mp hm).1 rfl
+      · -- ψ₀ stable
+        intro hreq _hnr
+        rcases hreq.1 with ⟨τ, hτle, hτpair⟩
+        refine ⟨τ, hτle, ?_⟩
+        rw [hpending']
+        exact Finset.mem_insert.mpr (Or.inr hτpair)
+      · -- ψ₁ stable
+        intro hreq _hnr
+        simpa [psis, hdone'] using hreq.1
     · rcases hrest with hcomplete | hretire
       · -- a completion by controller `c'`
         rcases hcomplete with ⟨c', hcomplete'⟩
         rcases hcomplete' with ⟨h, hpending', hdone', hissued', hl', hretired', _hdest'⟩
         let m := Finset.min' (cops c' (e k)) h
-        right
-        constructor
+        tla_l2_step_param c
         · change t ∈ (e (k + 1)).issued ∧
             ((∃ c : Nat, (c, t) ∈ (e (k + 1)).pending) ∨ t ∈ (e (k + 1)).done)
           constructor
@@ -438,85 +434,83 @@ theorem memory_pipeline_liveness (t : Nat) :
             · right
               rw [hdone']
               exact Finset.mem_insert.mpr (Or.inr hd)
-        · constructor
-          · intro c i hnp
-            fin_cases i
-            · intro x hx
-              change x ∈ ((e (k + 1)).pending.filter (fun p => p.2 ≤ t)).image Prod.snd at hx
-              rcases Finset.mem_image.mp hx with ⟨p, hp, hpx⟩
-              rcases Finset.mem_filter.mp hp with ⟨hp1, hp2⟩
-              rw [hpending'] at hp1
-              change x ∈ ((e k).pending.filter (fun p => p.2 ≤ t)).image Prod.snd
-              exact Finset.mem_image.mpr ⟨p, ⟨Finset.mem_filter.mpr
-                ⟨(Finset.erase_subset (c', m) (e k).pending) hp1, hp2⟩, hpx⟩⟩
-            · intro x hx
-              simp [deltas, Delta1] at hx ⊢
-              rw [hdone'] at hx
-              constructor
-              · rcases Finset.mem_insert.mp hx.1 with hxm | hxmem
-                · have hmle : m ≤ t := by
-                    rw [hxm] at hx
-                    exact hx.2
-                  have hpair : (c', m) ∈ (e k).pending :=
-                    cops_mem_pending c' (e k) (Finset.min'_mem (cops c' (e k)) h)
-                  exact False.elim (hnp ⟨(0 : Fin 2), ⟨by decide,
-                    ⟨c', ⟨m, ⟨hmle, hpair⟩⟩⟩⟩⟩)
-                · exact hxmem
-              · exact hx.2
-          · constructor
-            · intro c i
-              fin_cases i
-              · intro hreq hR
-                rcases hR with ⟨h0, hpending'', _hdone'', _hissued'', _hlast'', _hretired''⟩
-                let m0 := Finset.min' (cops c (e k)) h0
-                rcases hreq.1 with ⟨τ, hτle, hτpair⟩
-                have hτcops : τ ∈ cops c (e k) := by
-                  exact Finset.mem_image.mpr ⟨(c, τ),
-                    ⟨Finset.mem_filter.mpr ⟨hτpair, rfl⟩, rfl⟩⟩
-                have hmle : m0 ≤ t := le_trans ((Finset.isLeast_min' (cops c (e k)) h0).2 hτcops) hτle
-                have hmpair : (c, m0) ∈ (e k).pending :=
-                  cops_mem_pending c (e k) (Finset.min'_mem (cops c (e k)) h0)
-                have hmem : m0 ∈ deltas t 0 (e k) := by
-                  change m0 ∈ ((e k).pending.filter (fun p => p.2 ≤ t)).image Prod.snd
-                  exact Finset.mem_image.mpr ⟨(c, m0), ⟨Finset.mem_filter.mpr ⟨hmpair, hmle⟩, rfl⟩⟩
-                have hnotmem : m0 ∉ deltas t 0 (e (k + 1)) := by
-                  intro hδ
-                  change m0 ∈ ((e (k + 1)).pending.filter (fun p => p.2 ≤ t)).image Prod.snd at hδ
-                  rcases Finset.mem_image.mp hδ with ⟨p, hp, hpx⟩
-                  rcases Finset.mem_filter.mp hp with ⟨hp1, _hp2⟩
-                  rw [hpending''] at hp1
-                  have hpne : p ≠ (c, m0) := (Finset.mem_erase.mp hp1).1
-                  have hpold : p ∈ (e k).pending := (Finset.mem_erase.mp hp1).2
-                  have hpeq : p = (c, m0) := h3 p hpold (c, m0) hmpair hpx
-                  exact hpne hpeq
-                exact ⟨m0, hmem, hnotmem⟩
-              · intro _hreq hR
-                exfalso
-                rcases hR with ⟨h2, hdone'', _hretired'', _hpending'', _hissued'', _hlast''⟩
-                have hc : (e k).done.erase (Finset.min' (e k).done h2) =
-                    insert m (e k).done := by
-                  rw [← hdone'', hdone']
-                have hm : Finset.min' (e k).done h2 ∈
-                    (e k).done.erase (Finset.min' (e k).done h2) := by
-                  rw [hc]
-                  exact Finset.mem_insert.mpr (Or.inr (Finset.min'_mem (e k).done h2))
-                exact (Finset.mem_erase.mp hm).1 rfl
-            · intro c i
-              fin_cases i
-              · intro hreq hnr
-                rcases hreq.1 with ⟨τ, hτle, hτpair⟩
-                by_cases hc : c = c'
-                · exfalso
-                  exact hnr (by simpa [hc] using ⟨h, hpending', hdone', hissued', hl', hretired', _hdest'⟩)
-                · refine ⟨τ, hτle, ?_⟩
-                  rw [hpending']
-                  exact Finset.mem_erase.mpr ⟨by
-                    intro heq
-                    exact hc (congrArg Prod.fst heq), hτpair⟩
-              · intro hreq _hnr
-                change t ∈ (e (k + 1)).done
-                rw [hdone']
-                exact Finset.mem_insert.mpr (Or.inr hreq.1)
+        · -- δ₀ conserved
+          intro hnp x hx
+          change x ∈ ((e (k + 1)).pending.filter (fun p => p.2 ≤ t)).image Prod.snd at hx
+          rcases Finset.mem_image.mp hx with ⟨p, hp, hpx⟩
+          rcases Finset.mem_filter.mp hp with ⟨hp1, hp2⟩
+          rw [hpending'] at hp1
+          change x ∈ ((e k).pending.filter (fun p => p.2 ≤ t)).image Prod.snd
+          exact Finset.mem_image.mpr ⟨p, ⟨Finset.mem_filter.mpr
+            ⟨(Finset.erase_subset (c', m) (e k).pending) hp1, hp2⟩, hpx⟩⟩
+        · -- δ₁ conserved
+          intro hnp x hx
+          simp [deltas, Delta1] at hx ⊢
+          rw [hdone'] at hx
+          constructor
+          · rcases Finset.mem_insert.mp hx.1 with hxm | hxmem
+            · have hmle : m ≤ t := by
+                rw [hxm] at hx
+                exact hx.2
+              have hpair : (c', m) ∈ (e k).pending :=
+                cops_mem_pending c' (e k) (Finset.min'_mem (cops c' (e k)) h)
+              exact False.elim (hnp ⟨(0 : Fin 2), ⟨by decide,
+                ⟨c', ⟨m, ⟨hmle, hpair⟩⟩⟩⟩⟩)
+            · exact hxmem
+          · exact hx.2
+        · -- δ₀ reduced when `Complete c` fires
+          intro hreq hR
+          rcases hR with ⟨h0, hpending'', _hdone'', _hissued'', _hlast'', _hretired''⟩
+          let m0 := Finset.min' (cops c (e k)) h0
+          rcases hreq.1 with ⟨τ, hτle, hτpair⟩
+          have hτcops : τ ∈ cops c (e k) := by
+            exact Finset.mem_image.mpr ⟨(c, τ),
+              ⟨Finset.mem_filter.mpr ⟨hτpair, rfl⟩, rfl⟩⟩
+          have hmle : m0 ≤ t := le_trans ((Finset.isLeast_min' (cops c (e k)) h0).2 hτcops) hτle
+          have hmpair : (c, m0) ∈ (e k).pending :=
+            cops_mem_pending c (e k) (Finset.min'_mem (cops c (e k)) h0)
+          have hmem : m0 ∈ deltas t 0 (e k) := by
+            change m0 ∈ ((e k).pending.filter (fun p => p.2 ≤ t)).image Prod.snd
+            exact Finset.mem_image.mpr ⟨(c, m0), ⟨Finset.mem_filter.mpr ⟨hmpair, hmle⟩, rfl⟩⟩
+          have hnotmem : m0 ∉ deltas t 0 (e (k + 1)) := by
+            intro hδ
+            change m0 ∈ ((e (k + 1)).pending.filter (fun p => p.2 ≤ t)).image Prod.snd at hδ
+            rcases Finset.mem_image.mp hδ with ⟨p, hp, hpx⟩
+            rcases Finset.mem_filter.mp hp with ⟨hp1, _hp2⟩
+            rw [hpending''] at hp1
+            have hpne : p ≠ (c, m0) := (Finset.mem_erase.mp hp1).1
+            have hpold : p ∈ (e k).pending := (Finset.mem_erase.mp hp1).2
+            have hpeq : p = (c, m0) := h3 p hpold (c, m0) hmpair hpx
+            exact hpne hpeq
+          exact ⟨m0, hmem, hnotmem⟩
+        · -- δ₁ reduced when `Retire` fires
+          intro _hreq hR
+          exfalso
+          rcases hR with ⟨h2, hdone'', _hretired'', _hpending'', _hissued'', _hlast''⟩
+          have hc : (e k).done.erase (Finset.min' (e k).done h2) =
+              insert m (e k).done := by
+            rw [← hdone'', hdone']
+          have hm : Finset.min' (e k).done h2 ∈
+              (e k).done.erase (Finset.min' (e k).done h2) := by
+            rw [hc]
+            exact Finset.mem_insert.mpr (Or.inr (Finset.min'_mem (e k).done h2))
+          exact (Finset.mem_erase.mp hm).1 rfl
+        · -- ψ₀ stable
+          intro hreq hnr
+          rcases hreq.1 with ⟨τ, hτle, hτpair⟩
+          by_cases hc : c = c'
+          · exfalso
+            exact hnr (by simpa [hc] using ⟨h, hpending', hdone', hissued', hl', hretired', _hdest'⟩)
+          · refine ⟨τ, hτle, ?_⟩
+            rw [hpending']
+            exact Finset.mem_erase.mpr ⟨by
+              intro heq
+              exact hc (congrArg Prod.fst heq), hτpair⟩
+        · -- ψ₁ stable
+          intro hreq _hnr
+          change t ∈ (e (k + 1)).done
+          rw [hdone']
+          exact Finset.mem_insert.mpr (Or.inr hreq.1)
       · -- a retirement
         rcases hretire with ⟨h, hdone', hretired', hpending', hissued', hl', _hdest'⟩
         let m := Finset.min' (e k).done h
@@ -534,8 +528,7 @@ theorem memory_pipeline_liveness (t : Nat) :
           refine ⟨1 + t0, ?_⟩
           simpa [Tla.statePred, Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm,
             Nat.add_left_comm] using ht0
-        · right
-          constructor
+        · tla_l2_step_param c
           · change t ∈ (e (k + 1)).issued ∧
               ((∃ c : Nat, (c, t) ∈ (e (k + 1)).pending) ∨ t ∈ (e (k + 1)).done)
             constructor
@@ -548,54 +541,52 @@ theorem memory_pipeline_liveness (t : Nat) :
               · right
                 rw [hdone']
                 exact Finset.mem_erase.mpr ⟨htm, hd⟩
-          · constructor
-            · intro c i _hnp
-              fin_cases i
-              · intro x hx
-                simp [deltas, Delta0] at hx ⊢
-                rw [hpending'] at hx
-                exact hx
-              · intro x hx
-                simp [deltas, Delta1] at hx ⊢
-                constructor
-                · rw [hdone'] at hx
-                  exact (Finset.erase_subset m (e k).done) hx.1
-                · exact hx.2
-            · constructor
-              · intro c i
-                fin_cases i
-                · intro _hreq hR
-                  exfalso
-                  rcases hR with ⟨h0, hpending'', _hdone'', _hissued'', _hlast'', _hretired''⟩
-                  let m0 := Finset.min' (cops c (e k)) h0
-                  have hmpair : (c, m0) ∈ (e k).pending :=
-                    cops_mem_pending c (e k) (Finset.min'_mem (cops c (e k)) h0)
-                  have hc : (e k).pending.erase (c, m0) = (e k).pending := by
-                    rw [← hpending'', hpending']
-                  have hmem : (c, m0) ∈ (e k).pending.erase (c, m0) := by
-                    rw [hc]
-                    exact hmpair
-                  exact (Finset.mem_erase.mp hmem).1 rfl
-                · intro hreq hR
-                  rcases hR with ⟨h2, hdone'', _hretired'', _hpending'', _hissued'', _hlast''⟩
-                  let m0 := Finset.min' (e k).done h2
-                  have hmle : m0 ≤ t := (Finset.isLeast_min' (e k).done h2).2 hreq.1
-                  refine ⟨m0, ?_, ?_⟩
-                  · simp [deltas, Delta1]
-                    exact ⟨Finset.min'_mem (e k).done h2, hmle⟩
-                  · intro hδ
-                    simp [deltas, Delta1] at hδ
-                    rw [hdone''] at hδ
-                    exact (Finset.mem_erase.mp hδ.1).1 rfl
-              · intro c i
-                fin_cases i
-                · intro hreq _hnr
-                  rcases hreq.1 with ⟨τ, hτle, hτpair⟩
-                  refine ⟨τ, hτle, ?_⟩
-                  rw [hpending']
-                  exact hτpair
-                · intro _hreq hnr
-                  exact False.elim (hnr ⟨h, hdone', hretired', hpending', hissued', hl', _hdest'⟩)
+          · -- δ₀ conserved
+            intro _hnp x hx
+            simp [deltas, Delta0] at hx ⊢
+            rw [hpending'] at hx
+            exact hx
+          · -- δ₁ conserved
+            intro _hnp x hx
+            simp [deltas, Delta1] at hx ⊢
+            constructor
+            · rw [hdone'] at hx
+              exact (Finset.erase_subset m (e k).done) hx.1
+            · exact hx.2
+          · -- δ₀ reduced when `Complete c` fires
+            intro _hreq hR
+            exfalso
+            rcases hR with ⟨h0, hpending'', _hdone'', _hissued'', _hlast'', _hretired''⟩
+            let m0 := Finset.min' (cops c (e k)) h0
+            have hmpair : (c, m0) ∈ (e k).pending :=
+              cops_mem_pending c (e k) (Finset.min'_mem (cops c (e k)) h0)
+            have hc : (e k).pending.erase (c, m0) = (e k).pending := by
+              rw [← hpending'', hpending']
+            have hmem : (c, m0) ∈ (e k).pending.erase (c, m0) := by
+              rw [hc]
+              exact hmpair
+            exact (Finset.mem_erase.mp hmem).1 rfl
+          · -- δ₁ reduced when `Retire` fires
+            intro hreq hR
+            rcases hR with ⟨h2, hdone'', _hretired'', _hpending'', _hissued'', _hlast''⟩
+            let m0 := Finset.min' (e k).done h2
+            have hmle : m0 ≤ t := (Finset.isLeast_min' (e k).done h2).2 hreq.1
+            refine ⟨m0, ?_, ?_⟩
+            · simp [deltas, Delta1]
+              exact ⟨Finset.min'_mem (e k).done h2, hmle⟩
+            · intro hδ
+              simp [deltas, Delta1] at hδ
+              rw [hdone''] at hδ
+              exact (Finset.mem_erase.mp hδ.1).1 rfl
+          · -- ψ₀ stable
+            intro hreq _hnr
+            rcases hreq.1 with ⟨τ, hτle, hτpair⟩
+            refine ⟨τ, hτle, ?_⟩
+            rw [hpending']
+            exact hτpair
+          · -- ψ₁ stable
+            intro _hreq hnr
+            exact False.elim (hnr ⟨h, hdone', hretired', hpending', hissued', hl', _hdest'⟩)
   · -- P3: a scheduled justice action eventually fires
     tla_spec_split
     intro k _hφ c i hψ
