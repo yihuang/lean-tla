@@ -840,9 +840,18 @@ existing examples.
   `LexReordering`). A `tla_l2_step`-style tactic would split the `L2Step`
   structure and grind the algebraic clauses, leaving the genuinely
   mathematical ones (which are real proofs, so the payoff is partial).
-- **Suffix-level temporal wrapper automation** — the Streamlet
-  `epoch_step`/`window_progress` proofs are full of
-  `(e.drop k) j ↔ e (k + j)` conversions. A tactic that makes the
-  suffix/offset rewriting automatic (beyond `tla_drop_simpa`'s
-  per-call `simpa` sets) would cut the temporal wrapper's remaining
-  mechanical overhead.
+
+## 7. Suffix-level temporal wrapper automation: `tla_suffix`
+
+The temporal wrappers' remaining mechanical overhead was suffix/offset
+conversion — `(e.drop k) j ↔ e (k + j)` (definitionally `e (j + k)`) plus
+the pure index arithmetic. `tla_suffix` (`TlaDsl/Tactic.lean`) is the
+one-call form: `tla_drop_simpa` (the `ωSequence`-drop + `Nat.add_*` simp
+set) first, `omega` for the pure arithmetic second. The window-rank
+arithmetic `(e0 + 5 - k) + 1 = e0 + 5 - (k - 1)` was extracted as
+`window_rank_sub` (isolating `omega` from the big wrapper context, where
+it spuriously fails) and is reused by both the honest and Byzantine
+`window_progress` proofs; the hand-rolled 15-line proof is gone, and the
+`simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]` calls in
+`votes_persist_along`/`proposals_persist_along`/`epoch_step` are
+`tla_drop_simpa` calls.

@@ -280,6 +280,16 @@ macro_rules
       `(tactic| simpa [Tla.statePred, Tla.actionPred, Tla.always,
         Cslib.ωSequence.drop, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using $h)
 
+/-- **Suffix-level conversion** for the temporal wrapper: `tla_drop_simpa`
+converts `(e.drop k) j ↔ e (k + j)`-shaped goals and hypotheses (the
+`ωSequence`-drop + Nat-index simp set), and `omega` finishes the pure
+index arithmetic (window ranks like `(e0 + 5 - k) + 1 = e0 + 5 - (k - 1)`).
+This is the one-call replacement for the wrapper's suffix-level conclusions. -/
+syntax "tla_suffix" (" using " term)? : tactic
+macro_rules
+  | `(tactic| tla_suffix) => `(tactic| (first | tla_drop_simpa | omega))
+  | `(tactic| tla_suffix using $h) => `(tactic| (first | tla_drop_simpa using $h | omega))
+
 /-- **Safe equality-conjunction split.** `rcases h with ⟨rfl, rfl⟩` on
 `j = i ∧ e' = b.epoch` substitutes the *right*-hand-side variables
 (eliminating `i` and `b.epoch`), so later references to them fail with

@@ -1040,7 +1040,7 @@ lemma votes_persist_along {n : Nat} {Byz : Finset Node} {L : Epoch → Node}
   | succ j ih =>
       have h' : (e (k + j)).votes i e' = some b := ih
       have h'' := stut_votes_persist (hStut (k + j)) h'
-      simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h''
+      tla_drop_simpa using h''
 
 lemma proposals_persist_along {n : Nat} {Byz : Finset Node} {L : Epoch → Node}
     {e : Tla.Behavior St}
@@ -1052,7 +1052,7 @@ lemma proposals_persist_along {n : Nat} {Byz : Finset Node} {L : Epoch → Node}
   | succ j ih =>
       have h' : (e (k + j)).proposed e' = some b := ih
       have h'' := stut_proposals_persist (hStut (k + j)) h'
-      simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h''
+      tla_drop_simpa using h''
 
 /-- Notarization facts survive additions of votes. -/
 lemma notarizedBy_votes_add {n : Nat} {s s' : St} {b : Block} {e : Epoch}
@@ -1207,7 +1207,7 @@ lemma epoch_step_byz {n : Nat} {Byz : Finset Node} {L : Epoch → Node} {e' : Ep
   constructor
   · tla_drop_simpa using (hInvAll (k + (j1 + j2 + j3)))
   · constructor
-    · simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hj3
+    · tla_drop_simpa using hj3
     · refine ⟨b, ?_, ?_⟩
       · tla_drop_simpa using (proposals_persist_along hStut (k := k + j1 + j2) (j := j3) hpb)
       · tla_drop_simpa using (chainNotarizedBy_persist_along hStut (k := k + j1 + j2) (j := j3) hcb)
@@ -1270,23 +1270,7 @@ theorem window_progress_byz (n : Nat) (Byz : Finset Node) (L : Epoch → Node)
         have hrank : (e (n' + j)).cur = e0 + 5 - (k - 1) := by
           have hcurj : (e (n' + j)).cur = e' + 1 := hj.2.1
           have hsub : e' + 1 = e0 + 5 - (k - 1) := by
-            dsimp [e']
-            have hk1 : 1 ≤ k := hkpos
-            have hka : k ≤ e0 + 5 := by omega
-            have hkk : k = (k - 1) + 1 := (Nat.sub_add_cancel hk1).symm
-            rw [hkk]
-            rw [← Nat.sub_sub]
-            have hk' : k - 1 ≤ e0 + 4 := Nat.sub_le_sub_right hka 1
-            have hsub2 : e0 + 5 - (e0 + 4) ≤ e0 + 5 - (k - 1) :=
-              Nat.sub_le_sub_left hk' (e0 + 5)
-            have h1 : 1 ≤ e0 + 5 - (e0 + 4) := by
-              have hh : e0 + 5 = e0 + 4 + 1 := by
-                rw [Nat.add_succ]
-              rw [hh]
-              simp
-            have hle : 1 ≤ e0 + 5 - (k - 1) := le_trans h1 hsub2
-            rw [Nat.sub_add_cancel hle]
-            rfl
+            simpa [e'] using TlaDsl.Examples.Streamlet.Liveness.window_rank_sub e0 k hk hkpos
           rw [hsub] at hcurj
           exact hcurj
         have hkm : k - 1 < k := by omega
