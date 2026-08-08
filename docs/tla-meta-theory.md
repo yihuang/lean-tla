@@ -121,7 +121,7 @@ Both compile with zero `sorry`s and zero dependencies.
 
 ## Reviewer points (2026-08-04): status and next steps
 
-### 1. Sim ↔ SimFull bridge — **in progress, blocker identified**
+### 1. Sim ↔ SimFull bridge — **done**
 
 `SimFull e f := Compress e = Compress f`, so the bridge is
 `Sim e f → Compress e = Compress f`, i.e. the leading-stutter lemma
@@ -136,10 +136,23 @@ when the index shift fails, both reduce to the absorbed first value via
 `e 0 = e 1`). The characterization of the difference is: `SimFull` identifies
 exactly the pairs that differ by **infinitely many** stutters — `Sim` on the
 finitely-stuttering behaviors, with the infinite-stuttering ones collapsed
-(a concrete pair: `doubled n = n / 2` vs `single n = n`, same compression,
-not `Sim`). A unified quotient would then be `Quot SimFull` with
-`StutInvFull` formulas descending; the two theories stay separate until the
-value-level lemma lands.
+(the concrete pair below). A unified quotient is `Quot SimFull` with
+`StutInvFull` formulas descending.
+
+*Update (2026-08-08): the bridge is in `TlaDsl/SimBridge.lean`, closed via
+the block-*position* route instead of the index shift: position 1 lies in
+the first block (`BlockOf e 1 = 0` from `e 0 = e 1` via
+`BlockOf_eq_of_between`), so `Compress_drop_blockOf` gives
+`Compress (e.drop 1) = Compress e` pointwise — the value-level lemma,
+eventually-constant case included. On top: `Sim.simFull` (the refinement
+`Sim ⊆ SimFull`, by induction on `Sim`), `stutQuot_to_full` (the finite
+quotient embeds into the existing `StutQuotFull`), and the
+**characterization** — `doubled a b = a,a,b,b,a,a,…` vs
+`alt a b = a,b,a,b,…` are `SimFull`-equivalent (same compression) but not
+`Sim`-equivalent, because "eventually no stutter steps"
+(`EventuallyNoStutter`) is a `Sim`-invariant that `alt` satisfies and
+`doubled` does not. So `SimFull` is exactly the closure of `Sim` under
+infinitely many stutter steps.*
 
 ### 2. Canonical form / representation theorem — **not started (scoped)**
 
