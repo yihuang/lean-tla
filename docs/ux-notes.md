@@ -794,7 +794,17 @@ next tactic):
 4. **`apply`-style macros with adjacent `$p:term` splices merge them into
    one application**, and named-argument splices into a rule with implicit
    parameters do not get the spine-first elaboration `refine (p := ...)`
-   gets from a concrete goal. The rule-application macros were therefore
-   left out of this slice: the examples keep the direct
-   `refine Tla.rel_rank_lex (p := ...) ...` form, which is both reliable
-   and readable.
+   gets from a concrete goal. The fix is to stop using a macro: the
+   rule-application tactics (`tla_rel_rank_lex`/`tla_rel_rank_param`/
+   `tla_rel_rank_param_global`) are now **elaborators** that read the state
+   type `σ` from the goal (`Tla.Entails H (leadsTo (statePred p) ...)`),
+   elaborate each argument against the rule's expected types with `σ`
+   concrete (so `fun s => t ∈ s.sentA` resolves fields), build the rule
+   application with `mkAppM`, and apply it via `MVarId.apply`. The
+   examples call them positionally, and each obligation still starts with
+   `tla_spec_split`. Two elaborator-specific traps: adjacent `term`
+   arguments in `elab` syntax merge into one application (`(fun s => ...)
+   (fun s => ...)` is parsed as an application), so the arguments are
+   **comma-separated** in the syntax declaration; and the state type is
+   `Entails`'s *first* application argument (`@Tla.Entails σ F G`), not
+   the second.

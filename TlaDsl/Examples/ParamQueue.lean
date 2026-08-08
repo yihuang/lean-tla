@@ -169,11 +169,10 @@ theorem param_queue_liveness (t : Nat) :
     Tla.Entails Spec
       (Tla.leadsTo (Tla.statePred (fun s => t ∈ s.sent))
         (Tla.statePred (fun s => t ∈ s.recv))) := by
-  refine Tla.rel_rank_param
-    (p := fun s => t ∈ s.sent) (q := fun s => t ∈ s.recv)
-    (φ := fun s => t ∈ s.sent ∧ t ∈ s.pend)
-    (δs := deltas t) (ψs := psis t) (rs := rjs)
-    (H := Spec) ?_ ?_ ?_ ?_
+  tla_rel_rank_param
+    (fun s => t ∈ s.sent), (fun s => t ∈ s.recv),
+    (fun s => t ∈ s.sent ∧ t ∈ s.pend),
+    (deltas t), (psis t), rjs, Spec
   · -- S1: a sent message is received or still pending
     tla_spec_split
     intro k hp

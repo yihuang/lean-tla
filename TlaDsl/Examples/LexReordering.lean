@@ -629,11 +629,10 @@ theorem reorder_liveness (t : Nat) :
     Tla.Entails Spec
       (Tla.leadsTo (Tla.statePred (fun s => t ∈ s.sentA))
         (Tla.statePred (fun s => t ∈ s.recv2))) := by
-  refine Tla.rel_rank_lex
-    (p := fun s => t ∈ s.sentA) (q := fun s => t ∈ s.recv2)
-    (φ := fun s => t ∈ s.sentA ∧ (t ∈ s.pendA ∨ (∃ a : Nat, (a, t) ∈ s.queue2)))
-    (δs := deltas t) (ψs := psis t) (rs := rjs)
-    (H := Spec) ?_ ?_ ?_ ?_
+  tla_rel_rank_lex
+    (fun s => t ∈ s.sentA), (fun s => t ∈ s.recv2),
+    (fun s => t ∈ s.sentA ∧ (t ∈ s.pendA ∨ (∃ a : Nat, (a, t) ∈ s.queue2))),
+    (deltas t), (psis t), rjs, Spec
   · -- S1: a sent message is received, in queue 1, or in queue 2
     tla_spec_split
     intro k hp

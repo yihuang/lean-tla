@@ -200,6 +200,59 @@ elab "tla_spec_split" : tactic => withMainContext do
           let nm := Name.mkSimple ("hJ" ++ toString jIdx)
           evalTactic (← `(tactic| have $(mkIdent nm) := $(mkIdent hCur)))
 
+/-- Shared core of the relational-ranking rule tactics. The goal must be
+`Tla.Entails H (Tla.leadsTo (Tla.statePred p) (Tla.statePred q))`; the
+state type `σ` is read from the goal so the source/target/invariant
+predicates elaborate with `σ` concrete (field accesses like `s.pendA`
+resolve), the remaining arguments elaborate against the rule's signature,
+and the rule is applied by meta-level `apply`, leaving the four
+obligations (S1/L2/S3/S4 or S1/P2/P3/P4). -/
+private def relRankCore (rule : Name) (p q φ δs ψs rs H : Syntax) : TacticM Unit :=
+  withMainContext do
+    let g ← getMainGoal
+    let gType ← liftMetaM (instantiateMVars (← g.getType))
+    let σ ← match gType.getAppFn with
+      | .const n _ =>
+          if n == ``Tla.Entails then
+            -- `@Tla.Entails σ F G`: the state type is the first argument
+            pure gType.getAppArgs[0]!
+          else
+            throwError "rel-ranking rule: goal is not a `Tla.Entails ... (Tla.leadsTo ...)` entailment"
+      | _ =>
+          throwError "rel-ranking rule: goal is not a `Tla.Entails ... (Tla.leadsTo ...)` entailment"
+    let statePredTy ← liftMetaM (mkAppM ``Tla.StatePred #[σ])
+    let pE ← liftM (Term.elabTerm p (some statePredTy))
+    let qE ← liftM (Term.elabTerm q (some statePredTy))
+    let φE ← liftM (Term.elabTerm φ (some statePredTy))
+    let δsE ← liftM (Term.elabTerm δs none)
+    let ψsE ← liftM (Term.elabTerm ψs none)
+    let rsE ← liftM (Term.elabTerm rs none)
+    let HE ← liftM (Term.elabTerm H none)
+    let ruleE ← liftMetaM (mkAppM rule #[pE, qE, φE, δsE, ψsE, rsE, HE])
+    let gs ← liftMetaM (g.apply ruleE)
+    setGoals gs
+
+/-- Apply the lexicographic relational-ranking rule (Rule 10), supplying
+the source predicate `p`, the target `q`, the invariant `φ`, the component
+rankings `δs`, the schedulers `ψs`, the justice actions `rs` and the spec
+`H`; leaves the four obligations (S1/L2/S3/S4), each starting with
+`tla_spec_split`-able boilerplate. -/
+elab "tla_rel_rank_lex " p:term ", " q:term ", " φ:term ", " δs:term ", " ψs:term ", " rs:term ", " H:term : tactic =>
+  relRankCore ``Tla.rel_rank_lex p q φ δs ψs rs H
+
+/-- Apply the parameterized relational-ranking rule (Rule 11), supplying
+the source predicate `p`, the target `q`, the invariant `φ`, the component
+rankings `δs`, the parameterized schedulers `ψs`, the parameterized justice
+actions `rs` and the spec `H`; leaves the four obligations (S1/P2/P3/P4). -/
+elab "tla_rel_rank_param " p:term ", " q:term ", " φ:term ", " δs:term ", " ψs:term ", " rs:term ", " H:term : tactic =>
+  relRankCore ``Tla.rel_rank_param p q φ δs ψs rs H
+
+/-- Apply the global-preemption variant of Rule 11
+(`rel_rank_param_global`), the case-study form used by the
+memory-pipeline example. -/
+elab "tla_rel_rank_param_global " p:term ", " q:term ", " φ:term ", " δs:term ", " ψs:term ", " rs:term ", " H:term : tactic =>
+  relRankCore ``Tla.rel_rank_param_global p q φ δs ψs rs H
+
 /-- The invariant-threaded variant of `refine_via`: applies
 `refinement_mapping_inv`, additionally requiring the concrete invariant
 `inv` to hold initially and be preserved (the step correspondence is then
