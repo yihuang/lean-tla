@@ -1,6 +1,8 @@
 import Bft.Core
 import Bft.Rules
 import Mathlib.Data.Set.Card
+import Mathlib.Order.WellFounded
+import Mathlib.Order.PiLex
 
 /-!
 # Bft.RelRank — relational ranking 活性引擎（McMillan CAV 2024）
@@ -223,8 +225,75 @@ theorem RelRankCert.trans {σ : Type u} {p q q' : StatePred σ}
 def VecLexLess {n : ℕ} (x y : Fin n → ℕ) : Prop :=
   ∃ i : Fin n, (∀ j : Fin n, j.val < i.val → x j ≤ y j) ∧ x i < y i
 
-/-- `VecLexLess` well-founded（Theorem 1）。draft。 -/
-theorem vecLexLess_wellFounded : ∀ n : ℕ, WellFounded (@VecLexLess n) := sorry
+/-- 严格字典序（首个不同分量严格更小、之前分量相等）well-founded：
+对 `n` 归纳，用 `WellFounded.prod_lex` 拆掉头分量。
+（移植自 TlaDsl/RelRank.lean 已机器检查版本。） -/
+theorem piLexNat_wellFounded : ∀ (n : ℕ),
+    WellFounded (Pi.Lex (· < ·) (· < ·) : (Fin n → ℕ) → (Fin n → ℕ) → Prop)
+  | 0 => by
+      refine ⟨fun x => Acc.intro x ?_⟩
+      intro y hy
+      rcases hy with ⟨i, _⟩
+      exact Fin.elim0 i
+  | n + 1 => by
+      let first : (Fin (n + 1) → ℕ) → ℕ := fun x => x 0
+      let tail : (Fin (n + 1) → ℕ) → Fin n → ℕ := fun x i => x i.succ
+      have htail : WellFounded (Pi.Lex (· < ·) (· < ·) :
+          (Fin n → ℕ) → (Fin n → ℕ) → Prop) :=
+        piLexNat_wellFounded n
+      have hprod : WellFounded (Prod.Lex (fun a b : ℕ => a < b)
+          (fun x y : Fin n → ℕ => Pi.Lex (· < ·) (· < ·) x y)) :=
+        WellFounded.prod_lex Nat.lt_wfRel.wf htail
+      refine WellFounded.mono (InvImage.wf (fun x : Fin (n + 1) → ℕ => (first x, tail x)) hprod) ?_
+      intro x y hlex
+      rcases hlex with ⟨i, hsame, hlt⟩
+      have i_cases : i = 0 ∨ ∃ k : Fin n, i = k.succ :=
+        Fin.cases (motive := fun j : Fin (n + 1) => j = 0 ∨ ∃ k : Fin n, j = k.succ)
+          (Or.inl rfl) (fun k => Or.inr ⟨k, rfl⟩) i
+      rcases i_cases with rfl | ⟨k, rfl⟩
+      · change Prod.Lex (fun a b : ℕ => a < b)
+          (fun x y : Fin n → ℕ => Pi.Lex (· < ·) (· < ·) x y) (first x, tail x) (first y, tail y)
+        exact Prod.Lex.left (tail x) (tail y) hlt
+      · have hfirst : first x = first y := by
+          have h0 := hsame 0 (by simp)
+          simpa [first] using h0
+        have htaillex : Pi.Lex (· < ·) (· < ·) (tail x) (tail y) := by
+          refine ⟨k, ?_, ?_⟩
+          · intro j' hj'
+            have h := hsame j'.succ (by
+              simpa using (Nat.succ_lt_succ hj'))
+            simpa [tail] using h
+          · simpa [tail] using hlt
+        change Prod.Lex (fun a b : ℕ => a < b)
+          (fun x y : Fin n → ℕ => Pi.Lex (· < ·) (· < ·) x y) (first x, tail x) (first y, tail y)
+        rw [← hfirst]
+        exact Prod.Lex.right (first x) htaillex
+
+/-- `VecLexLess` 嵌入严格字典序：取向量不同的最小下标 `j₀`；`j₀` 处严格
+下降（单调条件给出不增），更早分量相等。 -/
+theorem vecLexLess_imp_piLex {n : ℕ} {x y : Fin n → ℕ} (h : VecLexLess x y) :
+    Pi.Lex (· < ·) (· < ·) x y := by
+  rcases h with ⟨i, hle, hlt⟩
+  let D : Finset (Fin n) := Finset.univ.filter (fun j => x j < y j)
+  have hD : D.Nonempty := ⟨i, by simp [D, hlt]⟩
+  let j0 : Fin n := D.min' hD
+  refine ⟨j0, ?_, ?_⟩
+  · intro j hj
+    have hjD : j ∉ D := by
+      intro hjD
+      have hlej : j0 ≤ j := (Finset.isLeast_min' D hD).2 hjD
+      exact (not_lt_of_ge hlej) hj
+    have hxjy : ¬ x j < y j := by simpa [D] using hjD
+    have hle' : x j ≤ y j := hle j (by
+      have hleji : j0 ≤ i := (Finset.isLeast_min' D hD).2 (by simp [D, hlt])
+      exact lt_of_lt_of_le hj hleji)
+    exact le_antisymm hle' (not_lt.mp hxjy)
+  · simpa [D] using D.min'_mem hD
+
+/-- `VecLexLess` well-founded（Theorem 1）。 -/
+theorem vecLexLess_wellFounded : ∀ (n : ℕ), WellFounded (@VecLexLess n) := by
+  intro n
+  exact WellFounded.mono (piLexNat_wellFounded n) (fun x y h => vecLexLess_imp_piLex h)
 
 /-- 分量 `i` 被抢占：存在更高优先级的 scheduler 处于开启。 -/
 def Pre {σ : Type u} {n : ℕ} (ψs : Fin n → σ → Prop) (i : Fin n) (s : σ) : Prop :=
@@ -233,6 +302,235 @@ def Pre {σ : Type u} {n : ℕ} (ψs : Fin n → σ → Prop) (i : Fin n) (s : �
 /-- 分量 `i` 被需要：开启且未被抢占。 -/
 def Req {σ : Type u} {n : ℕ} (ψs : Fin n → σ → Prop) (i : Fin n) (s : σ) : Prop :=
   ψs i s ∧ ¬ Pre ψs i s
+
+/-! ### Finset 值 ranking 的辅助定义 -/
+
+def ConservesFinset {σ : Type u} {α : Type v} (δ : σ → Finset α) (s s' : σ) : Prop :=
+  δ s' ⊆ δ s
+
+def ReducesFinset {σ : Type u} {α : Type v} (δ : σ → Finset α) (s s' : σ) : Prop :=
+  ∃ x, x ∈ δ s ∧ x ∉ δ s'
+
+theorem card_le_card_of_conserve {σ : Type u} {α : Type v} (δ : σ → Finset α)
+    {s s' : σ} :
+    ConservesFinset δ s s' → (δ s').card ≤ (δ s).card :=
+  Finset.card_le_card
+
+theorem card_lt_card_of_reduce {σ : Type u} {α : Type v} (δ : σ → Finset α)
+    {s s' : σ} :
+    ConservesFinset δ s s' → ReducesFinset δ s s' → (δ s').card < (δ s).card := by
+  intro hcons hred
+  rcases hred with ⟨x0, hx0in, hx0out⟩
+  have hssub : δ s' ⊂ δ s := by
+    constructor
+    · exact hcons
+    · intro hsup
+      exact hx0out (hsup hx0in)
+  exact Finset.card_lt_card hssub
+
+/-- 后续位置的 `◇q` 提升回前面的后缀。 -/
+theorem eventually_statePred_lift {σ : Type u} (q : StatePred σ) (e : Behavior σ)
+    (k t : ℕ) (h : eventually (statePred q) (e.drop (k + t))) :
+    eventually (statePred q) (e.drop k) := by
+  rw [eventually_statePred_drop] at h ⊢
+  rcases h with ⟨m, hm⟩
+  exact ⟨t + m, by simpa [Nat.add_assoc] using hm⟩
+
+/-- L2 步形状（论文 Rule 10）。 -/
+def L2Step {σ : Type u} {α : Type v} {n : ℕ} (q : StatePred σ) (φ : StatePred σ)
+    (δs : Fin n → σ → Finset α) (ψs : Fin n → σ → Prop) (rs : Fin n → Action σ)
+    (e : Behavior σ) (k : ℕ) : Prop :=
+  eventually (statePred q) (e.drop k) ∨
+    (φ (e (k + 1)) ∧
+     (∀ i : Fin n, ¬ Pre ψs i (e k) → ConservesFinset (δs i) (e k) (e (k + 1))) ∧
+     (∀ i : Fin n, Req ψs i (e k) → rs i (e k) (e (k + 1)) →
+       ReducesFinset (δs i) (e k) (e (k + 1))) ∧
+     (∀ i : Fin n, Req ψs i (e k) → ¬ rs i (e k) (e (k + 1)) → ψs i (e (k + 1))))
+
+/-- Walk A+B：`¬◇q` 下 L2 保持 `φ` 且 conserve 所有未被抢占的分量。 -/
+theorem walk_below {σ : Type u} {α : Type v} {n : ℕ} (q : StatePred σ)
+    (φ : StatePred σ)
+    (δs : Fin n → σ → Finset α) (ψs : Fin n → σ → Prop) (rs : Fin n → Action σ)
+    (e : Behavior σ) (k : ℕ) (l : Fin n)
+    (hL2 : ∀ k : ℕ, φ (e k) → L2Step q φ δs ψs rs e k)
+    (hnot : ¬ eventually (statePred q) (e.drop k)) (hφk : φ (e k))
+    (hnotpre : ∀ i : Fin n, i.val ≤ l.val → ∀ t : ℕ, ¬ Pre ψs i (e (k + t))) :
+    ∀ t : ℕ, φ (e (k + t)) ∧
+      ∀ i : Fin n, i.val ≤ l.val → (δs i (e (k + t))).card ≤ (δs i (e k)).card := by
+  intro t
+  induction t with
+  | zero =>
+      constructor
+      · simpa using hφk
+      · intro i hi
+        exact le_rfl
+  | succ t ih =>
+      rcases ih with ⟨hφt, hle⟩
+      rcases hL2 (k + t) hφt with hevq' | hrest
+      · exact False.elim (hnot (eventually_statePred_lift q e k t hevq'))
+      · constructor
+        · simpa [Nat.add_assoc] using hrest.1
+        · intro i hi
+          have hcons : ConservesFinset (δs i) (e (k + t)) (e (k + t + 1)) :=
+            hrest.2.1 i (hnotpre i hi t)
+          have hle1 : (δs i (e (k + t + 1))).card ≤ (δs i (e (k + t))).card :=
+            Finset.card_le_card hcons
+          simpa [Nat.add_assoc] using le_trans hle1 (hle i hi)
+
+/-- Walk C：justice 未触发期间，被需要的 scheduler `ψ_l` 保持到首次触发。 -/
+theorem sched_persist {σ : Type u} {α : Type v} {n : ℕ} (q : StatePred σ)
+    (φ : StatePred σ)
+    (δs : Fin n → σ → Finset α) (ψs : Fin n → σ → Prop) (rs : Fin n → Action σ)
+    (e : Behavior σ) (k m0 j0 : ℕ) (l : Fin n)
+    (hL2 : ∀ k : ℕ, φ (e k) → L2Step q φ δs ψs rs e k)
+    (hnot : ¬ eventually (statePred q) (e.drop k))
+    (hφm0 : φ (e (k + m0))) (hψm0 : ψs l (e (k + m0)))
+    (hnotpre : ∀ t : ℕ, ¬ Pre ψs l (e (k + m0 + t)))
+    (hfirst : ∀ j : ℕ, j < j0 → ¬ rs l (e (k + m0 + j)) (e (k + m0 + j + 1))) :
+    ∀ t : ℕ, t ≤ j0 → φ (e (k + m0 + t)) ∧ ψs l (e (k + m0 + t)) := by
+  intro t
+  induction t with
+  | zero =>
+      intro ht
+      constructor
+      · simpa [Nat.add_assoc] using hφm0
+      · exact hψm0
+  | succ t ih =>
+      intro ht
+      rcases ih (by omega) with ⟨hφt, hψt⟩
+      have hreqt : Req ψs l (e (k + m0 + t)) := ⟨hψt, hnotpre t⟩
+      have hnr : ¬ rs l (e (k + m0 + t)) (e (k + m0 + t + 1)) := hfirst t (by omega)
+      rcases hL2 (k + m0 + t) hφt with hevq' | hrest
+      · exact False.elim (hnot (eventually_statePred_lift q e k (m0 + t)
+          (by simpa [Nat.add_assoc] using hevq')))
+      · constructor
+        · simpa [Nat.add_assoc] using hrest.1
+        · simpa [Nat.add_assoc] using hrest.2.2.2 l hreqt hnr
+
+/-- 从 `k` 起曾经被调度的最小下标：`Fin n` 上取最小元；比它小的下标
+永不调度，因此它及其以下永不抢占。 -/
+theorem min_ever_scheduled {σ : Type u} {n : ℕ} (ψs : Fin n → σ → Prop)
+    (e : Behavior σ) (k : ℕ) (hS4 : ∃ i0 : Fin n, ψs i0 (e k)) :
+    ∃ l : Fin n, (∃ m : ℕ, ψs l (e (k + m))) ∧
+      ∀ j : Fin n, j.val < l.val → ∀ t : ℕ, ¬ ψs j (e (k + t)) := by
+  classical
+  let Sched : Finset (Fin n) := Finset.univ.filter (fun i => ∃ m : ℕ, ψs i (e (k + m)))
+  have hS : Sched.Nonempty := by
+    rcases hS4 with ⟨i0, hi0⟩
+    refine ⟨i0, ?_⟩
+    simp [Sched]
+    exact ⟨0, hi0⟩
+  let l : Fin n := Sched.min' hS
+  refine ⟨l, ?_, ?_⟩
+  · simpa [Sched, l] using Sched.min'_mem hS
+  · intro j hj t hψ
+    have hjS : j ∈ Sched := by
+      simp [Sched]
+      exact ⟨t, hψ⟩
+    have hle : l ≤ j := (Finset.isLeast_min' Sched hS).2 hjS
+    exact (not_lt_of_ge hle) hj
+
+/-- Rule 10（论文）：字典序 relational ranking + stable scheduler。
+soundness：取最小被调度下标 `l`（`min_ever_scheduled`），它永不抢占，
+高优先级分量 conserve 有界（`walk_below`）；其 justice 最终触发（S3），
+由稳定性在首次触发时严格缩小（`sched_persist` +
+`card_lt_card_of_reduce`）；cardinality 向量在 `VecLexLess` 中严格下降，
+由 `vecLexLess_wellFounded` 终止。
+（移植自 TlaDsl/RelRank.lean 已机器检查版本。） -/
+theorem rel_rank_lex {σ : Type u} {α : Type v} {n : ℕ} (p q : StatePred σ)
+    (φ : StatePred σ) (δs : Fin n → σ → Finset α)
+    (ψs : Fin n → σ → Prop) (rs : Fin n → Action σ) (H : Pred σ)
+    (hS1 : ∀ e : Behavior σ, H e → ∀ k : ℕ, p (e k) →
+      eventually (statePred q) (e.drop k) ∨ φ (e k))
+    (hL2 : ∀ e : Behavior σ, H e → ∀ k : ℕ, φ (e k) → L2Step q φ δs ψs rs e k)
+    (hS3 : ∀ e : Behavior σ, H e → ∀ k : ℕ, φ (e k) → ∀ i : Fin n, ψs i (e k) →
+      eventually (statePred q) (e.drop k) ∨
+        eventually (actionPred (rs i)) (e.drop k))
+    (hS4 : ∀ e : Behavior σ, H e → ∀ k : ℕ, φ (e k) →
+      eventually (statePred q) (e.drop k) ∨ ∃ i : Fin n, ψs i (e k)) :
+    Entails H (leadsTo (statePred p) (statePred q)) := by
+  intro e hH k hp
+  have hp' : p (e k) := by simpa using hp
+  rcases hS1 e hH k hp' with hevq | hφk
+  · exact hevq
+  · have hwf : WellFounded (@VecLexLess n) := vecLexLess_wellFounded n
+    have hmain : ∀ (v : Fin n → ℕ) (k : ℕ), φ (e k) →
+        (∀ i, (δs i (e k)).card ≤ v i) → eventually (statePred q) (e.drop k) := by
+      intro v
+      refine WellFounded.induction (C := fun v => ∀ k : ℕ, φ (e k) →
+          (∀ i, (δs i (e k)).card ≤ v i) → eventually (statePred q) (e.drop k)) hwf v ?_
+      intro v ih k hφk hv
+      classical
+      by_cases hevq : eventually (statePred q) (e.drop k)
+      · exact hevq
+      · have hnot : ¬ eventually (statePred q) (e.drop k) := hevq
+        rcases hS4 e hH k hφk with hevq' | ⟨i0, hi0⟩
+        · exact False.elim (hnot hevq')
+        · rcases min_ever_scheduled ψs e k ⟨i0, hi0⟩ with ⟨l, hlmem, hminimal⟩
+          have hnotpre : ∀ (i : Fin n), i.val ≤ l.val → ∀ t : ℕ,
+              ¬ Pre ψs i (e (k + t)) := by
+            intro i hi t hpre
+            rcases hpre with ⟨j, hj, hψj⟩
+            exact hminimal j (lt_of_lt_of_le hj hi) t hψj
+          have hwalk : ∀ t : ℕ, φ (e (k + t)) ∧
+              ∀ i : Fin n, i.val ≤ l.val →
+                (δs i (e (k + t))).card ≤ (δs i (e k)).card :=
+            walk_below q φ δs ψs rs e k l (hL2 e hH) hnot hφk hnotpre
+          rcases hlmem with ⟨m0, hψlm0⟩
+          have hφm0 : φ (e (k + m0)) := (hwalk m0).1
+          rcases hS3 e hH (k + m0) hφm0 l hψlm0 with hevq' | hrl
+          · exact False.elim (hnot (eventually_statePred_lift q e k m0 hevq'))
+          · have hrl' : ∃ j : ℕ, rs l (e (k + m0 + j)) (e (k + m0 + j + 1)) := by
+              rcases hrl with ⟨j, hj⟩
+              refine ⟨j, ?_⟩
+              simpa [Nat.add_assoc] using hj
+            let j0 : ℕ := Nat.find hrl'
+            have hfire : rs l (e (k + m0 + j0)) (e (k + m0 + j0 + 1)) := by
+              simpa [j0] using
+                (Nat.find_spec (p := fun j => rs l (e (k + m0 + j))
+                  (e (k + m0 + j + 1))) hrl')
+            have hfirst : ∀ j : ℕ, j < j0 →
+                ¬ rs l (e (k + m0 + j)) (e (k + m0 + j + 1)) := by
+              intro j hj
+              exact Nat.find_min (p := fun j => rs l (e (k + m0 + j))
+                (e (k + m0 + j + 1))) hrl' (by simpa [j0] using hj)
+            have hpersist : ∀ t : ℕ, t ≤ j0 →
+                φ (e (k + m0 + t)) ∧ ψs l (e (k + m0 + t)) :=
+              sched_persist q φ δs ψs rs e k m0 j0 l (hL2 e hH) hnot hφm0 hψlm0
+                (fun t => by simpa [Nat.add_assoc] using hnotpre l le_rfl (m0 + t))
+                hfirst
+            have hφk'' : φ (e (k + m0 + j0)) := (hpersist j0 le_rfl).1
+            have hψk'' : ψs l (e (k + m0 + j0)) := (hpersist j0 le_rfl).2
+            have hreqk'' : Req ψs l (e (k + m0 + j0)) :=
+              ⟨hψk'', by simpa [Nat.add_assoc] using hnotpre l le_rfl (m0 + j0)⟩
+            rcases hL2 e hH (k + m0 + j0) hφk'' with hevq' | hrest
+            · exact False.elim (hnot (eventually_statePred_lift q e k (m0 + j0)
+                (by simpa [Nat.add_assoc] using hevq')))
+            · have hφnext : φ (e (k + m0 + j0 + 1)) := hrest.1
+              have hcons : ConservesFinset (δs l) (e (k + m0 + j0))
+                  (e (k + m0 + j0 + 1)) :=
+                hrest.2.1 l (by simpa [Nat.add_assoc] using hnotpre l le_rfl (m0 + j0))
+              have hred : ReducesFinset (δs l) (e (k + m0 + j0))
+                  (e (k + m0 + j0 + 1)) :=
+                hrest.2.2.1 l hreqk'' hfire
+              have hlex : VecLexLess (fun i => (δs i (e (k + m0 + j0 + 1))).card) v := by
+                refine ⟨l, ?_, ?_⟩
+                · intro j hj
+                  have h1 : (δs j (e (k + m0 + j0 + 1))).card ≤ (δs j (e k)).card := by
+                    simpa [Nat.add_assoc] using (hwalk (m0 + j0 + 1)).2 j (le_of_lt hj)
+                  exact le_trans h1 (hv j)
+                · have hnlt : (δs l (e (k + m0 + j0 + 1))).card <
+                      (δs l (e (k + m0 + j0))).card :=
+                    card_lt_card_of_reduce (δs l) hcons hred
+                  have hchainl : (δs l (e (k + m0 + j0))).card ≤ (δs l (e k)).card := by
+                    simpa [Nat.add_assoc] using (hwalk (m0 + j0)).2 l le_rfl
+                  exact lt_of_lt_of_le hnlt (le_trans hchainl (hv l))
+              have hev' : eventually (statePred q) (e.drop (k + m0 + j0 + 1)) :=
+                ih (fun i => (δs i (e (k + m0 + j0 + 1))).card) hlex (k + m0 + j0 + 1)
+                  hφnext (fun i => le_rfl)
+              exact eventually_statePred_lift q e k (m0 + j0 + 1) (by
+                simpa [Nat.add_assoc] using hev')
+    exact hmain (fun i => (δs i (e k)).card) k hφk (fun i => le_rfl)
 
 /-- Rule 10 证书（字典序 + stable scheduler）。draft：字段即论文
 L2/P3/P4 前提的逐条对应。 -/
@@ -255,13 +553,51 @@ structure LexRankCert (σ : Type u) (p q : StatePred σ) where
        (∀ i : Fin n, Req ψs i (e k) → ¬ rs i (e k) (e (k + 1)) →
          ψs i (e (k + 1))))
 
-/-- Rule 10 结论。draft：descent 在 cardinality 向量的 `VecLexLess` 上进行，
-结构同 `rank_descent`，归纳原理换为 `vecLexLess_wellFounded`。 -/
+/-- Rule 10 结论：直接应用 `rel_rank_lex`，把证书字段转换为其前提形状。
+
+**两处陈述修正（相对初版草案，均在写证明时发现）**：
+
+1. 初版的 `hjustice` 以 `Req ψs i` 为前件，弱于论文的 S3（任意**开启**
+   的 justice 最终触发，包括被抢占的分量）。虽然 soundness 证明只在
+   无抢占点调用 S3，但 `rel_rank_lex` 的前提对全部 `i` 量化，故证书
+   必须提供全强度 S3。本版改为 `cert.ψs i` 前件。
+2. 初版遗漏 S4（任一时刻至少一个 scheduler 开启）。没有 S4 该陈述是
+   **假的**：常值行为上 φ 恒真、所有 δs 为空、无 scheduler 时全部前提
+   vacuous 成立而 q 永不发生。本版补上 `hsched`。 -/
 theorem LexRankCert.toLeadsTo {σ : Type u} {p q : StatePred σ}
     (cert : LexRankCert σ p q)
     (hjustice : ∀ e, cert.H e → ∀ k : ℕ, cert.φ (e k) → ∀ i : Fin cert.n,
-      Req cert.ψs i (e k) →
-      (∃ m, q (e (k + m))) ∨ (∃ m, cert.rs i (e (k + m)) (e (k + m + 1)))) :
-    Entails cert.H (leadsTo (statePred p) (statePred q)) := sorry
+      cert.ψs i (e k) →
+      (∃ m, q (e (k + m))) ∨ (∃ m, cert.rs i (e (k + m)) (e (k + m + 1))))
+    (hsched : ∀ e, cert.H e → ∀ k : ℕ, cert.φ (e k) →
+      (∃ m, q (e (k + m))) ∨ ∃ i : Fin cert.n, cert.ψs i (e k)) :
+    Entails cert.H (leadsTo (statePred p) (statePred q)) := by
+  have hS1 : ∀ e : Behavior σ, cert.H e → ∀ k : ℕ, p (e k) →
+      eventually (statePred q) (e.drop k) ∨ cert.φ (e k) := by
+    intro e' hH' k' hp'
+    rcases cert.c1 e' hH' k' hp' with hq | hφ
+    · exact Or.inl (eventually_statePred_drop q e' k' |>.mpr ⟨0, hq⟩)
+    · exact Or.inr hφ
+  have hL2 : ∀ e : Behavior σ, cert.H e → ∀ k : ℕ, cert.φ (e k) →
+      L2Step q cert.φ cert.δs cert.ψs cert.rs e k := by
+    intro e' hH' k' hφ'
+    rcases cert.l2 e' hH' k' hφ' with hevq | hrest
+    · exact Or.inl (eventually_statePred_drop q e' k' |>.mpr hevq)
+    · exact Or.inr hrest
+  have hS3 : ∀ e : Behavior σ, cert.H e → ∀ k : ℕ, cert.φ (e k) →
+      ∀ i : Fin cert.n, cert.ψs i (e k) →
+      eventually (statePred q) (e.drop k) ∨
+        eventually (actionPred (cert.rs i)) (e.drop k) := by
+    intro e' hH' k' hφ' i hψ
+    rcases hjustice e' hH' k' hφ' i hψ with hq | hr
+    · exact Or.inl (eventually_statePred_drop q e' k' |>.mpr hq)
+    · exact Or.inr (eventually_actionPred_drop (cert.rs i) e' k' |>.mpr hr)
+  have hS4 : ∀ e : Behavior σ, cert.H e → ∀ k : ℕ, cert.φ (e k) →
+      eventually (statePred q) (e.drop k) ∨ ∃ i : Fin cert.n, cert.ψs i (e k) := by
+    intro e' hH' k' hφ'
+    rcases hsched e' hH' k' hφ' with hq | hψ
+    · exact Or.inl (eventually_statePred_drop q e' k' |>.mpr hq)
+    · exact Or.inr hψ
+  exact rel_rank_lex p q cert.φ cert.δs cert.ψs cert.rs cert.H hS1 hL2 hS3 hS4
 
 end Bft

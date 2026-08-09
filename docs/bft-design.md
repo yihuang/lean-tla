@@ -1,14 +1,17 @@
 # 设计文档：从模型到可执行 BFT 的 Lean4 验证管道
 
 > 项目代号 **Bft**。本文档记录设计决策与理由，特别是与 lean-tla（本项目的
-> 思想来源与对照组）的分歧点。代码为设计草案（draft）：核心证明按可编译
-> 标准书写，全部 `sorry` 显式标注并附证明方案，共 9 处（Stutter.lean 7 处，
-> RelRank.lean 2 处），其中只有 1 处（`stutAlways` 的 SI）是实质证明缺口，
-> 其余为机械性移植。
+> 思想来源与对照组）的分歧点。
 >
 > **修订记录**：v2 经 CSLib 源码调研（toolchain `v4.33.0-rc2`）后，
 > 内核从 `ℕ → σ` 迁移到 `Cslib.ωSequence`，新增 `Bft/CslibBridge.lean`
-> 与 FLTS 桥接；见 §2.2。
+> 与 FLTS 桥接；见 §2.2。v3（M1 完成）：**全部 sorry 消除，`lake build Bft`
+> 绿**（Stutter.lean 6 处全部证明——`stutAlways` 的 SI 实际是直接的逐点
+> 论证而非元理论深水区；RelRank.lean 2 处——`vecLexLess_wellFounded`
+> 移植 + `LexRankCert.toLeadsTo` 经完整 Rule 10 移植）。证明过程中修正了
+> `LexRankCert` 陈述的两处缺陷（见 §3.1 修正记录）：补上缺失的 S4 前提
+> （至少一个 scheduler 常开，否则命题本身为假），`hjustice` 前件从
+> `Req` 加强为 `ψs i` 本身（否则无法供给 S3）。
 
 ## 1. 愿景与定位
 
@@ -94,7 +97,14 @@ simp 引理——是对的，可直接借鉴）。
 - 组合子是引擎的真正价值所在（McMillan 论文标题里的 "at Scale" 指
   的就是组合，不是单条规则）；
 - `LexRankCert`（Rule 10，字典序 + stable scheduler）以同样方式给出，
-  本草案为接口陈述 + draft 证明。
+  已完整证明（`toLeadsTo` 经移植的 `rel_rank_lex` 全封闭）。
+
+**修正记录（M1 证明过程中发现）**：`LexRankCert.toLeadsTo` 的初版陈述
+**为假**——缺 S4 前提（任一时刻至少一个 scheduler 开启；反例：φ 恒真、
+无 scheduler 的常值行为满足全部旧前提但 q 永不成立），已补 `hsched`；
+同时 `hjustice` 前件从 `Req`（开启且未被抢占）加强为 `ψs i` 本身，
+否则被抢占分量无法供给 S3。这正暴露了"陈述先行、证明后补"工作流的
+风险，也说明 Rule 10 的前提结构必须机器检查才算数。
 
 ### 3.2 义务规范化器（tactic 层的核心工程）
 
@@ -147,10 +157,9 @@ lean-tla `StreamletExec` 的 `step` 是 `noncomputable`（guard 含存在量词�
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| 0 | 本草案：内核 + 引擎骨架 + 执行管道 + 端到端示例 | 9 处 sorry |
-| 1 | 消除 sorry（8 处机械 + 1 处 SimFull 移植）；`lake build` 绿；
-    编译验证 `CslibBridge` 各桥接引理（尤其 `leadsTo_statePred_iff`
-    的 simp 是否一次通过） | |
+| 0 | 本草案：内核 + 引擎骨架 + 执行管道 + 端到端示例 | ✅ |
+| 1 | 消除 sorry；`lake build Bft` 绿（1014 jobs，含 `CslibBridge`
+    全部桥接引理） | ✅ 零 sorry |
 | 2 | 义务规范化器完整版：grind patterns、失败分类、两状态反例 | |
 | 3 | Rule 10/11 组合子完整证明；证书库（队列模板） | |
 | 4 | 消息层 refinement：全局函数 spec → 本地状态 + 消息历史（Verdi 网络语义的 Lean 版；**最大研究缺口**） | |
