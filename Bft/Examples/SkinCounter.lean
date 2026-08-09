@@ -73,10 +73,11 @@ theorem safety : Entails Spec (always (statePred Inv)) :=
 /-- One tick brings `x = n` to `x = n + 1` (below the bound), by WF1. -/
 theorem tick_progress (n : ℕ) (hn : n < 2) :
     Entails (tlaAnd (stutAlways Next vars) (WF_v Tick vars))
-      (leadsTo (statePred (fun s => s.x = n)) (statePred (fun s => s.x = n + 1))) := by
+      (leadsTo (statePred { s | s.x = n }) (statePred { s | s.x = n + 1 })) := by
   apply wf1
   · -- p preserved by [Next]_vars unless q holds
     intro s s' hp hstep
+    simp at hp
     rcases hstep with hnext | hstut
     · rcases hnext with htick | ⟨hx2, hx', _⟩
       · obtain ⟨hlt, hx', _⟩ := htick
@@ -87,11 +88,13 @@ theorem tick_progress (n : ℕ) (hn : n < 2) :
     · left; have : s' = s := hstut; rwa [this]
   · -- ⟨Tick⟩_vars achieves q
     intro s s' hp hang
+    simp at hp
     obtain ⟨⟨hlt, hx', _⟩, hne⟩ := hang
     have e1 : s'.x = s.x + 1 := hx'
     show s'.x = n + 1; omega
   · -- ⟨Tick⟩_vars is enabled whenever x < 2
     intro s hp
+    simp at hp
     left
     refine ⟨⟨s.x + 1, s.y + 1⟩, ⟨?_, ?_, ?_⟩, ?_⟩
     · show x s < 2; simp only [x_apply]; omega

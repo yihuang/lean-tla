@@ -122,9 +122,10 @@ theorem mem_nullifiers {s : LSt n Block} {v : ℕ} {i : Fin n} :
 /-! ## Honest uniqueness invariant -/
 
 /-- Honest processors vote at most once per view. -/
-def HonestUniq (s : LSt n Block) : Prop :=
+def HonestUniq : StatePred (LSt n Block) := { s |
   ∀ i : Fin n, i ∉ Byz → ∀ v w₁ w₂,
     (i, v, w₁) ∈ s.msgs → (i, v, w₂) ∈ s.msgs → w₁ = w₂
+}
 
 /-! ## The quorum intersection engine -/
 
@@ -277,15 +278,15 @@ M-notarisation) and X2 (no nullification) all hold. -/
 theorem consistency (hn : 5 * f + 1 ≤ n) (hB : Byz.card ≤ f) :
     Entails (tlaAnd (statePred (Init n (Block := Block)))
         (stutAlways (Next n Byz (Block := Block)) (vars n)))
-      (always (statePred fun s : LSt n Block =>
+      (always (statePred { s : LSt n Block |
         (∀ v b b', LNot n f s v b → LNot n f s v b' → b = b') ∧
         (∀ v b b', b ≠ b' → LNot n f s v b → ¬ MNot n f s v b') ∧
-        (∀ v b, LNot n f s v b → ¬ Null n f s v))) := by
+        (∀ v b, LNot n f s v b → ¬ Null n f s v)})) := by
   intro e hE k
-  have hinv : HonestUniq n Byz (e k) := by
+  have hinv : e k ∈ HonestUniq n Byz := by
     have h := safety n Byz e hE k
-    simpa [statePred] using h
-  simp only [statePred, Cslib.ωSequence.get_drop, Nat.add_zero]
+    rwa [<- statePred_drop]
+  rw [statePred_drop]
   exact ⟨fun _ _ _ => lnot_unique n f Byz hn hB hinv,
          fun _ _ _ => lnot_not_mnot n f Byz hn hB hinv,
          fun _ _ => lnot_not_null n f Byz hn hB hinv⟩

@@ -58,9 +58,9 @@ def Goal : StatePred St := fun s => s.pc = 2
 
 /-! ## Safety -/
 
-theorem init_inv : ∀ s, Init s → Inv s := fun _s hs _ => hs.2
+theorem init_inv : ∀ s, s ∈ Init → s ∈ Inv := fun _s hs _ => hs.2
 
-theorem step_inv : ∀ s s', StutAction Next vars s s' → Inv s → Inv s' := by
+theorem step_inv : ∀ s s', StutAction Next vars s s' → s ∈ Inv → s' ∈ Inv := by
   intro s s' hstep hinv hpc'
   rcases hstep with hnext | hstut
   swap
@@ -109,15 +109,15 @@ def φ : StatePred St := fun s => s.pc = 1 ∧ s.served ≤ s.t
 
 theorem c1 : ∀ e : Behavior St,
     (tlaAnd (statePred Init) (tlaAnd (stutAlways Next vars) (WF_v Enter vars))) e →
-    ∀ k : ℕ, φ (e k) →
-    Goal (e k) ∨ (φ (e k) ∧ ∀ i, δ (e k) i → R (e k) i) := by
+    ∀ k : ℕ, e k ∈ φ →
+    e k ∈ Goal ∨ (e k ∈ φ ∧ ∀ i, δ (e k) i → R (e k) i) := by
   intro e _hE k hφ
   exact Or.inr ⟨hφ, fun i hi => Nat.lt_of_lt_of_le hi.1 (Nat.sub_le _ _)⟩
 
 theorem c2 : ∀ e : Behavior St,
     (tlaAnd (statePred Init) (tlaAnd (stutAlways Next vars) (WF_v Enter vars))) e →
-    ∀ k : ℕ, φ (e k) →
-    Goal (e (k + 1)) ∨ (φ (e (k + 1)) ∧ Conserves δ (e k) (e (k + 1))) := by
+    ∀ k : ℕ, e k ∈ φ →
+    e (k + 1) ∈ Goal ∨ (e (k + 1) ∈ φ ∧ Conserves δ (e k) (e (k + 1))) := by
   intro e hE k hφ
   have hN : StutAction Next vars (e k) (e (k + 1)) := by
     have := hE.2.1 k
@@ -135,14 +135,16 @@ theorem c2 : ∀ e : Behavior St,
         · exact h
         · exact absurd ⟨hφ.1, Nat.le_antisymm hφ.2 h⟩ hG
       refine ⟨?_, fun i hi => ?_⟩
-      · rw [φ, hs1, hs2, hs3]
+      · change (e (k + 1)).pc = 1 ∧ (e (k + 1)).served ≤ (e (k + 1)).t
+        rw [hs1, hs2, hs3]
         exact ⟨hφ.1, by omega⟩
       · rw [δ, hs1, hs2, hs3] at hi
         rw [δ]
         exact ⟨by omega, hφ.1⟩
     · -- Enter step: Goal reached
       left
-      rw [Goal, hs']
+      change (e (k + 1)).pc = 2
+      rw [hs']
   · -- Stutter step: everything preserved
     right
     have : e (k + 1) = e k := hstut
@@ -151,8 +153,8 @@ theorem c2 : ∀ e : Behavior St,
 
 theorem c3 : ∀ e : Behavior St,
     (tlaAnd (statePred Init) (tlaAnd (stutAlways Next vars) (WF_v Enter vars))) e →
-    ∀ k : ℕ, φ (e k) → Serve (e k) (e (k + 1)) →
-    Goal (e (k + 1)) ∨ Reduces δ (e k) (e (k + 1)) := by
+    ∀ k : ℕ, e k ∈ φ → Serve (e k) (e (k + 1)) →
+    e (k + 1) ∈ Goal ∨ Reduces δ (e k) (e (k + 1)) := by
   intro e _hE k hφ hserve
   right
   -- Serve removes the *last* waiting ticket t-served-1 from δ: the guard

@@ -148,15 +148,15 @@ theorem rank_descent {σ : Type u} {α : Type v} (q : StatePred σ) (r : Action 
 theorem relational_ranking_rule {σ : Type u} {α : Type v} (p q : StatePred σ)
     (r : Action σ) (φ : StatePred σ) (δ R : σ → α → Prop) (H : Pred σ)
     (hR : ∀ e : Behavior σ, ∀ n : ℕ, Set.Finite {x : α | R (e n) x})
-    (hC1 : ∀ e : Behavior σ, H e → ∀ k : ℕ, p (e k) →
-      q (e k) ∨ (φ (e k) ∧ ∀ x, δ (e k) x → R (e k) x))
-    (hC2 : ∀ e : Behavior σ, H e → ∀ k : ℕ, φ (e k) →
-      q (e (k + 1)) ∨ (φ (e (k + 1)) ∧ Conserves δ (e k) (e (k + 1))))
-    (hC3 : ∀ e : Behavior σ, H e → ∀ k : ℕ, φ (e k) → r (e k) (e (k + 1)) →
-      q (e (k + 1)) ∨ Reduces δ (e k) (e (k + 1))) :
+    (hC1 : ∀ e : Behavior σ, H e → ∀ k : ℕ, e k ∈ p →
+      e k ∈ q ∨ (e k ∈ φ ∧ ∀ x, δ (e k) x → R (e k) x))
+    (hC2 : ∀ e : Behavior σ, H e → ∀ k : ℕ, e k ∈ φ →
+      e (k + 1) ∈ q ∨ (e (k + 1) ∈ φ ∧ Conserves δ (e k) (e (k + 1))))
+    (hC3 : ∀ e : Behavior σ, H e → ∀ k : ℕ, e k ∈ φ → r (e k) (e (k + 1)) →
+      e (k + 1) ∈ q ∨ Reduces δ (e k) (e (k + 1))) :
     Entails (tlaAnd H (globalJustice r)) (leadsTo (statePred p) (statePred q)) := by
   intro e h k hpk
-  have hpk' : p (e k) := by simpa using hpk
+  have hpk' : e k ∈ p := by simpa using hpk
   refine (eventually_statePred_drop q e k).mpr ?_
   apply rank_descent q r φ δ R e k (fun n => hR e n)
   · rcases hC1 e h.1 k hpk' with hq | hφδ
@@ -185,12 +185,12 @@ structure RelRankCert (σ : Type u) (p q : StatePred σ) where
   R : σ → α → Prop
   H : Pred σ
   finiteness : ∀ e : Behavior σ, ∀ n : ℕ, Set.Finite {x | R (e n) x}
-  c1 : ∀ e : Behavior σ, H e → ∀ k : ℕ, p (e k) →
-    q (e k) ∨ (φ (e k) ∧ ∀ x, δ (e k) x → R (e k) x)
-  c2 : ∀ e : Behavior σ, H e → ∀ k : ℕ, φ (e k) →
-    q (e (k + 1)) ∨ (φ (e (k + 1)) ∧ Conserves δ (e k) (e (k + 1)))
-  c3 : ∀ e : Behavior σ, H e → ∀ k : ℕ, φ (e k) → r (e k) (e (k + 1)) →
-    q (e (k + 1)) ∨ Reduces δ (e k) (e (k + 1))
+  c1 : ∀ e : Behavior σ, H e → ∀ k : ℕ, e k ∈ p →
+    e k ∈ q ∨ (e k ∈ φ ∧ ∀ x, δ (e k) x → R (e k) x)
+  c2 : ∀ e : Behavior σ, H e → ∀ k : ℕ, e k ∈ φ →
+    e (k + 1) ∈ q ∨ (e (k + 1) ∈ φ ∧ Conserves δ (e k) (e (k + 1)))
+  c3 : ∀ e : Behavior σ, H e → ∀ k : ℕ, e k ∈ φ → r (e k) (e (k + 1)) →
+    e (k + 1) ∈ q ∨ Reduces δ (e k) (e (k + 1))
 
 /-- A certificate yields its leads-to conclusion. -/
 theorem RelRankCert.toLeadsTo {σ : Type u} {p q : StatePred σ}
@@ -227,7 +227,7 @@ existential disjunction. -/
 theorem leadsTo_exists {σ : Type u} {ι : Type v} {p : ι → StatePred σ}
     {q : StatePred σ} (e : Behavior σ)
     (h : ∀ i, leadsTo (statePred (p i)) (statePred q) e) :
-    leadsTo (statePred (fun s => ∃ i, p i s)) (statePred q) e := by
+    leadsTo (statePred {s | ∃ i, s ∈ p i}) (statePred q) e := by
   intro k hpk
   rcases hpk with ⟨i, hi⟩
   exact h i k hi
@@ -240,7 +240,7 @@ theorem RelRankCert.forall_fin {σ : Type u} {n : ℕ} {p : Fin n → StatePred 
     (certs : ∀ i : Fin n, RelRankCert σ (p i) q)
     (hsame : ∀ i, (certs i).H = H ∧ (certs i).r = r) :
     Entails (tlaAnd H (globalJustice r))
-      (leadsTo (statePred (fun s => ∃ i, p i s)) (statePred q)) := by
+      (leadsTo (statePred {s | ∃ i, s ∈ p i}) (statePred q)) := by
   intro e hE
   apply leadsTo_exists
   intro i
@@ -480,17 +480,17 @@ vector strictly decreases in `VecLexLess`, which terminates by
 theorem rel_rank_lex {σ : Type u} {α : Type v} {n : ℕ} (p q : StatePred σ)
     (φ : StatePred σ) (δs : Fin n → σ → Finset α)
     (ψs : Fin n → σ → Prop) (rs : Fin n → Action σ) (H : Pred σ)
-    (hS1 : ∀ e : Behavior σ, H e → ∀ k : ℕ, p (e k) →
-      eventually (statePred q) (e.drop k) ∨ φ (e k))
-    (hL2 : ∀ e : Behavior σ, H e → ∀ k : ℕ, φ (e k) → L2Step q φ δs ψs rs e k)
-    (hS3 : ∀ e : Behavior σ, H e → ∀ k : ℕ, φ (e k) → ∀ i : Fin n, ψs i (e k) →
+    (hS1 : ∀ e : Behavior σ, H e → ∀ k : ℕ, e k ∈ p →
+      eventually (statePred q) (e.drop k) ∨ e k ∈ φ)
+    (hL2 : ∀ e : Behavior σ, H e → ∀ k : ℕ, e k ∈ φ → L2Step q φ δs ψs rs e k)
+    (hS3 : ∀ e : Behavior σ, H e → ∀ k : ℕ, e k ∈ φ → ∀ i : Fin n, ψs i (e k) →
       eventually (statePred q) (e.drop k) ∨
         eventually (actionPred (rs i)) (e.drop k))
-    (hS4 : ∀ e : Behavior σ, H e → ∀ k : ℕ, φ (e k) →
+    (hS4 : ∀ e : Behavior σ, H e → ∀ k : ℕ, e k ∈ φ →
       eventually (statePred q) (e.drop k) ∨ ∃ i : Fin n, ψs i (e k)) :
     Entails H (leadsTo (statePred p) (statePred q)) := by
   intro e hH k hp
-  have hp' : p (e k) := by simpa using hp
+  have hp' : e k ∈ p := by simpa using hp
   rcases hS1 e hH k hp' with hevq | hφk
   · exact hevq
   · have hwf : WellFounded (@VecLexLess n) := vecLexLess_wellFounded n
@@ -582,10 +582,10 @@ structure LexRankCert (σ : Type u) (p q : StatePred σ) where
   φ : StatePred σ
   δs : Fin n → σ → Finset α
   H : Pred σ
-  c1 : ∀ e : Behavior σ, H e → ∀ k : ℕ, p (e k) → q (e k) ∨ φ (e k)
-  l2 : ∀ e : Behavior σ, H e → ∀ k : ℕ, φ (e k) →
-    (∃ m, q (e (k + m))) ∨
-      (φ (e (k + 1)) ∧
+  c1 : ∀ e : Behavior σ, H e → ∀ k : ℕ, e k ∈ p → e k ∈ q ∨ e k ∈ φ
+  l2 : ∀ e : Behavior σ, H e → ∀ k : ℕ, e k ∈ φ →
+    (∃ m, e (k + m) ∈ q) ∨
+      (e (k + 1) ∈ φ ∧
        (∀ i : Fin n, ¬ Pre ψs i (e k) →
          ∀ x, x ∈ δs i (e (k + 1)) → x ∈ δs i (e k)) ∧
        (∀ i : Fin n, Req ψs i (e k) → rs i (e k) (e (k + 1)) →
@@ -611,25 +611,25 @@ writing the proof)**:
    vacuously while q never happens. This version adds `hsched`. -/
 theorem LexRankCert.toLeadsTo {σ : Type u} {p q : StatePred σ}
     (cert : LexRankCert σ p q)
-    (hjustice : ∀ e, cert.H e → ∀ k : ℕ, cert.φ (e k) → ∀ i : Fin cert.n,
+    (hjustice : ∀ e, cert.H e → ∀ k : ℕ, e k ∈ cert.φ → ∀ i : Fin cert.n,
       cert.ψs i (e k) →
-      (∃ m, q (e (k + m))) ∨ (∃ m, cert.rs i (e (k + m)) (e (k + m + 1))))
-    (hsched : ∀ e, cert.H e → ∀ k : ℕ, cert.φ (e k) →
-      (∃ m, q (e (k + m))) ∨ ∃ i : Fin cert.n, cert.ψs i (e k)) :
+      (∃ m, e (k + m) ∈ q) ∨ (∃ m, cert.rs i (e (k + m)) (e (k + m + 1))))
+    (hsched : ∀ e, cert.H e → ∀ k : ℕ, e k ∈ cert.φ →
+      (∃ m, e (k + m) ∈ q) ∨ ∃ i : Fin cert.n, cert.ψs i (e k)) :
     Entails cert.H (leadsTo (statePred p) (statePred q)) := by
-  have hS1 : ∀ e : Behavior σ, cert.H e → ∀ k : ℕ, p (e k) →
-      eventually (statePred q) (e.drop k) ∨ cert.φ (e k) := by
+  have hS1 : ∀ e : Behavior σ, cert.H e → ∀ k : ℕ, e k ∈ p →
+      eventually (statePred q) (e.drop k) ∨ e k ∈ cert.φ := by
     intro e' hH' k' hp'
     rcases cert.c1 e' hH' k' hp' with hq | hφ
     · exact Or.inl (eventually_statePred_drop q e' k' |>.mpr ⟨0, hq⟩)
     · exact Or.inr hφ
-  have hL2 : ∀ e : Behavior σ, cert.H e → ∀ k : ℕ, cert.φ (e k) →
+  have hL2 : ∀ e : Behavior σ, cert.H e → ∀ k : ℕ, e k ∈ cert.φ →
       L2Step q cert.φ cert.δs cert.ψs cert.rs e k := by
     intro e' hH' k' hφ'
     rcases cert.l2 e' hH' k' hφ' with hevq | hrest
     · exact Or.inl (eventually_statePred_drop q e' k' |>.mpr hevq)
     · exact Or.inr hrest
-  have hS3 : ∀ e : Behavior σ, cert.H e → ∀ k : ℕ, cert.φ (e k) →
+  have hS3 : ∀ e : Behavior σ, cert.H e → ∀ k : ℕ, e k ∈ cert.φ →
       ∀ i : Fin cert.n, cert.ψs i (e k) →
       eventually (statePred q) (e.drop k) ∨
         eventually (actionPred (cert.rs i)) (e.drop k) := by
@@ -637,7 +637,7 @@ theorem LexRankCert.toLeadsTo {σ : Type u} {p q : StatePred σ}
     rcases hjustice e' hH' k' hφ' i hψ with hq | hr
     · exact Or.inl (eventually_statePred_drop q e' k' |>.mpr hq)
     · exact Or.inr (eventually_actionPred_drop (cert.rs i) e' k' |>.mpr hr)
-  have hS4 : ∀ e : Behavior σ, cert.H e → ∀ k : ℕ, cert.φ (e k) →
+  have hS4 : ∀ e : Behavior σ, cert.H e → ∀ k : ℕ, e k ∈ cert.φ →
       eventually (statePred q) (e.drop k) ∨ ∃ i : Fin cert.n, cert.ψs i (e k) := by
     intro e' hH' k' hφ'
     rcases hsched e' hH' k' hφ' with hq | hψ

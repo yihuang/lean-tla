@@ -44,7 +44,7 @@ def StepSim (abs : τ → σ) (lv : τ → α) (LNext : Action τ)
 /-- Init-level simulation: low-level initial states abstract to high-level
 initial states. -/
 def InitSim (abs : τ → σ) (LInit : StatePred τ) (GInit : StatePred σ) : Prop :=
-  ∀ t, LInit t → GInit (abs t)
+  ∀ t, t ∈ LInit → abs t ∈ GInit
 
 /-- The stuttering-step machine simulates through the abstraction, at every
 suffix of the behavior. -/
@@ -84,11 +84,11 @@ theorem refine_invariant {abs : τ → σ} {lv : τ → α} {LNext : Action τ}
     (hG : Entails (tlaAnd (statePred GInit) (stutAlways GNext gv))
       (always (statePred GInv))) :
     Entails (tlaAnd (statePred LInit) (stutAlways LNext lv))
-      (always (statePred fun t => GInv (abs t))) := by
+      (always (statePred { t | abs t ∈ GInv })) := by
   intro e hE n
   have h := specSim_entails hinit hstep _ hG e hE n
   rw [statePred_drop, Cslib.ωSequence.get_map] at h
-  simpa [statePred] using h
+  rwa [statePred_drop]
 
 /-- Justice lifts through an abstraction: to get `□◇⟨r⟩` on the abstracted
 behavior, exhibit an occurrence of `r` on the abstract states after every

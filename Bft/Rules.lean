@@ -15,8 +15,8 @@ namespace Bft
 /-- Inductive invariance (non-stuttering version). -/
 theorem init_invariant {σ : Type u} (init : StatePred σ) (next : Action σ)
     (inv : StatePred σ)
-    (hinit : ∀ s, init s → inv s)
-    (hstep : ∀ s s', next s s' → inv s → inv s') :
+    (hinit : ∀ s, s ∈ init → s ∈ inv)
+    (hstep : ∀ s s', next s s' → s ∈ inv → s' ∈ inv) :
     Entails (tlaAnd (statePred init) (always (actionPred next)))
       (always (statePred inv)) := by
   intro e he n
@@ -32,8 +32,8 @@ theorem init_invariant {σ : Type u} (init : StatePred σ) (next : Action σ)
 /-- Inductive invariance, stuttering version. -/
 theorem init_invariant_stut {σ : Type u} {α : Type v} (init : StatePred σ)
     (next : Action σ) (v : σ → α) (inv : StatePred σ)
-    (hinit : ∀ s, init s → inv s)
-    (hstep : ∀ s s', StutAction next v s s' → inv s → inv s') :
+    (hinit : ∀ s, s ∈ init → s ∈ inv)
+    (hstep : ∀ s s', StutAction next v s s' → s ∈ inv → s' ∈ inv) :
     Entails (tlaAnd (statePred init) (stutAlways next v))
       (always (statePred inv)) := by
   intro e he n
@@ -68,18 +68,18 @@ theorem leadsTo_or {σ : Type u} (p1 p2 q : Pred σ) :
 /-- WF1 (Lamport): `p ↝ q` under `□[N]_v ∧ WF_v(A)`. Proved from the semantics. -/
 theorem wf1 {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Action σ)
     (v : σ → α)
-    (hstep : ∀ s s', p s → StutAction N v s s' → p s' ∨ q s')
-    (haq : ∀ s s', p s → AngleAction A v s s' → q s')
-    (henable : ∀ s, p s → Enabled (AngleAction A v) s ∨ q s) :
+    (hstep : ∀ s s', s ∈ p → StutAction N v s s' → s' ∈ p ∨ s' ∈ q)
+    (haq : ∀ s s', s ∈ p → AngleAction A v s s' → s' ∈ q)
+    (henable : ∀ s, s ∈ p → s ∈ Enabled (AngleAction A v) ∨ s ∈ q) :
     Entails (tlaAnd (stutAlways N v) (WF_v A v))
       (leadsTo (statePred p) (statePred q)) := by
   intro e h k hpk
   apply Classical.byContradiction
   intro hq
-  have hqall : ∀ m, ¬ q (e (k + m)) := by
+  have hqall : ∀ m, e (k + m) ∉ q := by
     intro m hm
     exact hq ⟨m, by simpa using hm⟩
-  have hp : ∀ j, p (e (k + j)) := by
+  have hp : ∀ j, e (k + j) ∈ p := by
     intro j
     induction j with
     | zero => simpa [statePred] using hpk
@@ -90,7 +90,7 @@ theorem wf1 {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Action σ)
         rcases hstep _ _ ih hN with hp' | hq'
         · exact hp'
         · exact absurd hq' (hqall (j + 1))
-  have hen : ∀ j, Enabled (AngleAction A v) (e (k + j)) := by
+  have hen : ∀ j, e (k + j) ∈ Enabled (AngleAction A v) := by
     intro j
     rcases henable _ (hp j) with hEn | hqj
     · exact hEn
@@ -110,18 +110,18 @@ theorem wf1 {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Action σ)
 implies infinitely-often enabled, and SF guarantees firing). -/
 theorem sf1 {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Action σ)
     (v : σ → α)
-    (hstep : ∀ s s', p s → StutAction N v s s' → p s' ∨ q s')
-    (haq : ∀ s s', p s → AngleAction A v s s' → q s')
-    (henable : ∀ s, p s → Enabled (AngleAction A v) s ∨ q s) :
+    (hstep : ∀ s s', s ∈ p → StutAction N v s s' → s' ∈ p ∨ s' ∈ q)
+    (haq : ∀ s s', s ∈ p → AngleAction A v s s' → s' ∈ q)
+    (henable : ∀ s, s ∈ p → s ∈ Enabled (AngleAction A v) ∨ s ∈ q) :
     Entails (tlaAnd (stutAlways N v) (SF_v A v))
       (leadsTo (statePred p) (statePred q)) := by
   intro e h k hpk
   apply Classical.byContradiction
   intro hq
-  have hqall : ∀ m, ¬ q (e (k + m)) := by
+  have hqall : ∀ m, e (k + m) ∉ q := by
     intro m hm
     exact hq ⟨m, by simpa using hm⟩
-  have hp : ∀ j, p (e (k + j)) := by
+  have hp : ∀ j, e (k + j) ∈ p := by
     intro j
     induction j with
     | zero => simpa [statePred] using hpk
@@ -132,7 +132,7 @@ theorem sf1 {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Action σ)
         rcases hstep _ _ ih hN with hp' | hq'
         · exact hp'
         · exact absurd hq' (hqall (j + 1))
-  have hen : ∀ j, Enabled (AngleAction A v) (e (k + j)) := by
+  have hen : ∀ j, e (k + j) ∈ Enabled (AngleAction A v) := by
     intro j
     rcases henable _ (hp j) with hEn | hqj
     · exact hEn

@@ -56,13 +56,13 @@ def Hspec : Pred St := tlaAnd (statePred Init) (stutAlways Next vars)
 
 /-! ## Safety -/
 
-theorem init_inv : ∀ s, Init s → Inv s := by
+theorem init_inv : ∀ s, s ∈ Init → s ∈ Inv := by
   intro s hs
   change s.q.Nodup
   rw [hs.1]
   exact List.nodup_nil
 
-theorem step_inv : ∀ s s', StutAction Next vars s s' → Inv s → Inv s' := by
+theorem step_inv : ∀ s s', StutAction Next vars s s' → s ∈ Inv → s' ∈ Inv := by
   intro s s' hstep hinv
   rcases hstep with hnext | hstut
   swap
@@ -164,7 +164,7 @@ noncomputable def tmpl (x : Fin 3) : FifoTemplate St (Fin 3) where
 /-- Every queued element is eventually served. -/
 theorem elem_liveness (x : Fin 3) :
     Entails (tlaAnd Hspec (globalJustice Dequeue))
-      (leadsTo (statePred fun s => x ∈ s.q) (statePred fun s => x ∉ s.q)) :=
+      (leadsTo (statePred {s | x ∈ s.q}) (statePred {s | x ∉ s.q})) :=
   (tmpl x).liveness
 
 /-! ## Rule 11: finite family of certificates
@@ -176,10 +176,10 @@ left branch fires. The family shares `Hspec` and `Dequeue`, so
 
 /-- Certificate for "while `i` waits, some output is eventually produced". -/
 noncomputable def outCert (i : Fin 3) :
-    RelRankCert St (fun s => i ∈ s.q) (fun s => s.out ≠ []) where
+    RelRankCert St {s | i ∈ s.q} {s | s.out ≠ []} where
   α := ℕ
   r := Dequeue
-  φ := fun s => i ∈ s.q
+  φ := {s | i ∈ s.q}
   δ := fun s n => n < s.q.idxOf i
   R := fun s n => n < s.q.length
   H := Hspec
@@ -188,6 +188,7 @@ noncomputable def outCert (i : Fin 3) :
     Or.inr ⟨hp, fun _n hn => Nat.lt_of_lt_of_le hn List.idxOf_le_length⟩
   c2 := by
     intro e hE k hφ
+    simp at hφ
     have hN : StutAction Next vars (e k) (e (k + 1)) := by
       have h := hE.2 k
       simpa [stutAlways, always] using h
@@ -229,7 +230,7 @@ noncomputable def outCert (i : Fin 3) :
 /-- Rule 11: if the queue is nonempty, some output is eventually produced. -/
 theorem some_output :
     Entails (tlaAnd Hspec (globalJustice Dequeue))
-      (leadsTo (statePred fun s => ∃ i, i ∈ s.q) (statePred fun s => s.out ≠ [])) :=
+      (leadsTo (statePred {s | ∃ i, i ∈ s.q}) (statePred {s | s.out ≠ []})) :=
   RelRankCert.forall_fin Hspec Dequeue outCert (fun _ => ⟨rfl, rfl⟩)
 
 /-! ## Execution layer -/

@@ -52,11 +52,11 @@ variable {σ : Type u} {α : Type v} [DecidableEq α] (t : FifoTemplate σ α)
 
 /-- The certificate produced by the template: rank = queue position.
 `noncomputable` because the case splits use classical logic. -/
-noncomputable def toCert : RelRankCert σ (fun s => t.x ∈ t.queue s)
-    (fun s => t.x ∉ t.queue s) where
+noncomputable def toCert : RelRankCert σ {s | t.x ∈ t.queue s}
+    {s | t.x ∉ t.queue s} where
   α := ℕ
   r := t.serve
-  φ := fun s => t.x ∈ t.queue s
+  φ := {s | t.x ∈ t.queue s}
   δ := fun s i => t.x ∈ t.queue s ∧ i < (t.queue s).idxOf t.x
   R := fun s i => i < (t.queue s).length
   H := t.H
@@ -85,8 +85,8 @@ noncomputable def toCert : RelRankCert σ (fun s => t.x ∈ t.queue s)
 `x ∈ queue ↝ x ∉ queue`. -/
 theorem liveness :
     Entails (tlaAnd t.H (globalJustice t.serve))
-      (leadsTo (statePred fun s => t.x ∈ t.queue s)
-               (statePred fun s => t.x ∉ t.queue s)) :=
+      (leadsTo (statePred {s | t.x ∈ t.queue s})
+               (statePred {s | t.x ∉ t.queue s})) :=
   t.toCert.toLeadsTo
 
 end FifoTemplate

@@ -68,11 +68,29 @@ general) is expressed by the *absence* of an `SI (tlaImp F G)` instance;
 signatures. Consequently set notation (`s ∈ p`, `p ∩ q`, `p ∪ q`, `pᶜ`,
 `p ⊆ q`) works directly on state predicates, and CSLib's grind-annotated
 lemmas (`step_leadsTo`, `leadsTo_trans`, `leadsTo_cases_or`,
-`until_frequently_leadsTo_and`, …) apply with no conversion. House style:
-declare state predicates as `StatePred σ` or `{s | …}` (never rely on
-bare `σ → Prop` literals in `Set` positions — `Set` is semireducible, so
-`rw`-family tactics that check at strict transparency reject them; use
-`simp [statePred]` there).
+`until_frequently_leadsTo_and`, …) apply with no conversion.
+
+**House style (state-predicate applications)** — apply state predicates
+by membership: `s ∈ p` (never `p s`) in statements, premises, and
+certificate obligations. Rules:
+
+* Declare state predicates as `StatePred σ` or `{s | …}`; state-first
+  `σ → Prop` defs (`def X (s : St) : Prop`) cannot appear in `∈`
+  positions (no `Membership` instance — convert them to
+  `def X : StatePred σ := fun s => …`, application still works by
+  defeq).
+* `s ∈ {s | …}` set-builder membership *is* simplified by `simp`, so
+  `simp at hp` before `omega` is the standard idiom (omega does not see
+  `∈`); bare `a ∈ p` on a variable is not simplified by `simp`.
+* `exact`/`apply` bridge `a ∈ p` ↔ `p a` by defeq, so proofs may mix
+  forms, but `rw`-family tactics check at strict transparency: an inline
+  `fun s => …` literal in a `Set` position is rejected (use `{s | …}`),
+  and unfolding a named predicate inside `∈` needs `change` first
+  (`rw [φ]` will not see through `e k ∈ φ`).
+* The pointwise simp lemmas (`statePred_drop`, `eventually_statePred_drop`)
+  produce membership normal forms (`statePred p (e.drop k) ↔ e k ∈ p`),
+  so goals closed by `simpa [statePred]` must be stated in membership
+  form.
 
 The state-level fragment is pointwise-equivalent to
 `Cslib.ωSequence.Temporal` (`Step`/`LeadsTo`): certificate conclusions

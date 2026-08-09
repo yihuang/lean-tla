@@ -45,11 +45,11 @@ def GNext : Action ℕ := fun n n' => n < cap ∧ n' = n + 1
 /-- Frame: the counter itself. -/
 def gvars (n : ℕ) : ℕ := n
 
-theorem g_init_inv : ∀ s, GInit s → (fun n => n ≤ cap) s :=
+theorem g_init_inv : ∀ s, s ∈ GInit → s ∈ {n | n ≤ cap} :=
   fun _s hs => hs ▸ Nat.zero_le _
 
 theorem g_step_inv : ∀ s s', StutAction GNext gvars s s' →
-    (fun n => n ≤ cap) s → (fun n => n ≤ cap) s' := by
+    s ∈ {n | n ≤ cap} → s' ∈ {n | n ≤ cap} := by
   intro s s' hstep hinv
   have h : s ≤ cap := hinv
   rcases hstep with ⟨hlt, hs'⟩ | hstut
@@ -61,8 +61,8 @@ theorem g_step_inv : ∀ s s', StutAction GNext gvars s s' →
 
 theorem gsafety :
     Entails (tlaAnd (statePred GInit) (stutAlways GNext gvars))
-      (always (statePred fun n => n ≤ cap)) :=
-  init_invariant_stut GInit GNext gvars (fun n => n ≤ cap) g_init_inv g_step_inv
+      (always (statePred {n | n ≤ cap})) :=
+  init_invariant_stut GInit GNext gvars {n | n ≤ cap} g_init_inv g_step_inv
 
 /-! ## Low-level system: client, server, message soup -/
 
@@ -132,8 +132,8 @@ theorem stepSim : StepSim abs lvars LNext gvars GNext := by
 in-flight) never exceeds `cap` — proved once at the high level. -/
 theorem lsafety :
     Entails (tlaAnd (statePred LInit) (stutAlways LNext lvars))
-      (always (statePred fun t => abs t ≤ cap)) :=
-  refine_invariant initSim stepSim (fun n => n ≤ cap) gsafety
+      (always (statePred {t | abs t ≤ cap})) :=
+  refine_invariant initSim stepSim {n | n ≤ cap} gsafety
 
 /-! ## Execution layer -/
 
@@ -201,9 +201,9 @@ theorem low_step_inv : ∀ t t',
     exact h ▸ hinv
 
 /-- Every executable run respects the bound. -/
-theorem exec_safe (t₀ : LSt) (ht₀ : LInit t₀) (trace : List Lbl) :
+theorem exec_safe (t₀ : LSt) (ht₀ : t₀ ∈ LInit) (trace : List Lbl) :
     abs (execSpec.run t₀ trace) ≤ cap := by
-  apply execSpec.run_invariant LInit (fun t => abs t ≤ cap) _ _ t₀ ht₀ trace
+  apply execSpec.run_invariant LInit {t | abs t ≤ cap} _ _ t₀ ht₀ trace
   · intro t ht
     have h0 : abs t = 0 := initSim t ht
     show abs t ≤ cap

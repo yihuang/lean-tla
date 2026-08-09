@@ -83,18 +83,18 @@ of some spec behavior. Combined with `init_invariant_stut`, the spec's
 invariants cover all runs. -/
 theorem ExecSpec.run_invariant {σ : Type u} (es : ExecSpec σ)
     (init inv : StatePred σ)
-    (hinit : ∀ s, init s → inv s)
-    (hstep : ∀ s s', StutAction es.next (fun s => s) s s' → inv s → inv s')
-    (s₀ : σ) (hs₀ : init s₀) (trace : List es.lbl) :
-    inv (es.run s₀ trace) := by
-  suffices hgen : ∀ s₀ : σ, inv s₀ → inv (es.run s₀ trace) by
+    (hinit : ∀ s, s ∈ init → s ∈ inv)
+    (hstep : ∀ s s', StutAction es.next (fun s => s) s s' → s ∈ inv → s' ∈ inv)
+    (s₀ : σ) (hs₀ : s₀ ∈ init) (trace : List es.lbl) :
+    es.run s₀ trace ∈ inv := by
+  suffices hgen : ∀ s₀ : σ, s₀ ∈ inv → es.run s₀ trace ∈ inv by
     exact hgen s₀ (hinit s₀ hs₀)
   intro s₀ hinv
   induction trace generalizing s₀ with
   | nil => exact hinv
   | cons l ls ih =>
       unfold run
-      have hinv_step : inv (es.step s₀ l) := by
+      have hinv_step : es.step s₀ l ∈ inv := by
         rcases es.step_is_spec_step s₀ l with hnext | hstut
         · exact hstep _ _ (Or.inl hnext) hinv
         · rw [hstut]

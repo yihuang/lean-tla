@@ -35,12 +35,9 @@ on state predicates, exactly as in `Cslib.ωSequence.Temporal`). -/
 abbrev StatePred (σ : Type u) := Set σ
 abbrev Action (σ : Type u) := σ → σ → Prop
 
-/-- Suffix. Reuses CSLib directly; no custom definition. -/
-abbrev drop {σ : Type u} (n : ℕ) (e : Behavior σ) : Behavior σ := e.drop n
-
 /-! ## The three liftings -/
 
-def statePred {σ : Type u} (p : StatePred σ) : Pred σ := fun e => p (e 0)
+def statePred {σ : Type u} (p : StatePred σ) : Pred σ := fun e => e.head ∈ p
 def actionPred {σ : Type u} (a : Action σ) : Pred σ := fun e => a (e 0) (e 1)
 def purePred {σ : Type u} (p : Prop) : Pred σ := fun _ => p
 
@@ -57,7 +54,7 @@ def tlaExists {σ : Type u} {α : Type v} (f : α → Pred σ) : Pred σ := fun 
 
 def always {σ : Type u} (F : Pred σ) : Pred σ := fun e => ∀ n, F (e.drop n)
 def eventually {σ : Type u} (F : Pred σ) : Pred σ := fun e => ∃ n, F (e.drop n)
-def later {σ : Type u} (F : Pred σ) : Pred σ := fun e => F (e.drop 1)
+def later {σ : Type u} (F : Pred σ) : Pred σ := fun e => F e.tail
 def leadsTo {σ : Type u} (P Q : Pred σ) : Pred σ := always (tlaImp P (eventually Q))
 
 /-! ## Satisfaction and entailment -/
@@ -67,7 +64,7 @@ def Entails {σ : Type u} (F G : Pred σ) : Prop := ∀ e : Behavior σ, F e →
 
 /-! ## Actions, stuttering, fairness -/
 
-def Enabled {σ : Type u} (a : Action σ) : StatePred σ := fun s => ∃ s', a s s'
+def Enabled {σ : Type u} (a : Action σ) : StatePred σ := { s | ∃ s', a s s' }
 
 def Unchanged {σ : Type u} {α : Type v} (v : σ → α) : Action σ := fun s s' => v s' = v s
 
@@ -106,7 +103,7 @@ position. CSLib's `get_drop` (`@[simp]`) sends `(e.drop n) m` to
 temporal/position boundary. -/
 
 @[simp] theorem statePred_drop {σ : Type u} (p : StatePred σ) (e : Behavior σ)
-    (k : ℕ) : statePred p (e.drop k) = p (e k) := by
+    (k : ℕ) : statePred p (e.drop k) ↔ e k ∈ p := by
   simp [statePred]
 
 @[simp] theorem actionPred_drop {σ : Type u} (a : Action σ) (e : Behavior σ)
@@ -115,7 +112,7 @@ temporal/position boundary. -/
 
 @[simp] theorem eventually_statePred_drop {σ : Type u} (q : StatePred σ)
     (e : Behavior σ) (k : ℕ) :
-    eventually (statePred q) (e.drop k) ↔ ∃ m, q (e (k + m)) := by
+    eventually (statePred q) (e.drop k) ↔ ∃ m, e (k + m) ∈ q := by
   simp [eventually, statePred]
 
 @[simp] theorem eventually_actionPred_drop {σ : Type u} (r : Action σ)
