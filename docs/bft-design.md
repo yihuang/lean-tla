@@ -204,7 +204,13 @@ lean-tla `StreamletExec` 的 `step` 是 `noncomputable`（guard 含存在量词�
     bracket 形式的 delaborator。内核零改动：层内仅新增记法目标
     （`tlaIff`/`strongUntil`/`Satisfies`/`CorrectAct`/函数 `GetElem`）。
     演示 `Examples/SkinCounter`（bracket 全管道：`init_invariant_stut`
-    安全 + `wf1` 活性，证明全部落在内核定理上）。内核贡献 CSLib 待 6b | ✅ |
+    安全 + `wf1` 活性，证明全部落在内核定理上） | ✅ |
+| 6b | 内核贡献 CSLib（第一个 PR 草案已整理）：
+    `Cslib/Foundations/Data/OmegaSequence/RankDescent.lean`——Rule 6
+    关系排名引擎直接对接 CSLib 现成点态 `ωSequence.LeadsTo`
+    （`RankCert` 证书 + 点态 descent 核心，无公式层依赖），附 countdown
+    测试与 PR 描述；补丁与说明在输出目录。后续候选：trans/forall_fin
+    组合子、Rule 10 字典序排名 | ✅（PR 草案，待用户提交） |
 
 ### 明确不做
 
