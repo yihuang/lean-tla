@@ -8,3 +8,5 @@ require cslib from git "https://github.com/leanprover/cslib" @ "main"
 
 @[default_target]
 lean_lib TlaDsl
+
+lean_lib Bft
