@@ -41,7 +41,7 @@ generated variable explicitly (`simp [x]` is unsupported).
 @[simp] def Vars : StConc → Nat × Nat := fun s => (s.x, s.y)
 
 def Spec : Tla.Pred StConc := [t| Init ∧ □[Next]_Vars]
-def SpecWF : Tla.Pred StConc := [t| (Init ∧ □[Next]_Vars) ∧ Tla.WF_v Next Vars]
+def SpecWF : Tla.Pred StConc := [t| Init ∧ □[Next]_Vars ∧ WF_(Vars)(Next)]
 ```
 
 * `[p| ...]`/`[a| ...]` are dedicated elaborators: they introduce the
@@ -67,6 +67,15 @@ def SpecParam : Tla.Pred St := [t| Init ∧ □ Next ∧ ∀ p : Nat, □◇ Pol
   state-first predicates (`NotarizedBy n b e` inside `[p| ...]`).
 * `[t| ...]` rewrites the propositional connectives to the temporal ones;
   `□[Next]_Vars` is stuttering closure, `WF_v` weak fairness.
+* The angle action and fairness read like TLA: `⟨A⟩_v` is
+  `AngleAction A v`, `WF_(v)(A)`/`SF_(v)(A)` are `WF_v A v`/`SF_v A v`
+  (Lean's lexer joins `WF_vars` into one identifier, so the frame is
+  parenthesized), and `□◇⟨A⟩_v` is "A fires infinitely often" — all
+  usable directly inside `[t| ...]`:
+  `[t| Init ∧ □[Next]_Vars ∧ WF_(Vars)(Next) ∧ □◇⟨Enter⟩_Vars]`.
+  `[t| ...]` itself is a dedicated elaborator: it lifts the
+  propositional connectives to the temporal ones and elaborates against
+  `Pred σ`, pinning the state type from the expected type when given.
 * The two-frame convention: write derived predicates *state-first*
   (`def ChainNotarized (s : St) ...`) so they compose with the brackets,
   and put shared proof-relevant predicates in plain definitions (brackets

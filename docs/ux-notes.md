@@ -892,3 +892,16 @@ it spuriously fails) and is reused by both the honest and Byzantine
 `simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]` calls in
 `votes_persist_along`/`proposals_persist_along`/`epoch_step` are
 `tla_drop_simpa` calls.
+
+## 8. The temporal/fairness top level reads like TLA
+
+`⟨A⟩_v` (`AngleAction A v`), `WF_(v)(A)`/`SF_(v)(A)` (`WF_v A v`/
+`SF_v A v`), and `□◇⟨A⟩_v` ("`A` fires infinitely often") are scoped
+notation, and `[t| ...]` is now a dedicated elaborator (it lifts the
+propositional connectives and elaborates against `Pred σ`, pinning the
+state type from the expected type). Fairness specs read like TLA:
+`[t| Init ∧ □[Next]_vars ∧ WF_(vars)(Next) ∧ □◇⟨Enter⟩_vars]`. Two
+lexer facts worth remembering: Lean joins `WF_vars` into one identifier,
+so the frame is parenthesized (`WF_(vars)(Next)`, not `WF_vars(Next)`),
+and the frame argument parses as an atom (`term:max`), so a non-atomic
+frame needs parentheses too.

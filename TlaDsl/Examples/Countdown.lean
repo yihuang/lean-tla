@@ -54,7 +54,7 @@ def Spec (k : Nat) : Tla.Pred St :=
 stays at `i = n` or reaches `i ≤ n - 1`, every `⟨Next⟩_i` step reaches
 `i ≤ n - 1`, and `⟨Next⟩_i` is enabled. So `i = n` leads to `i ≤ n - 1`. -/
 theorem countdown_step (n : Nat) (hn : 0 < n) :
-    Tla.Entails (Tla.tlaAnd (Tla.stutAlways Next i) (Tla.WF_v Next i))
+    Tla.Entails (Tla.tlaAnd (Tla.stutAlways Next i) (WF_(i)(Next)))
       (Tla.leadsTo (Tla.statePred (fun s : St => s.i = n))
         (Tla.statePred (fun s : St => s.i ≤ n - 1))) := by
   tla_wf1
@@ -73,7 +73,7 @@ induction on `k` (well-foundedness of `Nat`) chains the steps: from
 `i ≤ k' + 1`, either `i = k' + 1` (WF1 drops the rank to `≤ k'`, then the
 hypothesis applies) or `i ≤ k'` already. -/
 theorem bounded_countdown (k : Nat) :
-    Tla.Entails (Tla.tlaAnd (Tla.stutAlways Next i) (Tla.WF_v Next i))
+    Tla.Entails (Tla.tlaAnd (Tla.stutAlways Next i) (WF_(i)(Next)))
       (Tla.leadsTo (Tla.statePred (fun s : St => s.i ≤ k))
         (Tla.statePred (fun s : St => s.i = 0))) := by
   induction k using Nat.strong_induction_on with
@@ -125,7 +125,7 @@ theorem bounded_countdown (k : Nat) :
 
 /-- The countdown from a concrete value: `i = k` leads to `i = 0`. -/
 theorem countdown_liveness (k : Nat) :
-    Tla.Entails (Tla.tlaAnd (Tla.stutAlways Next i) (Tla.WF_v Next i))
+    Tla.Entails (Tla.tlaAnd (Tla.stutAlways Next i) (WF_(i)(Next)))
       (Tla.leadsTo (Tla.statePred (fun s : St => s.i = k))
         (Tla.statePred (fun s : St => s.i = 0))) := by
   intro e hSpec n hp
@@ -145,7 +145,7 @@ theorem countdown_liveness (k : Nat) :
 fairness on `Next`, the countdown eventually reaches `i = 0`. -/
 theorem spec_liveness (k : Nat) :
     Tla.Entails (Tla.tlaAnd (Tla.statePred (Init k))
-      (Tla.tlaAnd (Tla.stutAlways Next i) (Tla.WF_v Next i)))
+      (Tla.tlaAnd (Tla.stutAlways Next i) (WF_(i)(Next))))
       (Tla.eventually (Tla.statePred (fun s : St => s.i = 0))) := by
   intro e h
   have hk : (e 0).i = k := by

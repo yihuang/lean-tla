@@ -659,10 +659,18 @@ elab "[a| " body:term "]" : term <= expectedType => do
       mkLambdaFVars #[st0, st1] eb
 
 syntax "[t| " term "]" : term
-macro_rules
-  | `([t| $body]) => do
-      let t ← liftFormula body
-      pure t.raw
+elab "[t| " body:term "]" : term <= expectedType => do
+  -- lift the propositional connectives to the temporal ones, then
+  -- elaborate against `Pred σ` so state predicates and actions lift
+  -- invisibly (via the coercions) and the state type is pinned by the
+  -- expected type when one is given
+  let t ← liftMacroM <| liftFormula body
+  let u ← mkFreshLevelMVar
+  let σ ← mkFreshExprMVar (some (mkSort (Level.succ u)))
+  let expected := mkApp (mkConst ``Pred [u]) σ
+  unless expectedType.isMVar do
+    let _ ← isDefEq expected expectedType
+  Term.elabTerm t (some expected)
 
 /-- `[c| Byz, p | body]`: the action `body` guarded by the honest-processor
 condition `p ∉ Byz` — sugar for `CorrectAct Byz p [a| body]`, the standard

@@ -82,6 +82,24 @@ def unexpStutAlways : Unexpander := fun stx => do
   | `($_ $next $v) => `(□[$next]_$v)
   | _ => pure stx
 
+@[app_unexpander Tla.AngleAction]
+def unexpAngleAction : Unexpander := fun stx => do
+  match stx with
+  | `($_ $A $v) => `(⟨$A⟩_$v)
+  | _ => pure stx
+
+@[app_unexpander Tla.WF_v]
+def unexpWF : Unexpander := fun stx => do
+  match stx with
+  | `($_ $A $v) => `(WF_$v($A))
+  | _ => pure stx
+
+@[app_unexpander Tla.SF_v]
+def unexpSF : Unexpander := fun stx => do
+  match stx with
+  | `($_ $A $v) => `(SF_$v($A))
+  | _ => pure stx
+
 @[app_unexpander Tla.leadsTo]
 def unexpLeadsTo : Unexpander := fun stx => do
   match stx with

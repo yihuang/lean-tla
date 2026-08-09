@@ -44,7 +44,7 @@ tla_var St x y
 @[simp] def Vars : St → Nat × Nat := fun s => (s.x, s.y)
 
 def Spec : Tla.Pred St := [t| Init ∧ □[Next]_Vars]
-def SpecWF : Tla.Pred St := [t| (Init ∧ □[Next]_Vars) ∧ Tla.WF_v Next Vars]
+def SpecWF : Tla.Pred St := [t| Init ∧ □[Next]_Vars ∧ WF_(Vars)(Next)]
 
 end Conc
 
@@ -60,7 +60,7 @@ tla_var St x
 @[simp] def Next : Tla.Action St := [a| x' = x + 1]
 
 def Spec : Tla.Pred St := [t| Init ∧ □[Next]_x]
-def SpecWF : Tla.Pred St := [t| (Init ∧ □[Next]_x) ∧ Tla.WF_v Next x]
+def SpecWF : Tla.Pred St := [t| Init ∧ □[Next]_x ∧ WF_(x)(Next)]
 
 end Abs
 
@@ -129,7 +129,7 @@ theorem abs_leadsTo :
         (Tla.statePred (fun s : Abs.St => s.x = 1))) := by
   intro e hSpec
   have hbase : Tla.tlaAnd (Tla.stutAlways Abs.Next Abs.x) (Tla.WF_v Abs.Next Abs.x) e := by
-    simpa [Abs.SpecWF] using ⟨hSpec.1.2, hSpec.2⟩
+    simpa [Abs.SpecWF] using ⟨hSpec.2.1, hSpec.2.2⟩
   exact abs_step 0 e hbase
 
 /-! ## 5. The safety refinement with `refine_via`
@@ -176,7 +176,7 @@ is the substantive part, see `RefinementLiveness.lean`). Then
 
 theorem wf_conc_to_abs (e : Tla.Behavior Conc.St) (hSpec : Conc.SpecWF e) :
     Tla.WF_v Abs.Next Abs.x (Cslib.ωSequence.map f e) := by
-  have hWF : Tla.WF_v Conc.Next Conc.Vars e := by simpa [Conc.SpecWF] using hSpec.2
+  have hWF : Tla.WF_v Conc.Next Conc.Vars e := by simpa [Conc.SpecWF] using hSpec.2.2
   -- the abstract and concrete angle actions are always enabled
   have hEnAbs : ∀ s : Abs.St, Tla.Enabled (Tla.AngleAction Abs.Next Abs.x) s := by
     intro s
@@ -217,8 +217,9 @@ theorem wf_conc_to_abs (e : Tla.Behavior Conc.St) (hSpec : Conc.SpecWF e) :
 
 theorem conc_refines_abs_wf : Tla.RefinesVia f Conc.SpecWF Abs.SpecWF := by
   intro e hSpec
-  exact ⟨Tla.refinement_mapping Abs.Init Abs.Next Abs.x Conc.Init Conc.Next Conc.Vars f
-    init_refines step_refines e ⟨hSpec.1.1, hSpec.1.2⟩, wf_conc_to_abs e hSpec⟩
+  have hsafe := Tla.refinement_mapping Abs.Init Abs.Next Abs.x Conc.Init Conc.Next Conc.Vars f
+    init_refines step_refines e ⟨hSpec.1, hSpec.2.1⟩
+  exact ⟨hsafe.1, ⟨hsafe.2, wf_conc_to_abs e hSpec⟩⟩
 
 theorem conc_leadsTo :
     Tla.Entails Conc.SpecWF
