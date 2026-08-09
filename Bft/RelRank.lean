@@ -221,6 +221,33 @@ theorem RelRankCert.trans {σ : Type u} {p q q' : StatePred σ}
     cert₂.toLeadsTo e (hH e hE)
   exact (leadsTo_trans (statePred p) (statePred q) (statePred q')) e ⟨h1, h2⟩ k hpk
 
+/-- Rule 11 (disjunction over a family, predicate level): if every member of a
+family of state predicates leads to `q` on a behavior, so does their
+existential disjunction. -/
+theorem leadsTo_exists {σ : Type u} {ι : Type v} {p : ι → StatePred σ}
+    {q : StatePred σ} (e : Behavior σ)
+    (h : ∀ i, leadsTo (statePred (p i)) (statePred q) e) :
+    leadsTo (statePred (fun s => ∃ i, p i s)) (statePred q) e := by
+  intro k hpk
+  rcases hpk with ⟨i, hi⟩
+  exact h i k hi
+
+/-- Rule 11 for certificates: a finite family of certificates that share the
+same ambient truth `H` and justice action `r` jointly proves
+`(∃ i, p i) ↝ q` under `H ∧ □◇⟨r⟩`. -/
+theorem RelRankCert.forall_fin {σ : Type u} {n : ℕ} {p : Fin n → StatePred σ}
+    {q : StatePred σ} (H : Pred σ) (r : Action σ)
+    (certs : ∀ i : Fin n, RelRankCert σ (p i) q)
+    (hsame : ∀ i, (certs i).H = H ∧ (certs i).r = r) :
+    Entails (tlaAnd H (globalJustice r))
+      (leadsTo (statePred (fun s => ∃ i, p i s)) (statePred q)) := by
+  intro e hE
+  apply leadsTo_exists
+  intro i
+  have hcert := (certs i).toLeadsTo e
+  rw [(hsame i).1, (hsame i).2] at hcert
+  exact hcert hE
+
 /-! ## Rule 10/11: lexicographic and parameterized combinators
 
 The well-foundedness facts (`VecLexLess`, `piLexNat_wellFounded`) are ported

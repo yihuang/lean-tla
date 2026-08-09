@@ -166,7 +166,13 @@ lean-tla `StreamletExec` 的 `step` 是 `noncomputable`（guard 含存在量词�
     冒烟测试 `Examples/TicketLock`（全管道 + `#eval`）与
     `Examples/ObligationDemo`（反例打印）进默认构建。自定义 grind
     patterns 留待 M3 按需补充 | ✅（1018 jobs 绿） |
-| 3 | Rule 10/11 组合子完整证明；证书库（队列模板） | |
+| 3 | Rule 11 组合子（`leadsTo_exists` + `RelRankCert.forall_fin`：共享 H 与
+    justice 动作的有限证书族 ⇒ `(∃ i, p i) ↝ q`）；证书库首个模板
+    `Bft/Templates/Fifo.lean`（FIFO 队列位置排名 `List.idxOf`：C1 与
+    有界性自动闭合，用户只证 hc2/hc3 两条行为级条件）；
+    演示 `Examples/FifoQueue`（Nodup 不变量在 hc2/hc3 内复用、
+    每元素活性、Rule 11 合并、执行层 `#eval` 冒烟） | ✅（1020 jobs 绿；
+    Rule 10 的 LexRankCert 修正版已在 M1 落地） |
 | 4 | 消息层 refinement：全局函数 spec → 本地状态 + 消息历史（Verdi 网络语义的 Lean 版；**最大研究缺口**） | |
 | 5 | 案例：Minimmit 全管道（spec → safety → liveness cert → 可运行参考实现） | |
 | 6 | 内核贡献 CSLib；语法皮（`tla_var`、`[a|...]`）作为可替换层 | |

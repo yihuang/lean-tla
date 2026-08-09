@@ -6,3 +6,4 @@ import Bft.CslibBridge
 import Bft.Obligation
 import Bft.Tactic
 import Bft.Exec
+import Bft.Templates.Fifo
