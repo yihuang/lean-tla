@@ -8,3 +8,4 @@ import Bft.Tactic
 import Bft.Exec
 import Bft.Refine
 import Bft.Templates.Fifo
+import Bft.Skin

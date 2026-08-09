@@ -195,7 +195,16 @@ lean-tla `StreamletExec` 的 `step` 是 `noncomputable`（guard 含存在量词�
     达不到法定人数）。范围诚实声明：只建模投票核心——父块依赖、
     视图推进、contradiction-based nullify 与活性（M-公证引导视图
     收敛）留待后续里程碑 | ✅（1023 jobs 绿） |
-| 6 | 内核贡献 CSLib；语法皮（`tla_var`、`[a|...]`）作为可替换层 | |
+| 6a | 语法皮肤层 `Bft/Skin/`（可替换层）：`tla_var` 一键声明状态函数与
+    默认帧 `vars`（附全局 `[simp]` `_apply` 引理）；`[p| ...]`/`[a| ...]`
+    类型导向的专用 elaborator（`x'` 后状态、有界 `∀/∃ ∈`、状态优先的
+    命名谓词与命名动作自动提升）；`[t| ...]` 时态公式（状态谓词/动作经
+    Coe 隐形提升、`□[A]_v`、`WF_(v)(A)`、`□◇⟨A⟩_v`）；`[c| Byz, p | body]`
+    诚实节点守卫糖；scoped TLA 记号（`open scoped Bft`）+ 目标反打印为
+    bracket 形式的 delaborator。内核零改动：层内仅新增记法目标
+    （`tlaIff`/`strongUntil`/`Satisfies`/`CorrectAct`/函数 `GetElem`）。
+    演示 `Examples/SkinCounter`（bracket 全管道：`init_invariant_stut`
+    安全 + `wf1` 活性，证明全部落在内核定理上）。内核贡献 CSLib 待 6b | ✅ |
 
 ### 明确不做
 
