@@ -1,16 +1,18 @@
 import Bft.Core
 
 /-!
-# Bft.Rules — 从语义证明的规则
+# Bft.Rules — rules proved from the semantics
 
-全部从 `Core` 的语义定义证明，不引入 axiom。时序/位置边界的归约依赖
-`Core` 注册的 pointwise simp 引理（`statePred_drop`/`actionPred_drop` 等，
-底层是 CSLib 的 `@[simp] get_drop`）——证明里不出现加法重写链。
+Everything is proved from the semantic definitions in `Core`; no axioms are
+introduced. Reduction at the temporal/position boundary relies on the
+pointwise simp lemmas registered in `Core` (`statePred_drop`,
+`actionPred_drop`, etc., ultimately CSLib's `@[simp] get_drop`) — no
+addition-rewrite chains appear in the proofs.
 -/
 
 namespace Bft
 
-/-- 不变式归纳（非 stutter 版）。 -/
+/-- Inductive invariance (non-stuttering version). -/
 theorem init_invariant {σ : Type u} (init : StatePred σ) (next : Action σ)
     (inv : StatePred σ)
     (hinit : ∀ s, init s → inv s)
@@ -27,7 +29,7 @@ theorem init_invariant {σ : Type u} (init : StatePred σ) (next : Action σ)
       simpa [statePred] using
         hstep (e n) (e (n + 1)) hstepn (by simpa [statePred] using ih)
 
-/-- Stutter 版不变式归纳。 -/
+/-- Inductive invariance, stuttering version. -/
 theorem init_invariant_stut {σ : Type u} {α : Type v} (init : StatePred σ)
     (next : Action σ) (v : σ → α) (inv : StatePred σ)
     (hinit : ∀ s, init s → inv s)
@@ -44,7 +46,7 @@ theorem init_invariant_stut {σ : Type u} {α : Type v} (init : StatePred σ)
       simpa [statePred] using
         hstep (e n) (e (n + 1)) hstepn (by simpa [statePred] using ih)
 
-/-- leads-to 传递性。 -/
+/-- Transitivity of leads-to. -/
 theorem leadsTo_trans {σ : Type u} (P Q R : Pred σ) :
     Entails (tlaAnd (leadsTo P Q) (leadsTo Q R)) (leadsTo P R) := by
   intro e h n hP
@@ -55,7 +57,7 @@ theorem leadsTo_trans {σ : Type u} (P Q R : Pred σ) :
   exact ⟨k + m, by
     simpa [Cslib.ωSequence.drop_drop, Nat.add_assoc] using hR⟩
 
-/-- leads-to 左析取分配。 -/
+/-- Left-or distribution of leads-to. -/
 theorem leadsTo_or {σ : Type u} (p1 p2 q : Pred σ) :
     Entails (tlaAnd (leadsTo p1 q) (leadsTo p2 q)) (leadsTo (tlaOr p1 p2) q) := by
   intro e h n hpq
@@ -63,7 +65,7 @@ theorem leadsTo_or {σ : Type u} (p1 p2 q : Pred σ) :
   · exact h.1 n hp1
   · exact h.2 n hp2
 
-/-- WF1（Lamport）：在 `□[N]_v ∧ WF_v(A)` 下 `p ↝ q`。从语义证明。 -/
+/-- WF1 (Lamport): `p ↝ q` under `□[N]_v ∧ WF_v(A)`. Proved from the semantics. -/
 theorem wf1 {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Action σ)
     (v : σ → α)
     (hstep : ∀ s s', p s → StutAction N v s s' → p s' ∨ q s')
@@ -97,14 +99,15 @@ theorem wf1 {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Action σ)
     have h2 := h.2 k
     apply h2
     intro j
-    -- goal: statePred (Enabled …) ((e.drop k).drop j)，归约为 e (k+j)
+    -- goal: statePred (Enabled …) ((e.drop k).drop j), reduced to e (k+j)
     simpa using hen j
   rcases hWF with ⟨j, hA⟩
   have hA' : AngleAction A v (e (k + j)) (e (k + j + 1)) := by
     simpa using hA
   exact hqall (j + 1) (haq _ _ (hp j) hA')
 
-/-- SF1：SF 版（反证下永久 enabled 蕴含无限次 enabled，SF 保证触发）。 -/
+/-- SF1: the SF version (permanently enabled under the contradiction assumption
+implies infinitely-often enabled, and SF guarantees firing). -/
 theorem sf1 {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Action σ)
     (v : σ → α)
     (hstep : ∀ s s', p s → StutAction N v s s' → p s' ∨ q s')

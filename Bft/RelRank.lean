@@ -5,36 +5,40 @@ import Mathlib.Order.WellFounded
 import Mathlib.Order.PiLex
 
 /-!
-# Bft.RelRank — relational ranking 活性引擎（McMillan CAV 2024）
+# Bft.RelRank — the relational-ranking liveness engine (McMillan CAV 2024)
 
-引擎化设计（docs/design.md §3）：
+Engine design (docs/bft-design.md §3):
 
-1. **规则即证书**：`RelRankCert` 把一次 Rule 6 应用的全部见证（φ, δ, R, r
-   与义务证明）打包成可存储、可组合、可打印的对象；
-2. **组合子**：`RelRankCert.trans`（Rule 7 链接）把两个证书合成一个；
-   字典序/参数化组合子（Rule 10/11）以同样方式给出（draft 陈述）；
-3. **义务形状**：C1–C3 全部是单步安全式性质，供 tactic 层
-   （`Bft/Tactic.lean` 的义务规范化器 + grind）自动 discharge。
+1. **Rules as certificates**: `RelRankCert` packages all the witnesses of
+   one Rule 6 application (φ, δ, R, r, and the obligation proofs) into an
+   object that can be stored, composed, and printed;
+2. **Combinators**: `RelRankCert.trans` (Rule 7 chaining) composes two
+   certificates into one; the lexicographic/parameterized combinators
+   (Rule 10/11) are given the same way (`LexRankCert`);
+3. **Obligation shapes**: C1–C3 are all single-step safety-like properties,
+   discharged automatically by the tactic layer (the obligation normalizer
+   in `Bft/Obligation.lean` + grind).
 
-`drop` 的 pointwise normal form 在 `Core` 里是定义等式，所以 descent
-证明里没有 suffix 重写链。
+The pointwise normal form of `drop` is a definitional equation in `Core`,
+so the descent proofs contain no suffix-rewrite chains.
 -/
 
 namespace Bft
 
 /-! ## Conserve / Reduce -/
 
-/-- 一步 conserve `δ`：不增加元素。 -/
+/-- One step conserves `δ`: no new elements. -/
 def Conserves {σ : Type u} {α : Type v} (δ : σ → α → Prop) (s s' : σ) : Prop :=
   ∀ x, δ s' x → δ s x
 
-/-- 一步 reduce `δ`：至少移除一个元素。 -/
+/-- One step reduces `δ`: at least one element removed. -/
 def Reduces {σ : Type u} {α : Type v} (δ : σ → α → Prop) (s s' : σ) : Prop :=
   ∃ x, δ s x ∧ ¬ δ s' x
 
-/-! ## Rule 5：有限性由归纳得到 -/
+/-! ## Rule 5: finiteness by induction -/
 
-/-- 若 `R` 初始为空、每步至多增加有限多元素，则 `R` 在每个有限时刻有限。 -/
+/-- If `R` starts empty and gains only finitely many elements per step,
+then `R` is finite at every finite time. -/
 theorem finite_rank {σ : Type u} {α : Type v} (R : σ → α → Prop) (e : Behavior σ)
     (h0 : ∀ x, ¬ R (e 0) x)
     (hstep : ∀ n : ℕ, Set.Finite {x : α | R (e (n + 1)) x ∧ ¬ R (e n) x}) :
@@ -53,9 +57,9 @@ theorem finite_rank {σ : Type u} {α : Type v} (R : σ → α → Prop) (e : Be
         · exact Or.inr ⟨hx, h⟩
       exact (Set.Finite.union ih (hstep n)).subset hsub
 
-/-! ## descent 三助手 -/
+/-! ## The three descent helpers -/
 
-/-- conserve + reduce + finite ⇒ 基数严格下降。 -/
+/-- conserve + reduce + finite ⇒ cardinality strictly decreases. -/
 theorem ncard_decrease {σ : Type u} {α : Type v} (δ : σ → α → Prop) {s s' : σ}
     (hcons : Conserves δ s s') (hred : Reduces δ s s')
     (hfin : Set.Finite {x | δ s x}) :
@@ -68,8 +72,8 @@ theorem ncard_decrease {σ : Type u} {α : Type v} (δ : σ → α → Prop) {s 
       exact hx' (hsup hx)
   exact Set.ncard_lt_ncard hssub hfin
 
-/-- walk：`φ` 成立期间，要么先到达 `q`，要么 `φ` 持续、`δ` 逐步 conserve
-且保持在起点外延之内。 -/
+/-- The walk: while `φ` holds, either `q` is reached first, or `φ` persists,
+`δ` is conserved step by step, and stays within the starting envelope. -/
 theorem rank_persist {σ : Type u} {α : Type v} (q : StatePred σ) (φ : StatePred σ)
     (δ : σ → α → Prop) (e : Behavior σ)
     (hD2 : ∀ k : ℕ, φ (e k) →
@@ -95,7 +99,7 @@ theorem rank_persist {σ : Type u} {α : Type v} (q : StatePred σ) (φ : StateP
             · exact hcons d (by omega)
           · exact hsubm (hconsm x (by rwa [← Nat.add_assoc] at hx))
 
-/-- soundness 核心：`|δ|` 的有限下降。 -/
+/-- The soundness core: finite descent of `|δ|`. -/
 theorem rank_descent {σ : Type u} {α : Type v} (q : StatePred σ) (r : Action σ)
     (φ : StatePred σ) (δ R : σ → α → Prop) (e : Behavior σ) (k : ℕ)
     (hR : ∀ n : ℕ, Set.Finite {x : α | R (e n) x})
@@ -138,9 +142,9 @@ theorem rank_descent {σ : Type u} {α : Type v} (q : StatePred σ) (r : Action 
                 hfin' le_rfl hφm1' with ⟨t, ht⟩
             exact ⟨m + 1 + t, by simpa [Nat.add_assoc] using ht⟩
 
-/-! ## Rule 6：relational reactivity rule -/
+/-! ## Rule 6: the relational reactivity rule -/
 
-/-- Rule 6：在 `H ∧ □◇⟨r⟩` 下 `p ↝ q`。 -/
+/-- Rule 6: `p ↝ q` under `H ∧ □◇⟨r⟩`. -/
 theorem relational_ranking_rule {σ : Type u} {α : Type v} (p q : StatePred σ)
     (r : Action σ) (φ : StatePred σ) (δ R : σ → α → Prop) (H : Pred σ)
     (hR : ∀ e : Behavior σ, ∀ n : ℕ, Set.Finite {x : α | R (e n) x})
@@ -169,10 +173,10 @@ theorem relational_ranking_rule {σ : Type u} {α : Type v} (p q : StatePred σ)
   · intro j _hφ
     exact Or.inr ((eventually_actionPred_drop r e j).mp (h.2 j))
 
-/-! ## 证书 -/
+/-! ## Certificates -/
 
-/-- Rule 6 证书：一次活性证明的全部见证，可存储/组合/打印。
-`α` 由 δ 决定，作为结构体的 outParam 出现。 -/
+/-- A Rule 6 certificate: all the witnesses of one liveness proof, in a
+storable/composable/printable object. -/
 structure RelRankCert (σ : Type u) (p q : StatePred σ) where
   α : Type v
   r : Action σ
@@ -188,7 +192,7 @@ structure RelRankCert (σ : Type u) (p q : StatePred σ) where
   c3 : ∀ e : Behavior σ, H e → ∀ k : ℕ, φ (e k) → r (e k) (e (k + 1)) →
     q (e (k + 1)) ∨ Reduces δ (e k) (e (k + 1))
 
-/-- 证书给出 leads-to 结论。 -/
+/-- A certificate yields its leads-to conclusion. -/
 theorem RelRankCert.toLeadsTo {σ : Type u} {p q : StatePred σ}
     (cert : RelRankCert σ p q) :
     Entails (tlaAnd cert.H (globalJustice cert.r))
@@ -196,10 +200,12 @@ theorem RelRankCert.toLeadsTo {σ : Type u} {p q : StatePred σ}
   relational_ranking_rule p q cert.r cert.φ cert.δ cert.R cert.H
     cert.finiteness cert.c1 cert.c2 cert.c3
 
-/-- Rule 7（链接）：两个证书合成 `p ↝ r'`。
-注意义务前提放宽为 `◇` 形式：第二个证书的结论在第一个证书的
-C2/C3 分支里以 `∃ m, q (e (· + m))` 出现，正是 `rank_descent`
-hD2/hD3 的左析取支形状——组合在 descent 层完成，不需要二次归纳。 -/
+/-- Rule 7 (chaining): two certificates compose into one leads-to.
+Note the obligation premises are relaxed to an eventually form: the second
+certificate's conclusion appears in the first certificate's C2/C3 branches
+as `∃ m, q (e (· + m))` — exactly the left-disjunct shape of `rank_descent`'s
+hD2/hD3, so composition happens at the descent layer with no second
+induction. -/
 theorem RelRankCert.trans {σ : Type u} {p q q' : StatePred σ}
     (cert₁ : RelRankCert σ p q)
     (cert₂ : RelRankCert σ q q')
@@ -208,26 +214,27 @@ theorem RelRankCert.trans {σ : Type u} {p q q' : StatePred σ}
     Entails (tlaAnd cert₁.H (globalJustice cert₁.r))
       (leadsTo (statePred p) (statePred q')) := by
   intro e hE k hpk
-  -- 证书一：`p ↝ q`
+  -- certificate one: p leads-to q
   have h1 : (leadsTo (statePred p) (statePred q)) e := cert₁.toLeadsTo e hE
-  -- 证书二在所达环境下：`q ↝ q'`
+  -- certificate two, in the reached environment
   have h2 : (leadsTo (statePred q) (statePred q')) e :=
     cert₂.toLeadsTo e (hH e hE)
   exact (leadsTo_trans (statePred p) (statePred q) (statePred q')) e ⟨h1, h2⟩ k hpk
 
-/-! ## Rule 10/11：字典序与参数化组合子（draft 陈述）
+/-! ## Rule 10/11: lexicographic and parameterized combinators
 
-`VecLexLess`/`piLexNat_wellFounded` 等 well-foundedness 事实在 lean-tla
-`RelRank.lean` 已机器检查，可直接移植；此处给出引擎接口的陈述，证明
-标记 draft。 -/
+The well-foundedness facts (`VecLexLess`, `piLexNat_wellFounded`) are ported
+from the machine-checked versions in lean-tla `RelRank.lean`. -/
 
-/-- 单调字典序：某个分量严格下降、更高优先级分量不增。 -/
+/-- Monotone lexicographic order: some component strictly decreases while no
+higher-priority component increases. -/
 def VecLexLess {n : ℕ} (x y : Fin n → ℕ) : Prop :=
   ∃ i : Fin n, (∀ j : Fin n, j.val < i.val → x j ≤ y j) ∧ x i < y i
 
-/-- 严格字典序（首个不同分量严格更小、之前分量相等）well-founded：
-对 `n` 归纳，用 `WellFounded.prod_lex` 拆掉头分量。
-（移植自 TlaDsl/RelRank.lean 已机器检查版本。） -/
+/-- The strict lexicographic order (first differing component strictly
+smaller, earlier components equal) is well-founded: induction on `n`,
+peeling off the head component with `WellFounded.prod_lex`.
+(Ported from the machine-checked version in TlaDsl/RelRank.lean.) -/
 theorem piLexNat_wellFounded : ∀ (n : ℕ),
     WellFounded (Pi.Lex (· < ·) (· < ·) : (Fin n → ℕ) → (Fin n → ℕ) → Prop)
   | 0 => by
@@ -269,8 +276,9 @@ theorem piLexNat_wellFounded : ∀ (n : ℕ),
         rw [← hfirst]
         exact Prod.Lex.right (first x) htaillex
 
-/-- `VecLexLess` 嵌入严格字典序：取向量不同的最小下标 `j₀`；`j₀` 处严格
-下降（单调条件给出不增），更早分量相等。 -/
+/-- `VecLexLess` embeds into the strict lexicographic order: take the least
+index `j₀` where the vectors differ; it strictly decreases there (the
+monotonicity premise gives non-increase), and earlier components are equal. -/
 theorem vecLexLess_imp_piLex {n : ℕ} {x y : Fin n → ℕ} (h : VecLexLess x y) :
     Pi.Lex (· < ·) (· < ·) x y := by
   rcases h with ⟨i, hle, hlt⟩
@@ -290,20 +298,20 @@ theorem vecLexLess_imp_piLex {n : ℕ} {x y : Fin n → ℕ} (h : VecLexLess x y
     exact le_antisymm hle' (not_lt.mp hxjy)
   · simpa [D] using D.min'_mem hD
 
-/-- `VecLexLess` well-founded（Theorem 1）。 -/
+/-- `VecLexLess` is well-founded (Theorem 1). -/
 theorem vecLexLess_wellFounded : ∀ (n : ℕ), WellFounded (@VecLexLess n) := by
   intro n
   exact WellFounded.mono (piLexNat_wellFounded n) (fun x y h => vecLexLess_imp_piLex h)
 
-/-- 分量 `i` 被抢占：存在更高优先级的 scheduler 处于开启。 -/
+/-- Component `i` is preempted: a higher-priority scheduler is on. -/
 def Pre {σ : Type u} {n : ℕ} (ψs : Fin n → σ → Prop) (i : Fin n) (s : σ) : Prop :=
   ∃ j : Fin n, j.val < i.val ∧ ψs j s
 
-/-- 分量 `i` 被需要：开启且未被抢占。 -/
+/-- Component `i` is required: on and not preempted. -/
 def Req {σ : Type u} {n : ℕ} (ψs : Fin n → σ → Prop) (i : Fin n) (s : σ) : Prop :=
   ψs i s ∧ ¬ Pre ψs i s
 
-/-! ### Finset 值 ranking 的辅助定义 -/
+/-! ### Helpers for `Finset`-valued rankings -/
 
 def ConservesFinset {σ : Type u} {α : Type v} (δ : σ → Finset α) (s s' : σ) : Prop :=
   δ s' ⊆ δ s
@@ -328,7 +336,7 @@ theorem card_lt_card_of_reduce {σ : Type u} {α : Type v} (δ : σ → Finset �
       exact hx0out (hsup hx0in)
   exact Finset.card_lt_card hssub
 
-/-- 后续位置的 `◇q` 提升回前面的后缀。 -/
+/-- A `◇q` at a later position lifts back to an earlier suffix. -/
 theorem eventually_statePred_lift {σ : Type u} (q : StatePred σ) (e : Behavior σ)
     (k t : ℕ) (h : eventually (statePred q) (e.drop (k + t))) :
     eventually (statePred q) (e.drop k) := by
@@ -336,7 +344,7 @@ theorem eventually_statePred_lift {σ : Type u} (q : StatePred σ) (e : Behavior
   rcases h with ⟨m, hm⟩
   exact ⟨t + m, by simpa [Nat.add_assoc] using hm⟩
 
-/-- L2 步形状（论文 Rule 10）。 -/
+/-- The L2 step shape (Rule 10 of the paper). -/
 def L2Step {σ : Type u} {α : Type v} {n : ℕ} (q : StatePred σ) (φ : StatePred σ)
     (δs : Fin n → σ → Finset α) (ψs : Fin n → σ → Prop) (rs : Fin n → Action σ)
     (e : Behavior σ) (k : ℕ) : Prop :=
@@ -347,7 +355,8 @@ def L2Step {σ : Type u} {α : Type v} {n : ℕ} (q : StatePred σ) (φ : StateP
        ReducesFinset (δs i) (e k) (e (k + 1))) ∧
      (∀ i : Fin n, Req ψs i (e k) → ¬ rs i (e k) (e (k + 1)) → ψs i (e (k + 1))))
 
-/-- Walk A+B：`¬◇q` 下 L2 保持 `φ` 且 conserve 所有未被抢占的分量。 -/
+/-- Walk A+B: under `¬◇q`, L2 preserves `φ` and conserves all non-preempted
+components. -/
 theorem walk_below {σ : Type u} {α : Type v} {n : ℕ} (q : StatePred σ)
     (φ : StatePred σ)
     (δs : Fin n → σ → Finset α) (ψs : Fin n → σ → Prop) (rs : Fin n → Action σ)
@@ -377,7 +386,8 @@ theorem walk_below {σ : Type u} {α : Type v} {n : ℕ} (q : StatePred σ)
             Finset.card_le_card hcons
           simpa [Nat.add_assoc] using le_trans hle1 (hle i hi)
 
-/-- Walk C：justice 未触发期间，被需要的 scheduler `ψ_l` 保持到首次触发。 -/
+/-- Walk C: while justice has not fired, a required scheduler `ψ_l` persists
+until the first firing. -/
 theorem sched_persist {σ : Type u} {α : Type v} {n : ℕ} (q : StatePred σ)
     (φ : StatePred σ)
     (δs : Fin n → σ → Finset α) (ψs : Fin n → σ → Prop) (rs : Fin n → Action σ)
@@ -407,8 +417,9 @@ theorem sched_persist {σ : Type u} {α : Type v} {n : ℕ} (q : StatePred σ)
         · simpa [Nat.add_assoc] using hrest.1
         · simpa [Nat.add_assoc] using hrest.2.2.2 l hreqt hnr
 
-/-- 从 `k` 起曾经被调度的最小下标：`Fin n` 上取最小元；比它小的下标
-永不调度，因此它及其以下永不抢占。 -/
+/-- The least index ever scheduled from `k`: the minimum over `Fin n`;
+smaller indices are never scheduled, so it and everything below it are
+never preempted. -/
 theorem min_ever_scheduled {σ : Type u} {n : ℕ} (ψs : Fin n → σ → Prop)
     (e : Behavior σ) (k : ℕ) (hS4 : ∃ i0 : Fin n, ψs i0 (e k)) :
     ∃ l : Fin n, (∃ m : ℕ, ψs l (e (k + m))) ∧
@@ -430,13 +441,15 @@ theorem min_ever_scheduled {σ : Type u} {n : ℕ} (ψs : Fin n → σ → Prop)
     have hle : l ≤ j := (Finset.isLeast_min' Sched hS).2 hjS
     exact (not_lt_of_ge hle) hj
 
-/-- Rule 10（论文）：字典序 relational ranking + stable scheduler。
-soundness：取最小被调度下标 `l`（`min_ever_scheduled`），它永不抢占，
-高优先级分量 conserve 有界（`walk_below`）；其 justice 最终触发（S3），
-由稳定性在首次触发时严格缩小（`sched_persist` +
-`card_lt_card_of_reduce`）；cardinality 向量在 `VecLexLess` 中严格下降，
-由 `vecLexLess_wellFounded` 终止。
-（移植自 TlaDsl/RelRank.lean 已机器检查版本。） -/
+/-- Rule 10 (of the paper): lexicographic relational ranking + stable
+schedulers. Soundness: take the least ever-scheduled index `l`
+(`min_ever_scheduled`) — it is never preempted, and higher-priority
+components stay conserved and bounded (`walk_below`); its justice
+eventually fires (S3), and by stability the first firing strictly shrinks
+its component (`sched_persist` + `card_lt_card_of_reduce`); the cardinality
+vector strictly decreases in `VecLexLess`, which terminates by
+`vecLexLess_wellFounded`.
+(Ported from the machine-checked version in TlaDsl/RelRank.lean.) -/
 theorem rel_rank_lex {σ : Type u} {α : Type v} {n : ℕ} (p q : StatePred σ)
     (φ : StatePred σ) (δs : Fin n → σ → Finset α)
     (ψs : Fin n → σ → Prop) (rs : Fin n → Action σ) (H : Pred σ)
@@ -532,8 +545,8 @@ theorem rel_rank_lex {σ : Type u} {α : Type v} {n : ℕ} (p q : StatePred σ)
                 simpa [Nat.add_assoc] using hev')
     exact hmain (fun i => (δs i (e k)).card) k hφk (fun i => le_rfl)
 
-/-- Rule 10 证书（字典序 + stable scheduler）。draft：字段即论文
-L2/P3/P4 前提的逐条对应。 -/
+/-- A Rule 10 certificate (lexicographic + stable schedulers): the fields
+correspond one-to-one to the paper's L2/P3/P4 premises. -/
 structure LexRankCert (σ : Type u) (p q : StatePred σ) where
   n : ℕ
   α : Type v
@@ -553,17 +566,22 @@ structure LexRankCert (σ : Type u) (p q : StatePred σ) where
        (∀ i : Fin n, Req ψs i (e k) → ¬ rs i (e k) (e (k + 1)) →
          ψs i (e (k + 1))))
 
-/-- Rule 10 结论：直接应用 `rel_rank_lex`，把证书字段转换为其前提形状。
+/-- The Rule 10 conclusion: applies `rel_rank_lex` directly, converting the
+certificate fields into its premise shapes.
 
-**两处陈述修正（相对初版草案，均在写证明时发现）**：
+**Two statement corrections (relative to the first draft, both found while
+writing the proof)**:
 
-1. 初版的 `hjustice` 以 `Req ψs i` 为前件，弱于论文的 S3（任意**开启**
-   的 justice 最终触发，包括被抢占的分量）。虽然 soundness 证明只在
-   无抢占点调用 S3，但 `rel_rank_lex` 的前提对全部 `i` 量化，故证书
-   必须提供全强度 S3。本版改为 `cert.ψs i` 前件。
-2. 初版遗漏 S4（任一时刻至少一个 scheduler 开启）。没有 S4 该陈述是
-   **假的**：常值行为上 φ 恒真、所有 δs 为空、无 scheduler 时全部前提
-   vacuous 成立而 q 永不发生。本版补上 `hsched`。 -/
+1. The draft's `hjustice` had `Req ψs i` as antecedent — weaker than the
+   paper's S3 (every scheduler that is **on** eventually fires, including
+   preempted components). Although the soundness proof only invokes S3 at
+   non-preempted points, `rel_rank_lex`'s premise quantifies over all `i`,
+   so the certificate must supply full-strength S3. This version uses the
+   `cert.ψs i` antecedent.
+2. The draft was missing S4 (at every time, at least one scheduler is on).
+   Without S4 the statement is **false**: on a constant behavior with φ
+   always true, all δs empty, and no scheduler, every premise holds
+   vacuously while q never happens. This version adds `hsched`. -/
 theorem LexRankCert.toLeadsTo {σ : Type u} {p q : StatePred σ}
     (cert : LexRankCert σ p q)
     (hjustice : ∀ e, cert.H e → ∀ k : ℕ, cert.φ (e k) → ∀ i : Fin cert.n,

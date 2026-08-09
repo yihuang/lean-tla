@@ -160,7 +160,12 @@ lean-tla `StreamletExec` 的 `step` 是 `noncomputable`（guard 含存在量词�
 | 0 | 本草案：内核 + 引擎骨架 + 执行管道 + 端到端示例 | ✅ |
 | 1 | 消除 sorry；`lake build Bft` 绿（1014 jobs，含 `CslibBridge`
     全部桥接引理） | ✅ 零 sorry |
-| 2 | 义务规范化器完整版：grind patterns、失败分类、两状态反例 | |
+| 2 | 义务规范化器（`Bft/Obligation.lean`）：`tla_ob` 规范化 +
+    omega/grind 收尾、失败按层分类（temporal/action/finiteness/ranking/
+    two-state）、`#tla_cex G to Q` 两状态反例（FinEnum 穷举）；
+    冒烟测试 `Examples/TicketLock`（全管道 + `#eval`）与
+    `Examples/ObligationDemo`（反例打印）进默认构建。自定义 grind
+    patterns 留待 M3 按需补充 | ✅（1018 jobs 绿） |
 | 3 | Rule 10/11 组合子完整证明；证书库（队列模板） | |
 | 4 | 消息层 refinement：全局函数 spec → 本地状态 + 消息历史（Verdi 网络语义的 Lean 版；**最大研究缺口**） | |
 | 5 | 案例：Minimmit 全管道（spec → safety → liveness cert → 可运行参考实现） | |

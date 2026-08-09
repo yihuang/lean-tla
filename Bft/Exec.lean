@@ -3,41 +3,47 @@ import Bft.Rules
 import Cslib.Foundations.Semantics.FLTS.Basic
 
 /-!
-# Bft.Exec — 可执行化管道：从关系 spec 到 step 函数
+# Bft.Exec — the executability pipeline: from relational spec to step function
 
-核心模式（Verdi/IronFleet 同款）：把 `Next = A₁ ∨ ... ∨ Aₙ` 的每个析取支
-拆成 **guard（前提，只读当前状态）** 与 **update（确定性更新）**，组装成
-label-indexed step 函数。若 guard 可判定、update 可计算，则 step 函数
-可编译执行。
+The core pattern (same as Verdi/IronFleet): split each disjunct of
+`Next = A₁ ∨ ... ∨ Aₙ` into a **guard** (a precondition reading only the
+current state) and an **update** (a deterministic state update), then
+assemble a label-indexed step function. If the guards are decidable and the
+updates computable, the step function compiles to executable code.
 
-正确性定理 `run_is_behavior`：step 函数的任意 run 都是 spec 的 behavior
-——guard 成立时该步触发对应动作，否则该步 stutter。于是 spec 上证明的
-`□Inv`（以及任何 safety 性质）自动覆盖所有可执行 run。**活性不在此处
-获得**：可执行系统的活性来自部署环境的公平性假设（网络最终送达、
-定时器最终触发），这是信任基的显式组成部分，见 docs/design.md §4.4。
+Correctness theorem `run_invariant`: every run of the step function is a
+behavior of the spec — when the guard holds the step fires the matching
+action, otherwise it stutters. Hence `□Inv` (and any safety property) proved
+about the spec automatically covers all executable runs. **Liveness is not
+obtained here**: the liveness of an executable system comes from fairness
+assumptions about the deployment environment (the network eventually
+delivers, timers eventually fire) — an explicit part of the trust base, see
+docs/bft-design.md §4.4.
 
-与 lean-tla `StreamletExec` 的差别：那里 guard 含存在量词导致
-`noncomputable step`；本文件把"可判定 guard"作为一等设计约束，
-`GuardedAction` 结构体把 guard 的 `Decidable` 实例和"guard ⇒ 动作语义
-吻合"的证明打包，由 elaborator/tactic 半自动构造。
+Difference from lean-tla's `StreamletExec`: there the guard contains an
+existential, forcing `noncomputable step`; here "decidable guard" is a
+first-class design constraint, and the `GuardedAction` structure bundles the
+guard's `Decidable` instance with the proof that guard/update agree with the
+relational semantics.
 -/
 
 namespace Bft
 
-/-- 一个可执行动作：确定性更新 + 可判定 guard + 与关系语义的一致性证明。 -/
+/-- One executable action: deterministic update + decidable guard +
+proofs of agreement with the relational semantics. -/
 structure GuardedAction (σ : Type u) (lbl : Type v) where
-  /-- 关系语义（spec 层的动作）。 -/
+  /-- The relational semantics (the spec-layer action). -/
   rel : lbl → Action σ
-  /-- 前提。 -/
+  /-- The precondition. -/
   guard : lbl → σ → Prop
-  /-- 确定性更新。 -/
+  /-- The deterministic update. -/
   update : lbl → σ → σ
-  /-- guard 成立 ⇒ 更新后的状态满足关系。 -/
+  /-- If the guard holds, the updated state satisfies the relation. -/
   fires : ∀ l s, guard l s → rel l s (update l s)
-  /-- 关系是确定性的：任何满足关系的状态都是 update 的结果。 -/
+  /-- The relation is deterministic: any state satisfying it is the update. -/
   det : ∀ l s s', rel l s s' → s' = update l s
 
-/-- 可执行 spec：label 类型 + 一组动作 + guard 可判定性。 -/
+/-- An executable spec: a label type + a family of actions + decidable guards. -/
 structure ExecSpec (σ : Type u) where
   lbl : Type v
   actions : GuardedAction σ lbl
@@ -45,22 +51,23 @@ structure ExecSpec (σ : Type u) where
 
 attribute [instance] ExecSpec.decGuard
 
-/-- step 函数：guard 成立则更新，否则 stutter。**可编译**。 -/
+/-- The step function: update when the guard holds, stutter otherwise.
+**Compilable**. -/
 def ExecSpec.step {σ : Type u} (es : ExecSpec σ) (s : σ) (l : es.lbl) : σ :=
   if es.actions.guard l s then es.actions.update l s else s
 
-/-- 从初始状态出发、按 label 序列驱动的 run。 -/
+/-- The run from an initial state, driven by a label sequence. -/
 def ExecSpec.run {σ : Type u} (es : ExecSpec σ) (s₀ : σ) :
     List es.lbl → σ
   | [] => s₀
   | l :: ls => es.run (es.step s₀ l) ls
 
-/-- spec 层的 Next：存在某个 label 使关系成立。 -/
+/-- The spec-layer Next: some label makes the relation hold. -/
 def ExecSpec.next {σ : Type u} (es : ExecSpec σ) : Action σ :=
   fun s s' => ∃ l, es.actions.rel l s s'
 
-/-- **正确性定理**：每个 step 要么是 `next` 步，要么是 stutter
-（对任意帧 `v` 都成立，取 `v = id` 即得 `Unchanged`）。 -/
+/-- **Correctness theorem**: every step is either a `next` step or a stutter
+(holds for any frame `v`; taking `v = id` gives `Unchanged`). -/
 theorem ExecSpec.step_is_spec_step {σ : Type u} (es : ExecSpec σ) (s : σ)
     (l : es.lbl) :
     es.next s (es.step s l) ∨ es.step s l = s := by
@@ -71,8 +78,9 @@ theorem ExecSpec.step_is_spec_step {σ : Type u} (es : ExecSpec σ) (s : σ)
   · rw [if_neg hg]
     exact Or.inr rfl
 
-/-- 由此，`run` 的每一步都是 spec 步：任意有限 trace 是 spec 某个
-behavior 的前缀。结合 `init_invariant_stut`，spec 的不变式覆盖所有 run。 -/
+/-- Hence every step of `run` is a spec step: any finite trace is a prefix
+of some spec behavior. Combined with `init_invariant_stut`, the spec's
+invariants cover all runs. -/
 theorem ExecSpec.run_invariant {σ : Type u} (es : ExecSpec σ)
     (init inv : StatePred σ)
     (hinit : ∀ s, init s → inv s)
@@ -93,30 +101,33 @@ theorem ExecSpec.run_invariant {σ : Type u} (es : ExecSpec σ)
           exact hinv
       exact ih (es.step s₀ l) hinv_step
 
-/-! ## FLTS 桥接
+/-! ## FLTS bridge
 
-`ExecSpec.step` 就是一个 `Cslib.FLTS`（确定性 label 迁移函数），
-`run = mtr`。于是执行层免费接入 CSLib 的 FLTS/LTS 机器
-（`FLTSToLTS`、积 `Prod`、simulation）。 -/
+`ExecSpec.step` is literally a `Cslib.FLTS` (a deterministic labeled
+transition function), with `run = mtr`. The execution layer thus gets
+CSLib's FLTS/LTS machinery for free (`FLTSToLTS`, products `Prod`,
+simulation). -/
 
-/-- 可执行 spec 对应的 FLTS。 -/
+/-- The FLTS corresponding to an executable spec. -/
 def ExecSpec.toFLTS {σ : Type u} (es : ExecSpec σ) : Cslib.FLTS σ es.lbl where
   tr := es.step
 
-/-- run 即 FLTS 的多步迁移。 -/
+/-- A run is exactly the FLTS multi-step transition. -/
 theorem ExecSpec.run_eq_mtr {σ : Type u} (es : ExecSpec σ) (s₀ : σ)
     (ls : List es.lbl) :
     es.run s₀ ls = es.toFLTS.mtr s₀ ls := by
   induction ls generalizing s₀ with
   | nil => rfl
   | cons l ls ih =>
-      -- 两边分别展开一步：run 的 cons 子句与 `List.foldl` 的 cons 子句
-      -- （`mtr` 即 `μs.foldl flts.tr s`），再对尾段用归纳假设。
+      -- Unfold one step on both sides: the cons clause of `run` and the
+      -- cons clause of `List.foldl` (`mtr` is `μs.foldl flts.tr s`),
+      -- then apply the induction hypothesis to the tail.
       show es.run (es.step s₀ l) ls = es.toFLTS.mtr (es.step s₀ l) ls
       exact ih (es.step s₀ l)
 
-/-- **确定性**：spec 关系在可执行动作下是函数——refinement 方向
-（每个 spec 步都是某个 step）也因此免费得到，对模型检查/对拍有用。 -/
+/-- **Determinism**: the spec relation is a function under executable
+actions — so the refinement direction (every spec step is some `step`)
+comes for free, useful for model checking and differential testing. -/
 theorem ExecSpec.next_det {σ : Type u} (es : ExecSpec σ) (s s' : σ)
     (h : es.next s s') : ∃ l, s' = es.step s l ∨
       (¬ es.actions.guard l s ∧ es.step s l = s) := by
