@@ -284,8 +284,8 @@ theorem consistency (hn : 5 * f + 1 ≤ n) (hB : Byz.card ≤ f) :
   intro e hE k
   have hinv : HonestUniq n Byz (e k) := by
     have h := safety n Byz e hE k
-    rwa [statePred_drop] at h
-  rw [statePred_drop]
+    simpa [statePred] using h
+  simp only [statePred, Cslib.ωSequence.get_drop, Nat.add_zero]
   exact ⟨fun _ _ _ => lnot_unique n f Byz hn hB hinv,
          fun _ _ _ => lnot_not_mnot n f Byz hn hB hinv,
          fun _ _ => lnot_not_null n f Byz hn hB hinv⟩

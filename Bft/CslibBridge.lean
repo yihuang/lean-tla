@@ -26,12 +26,14 @@ open Cslib Set Filter
 /-! ## 1. State-level leads-to is equivalent to CSLib `LeadsTo` -/
 
 /-- `leadsTo ⌜p⌝ ⌜q⌝` holds on a behavior `e` iff CSLib's
-`e.LeadsTo {s | p s} {s | q s}` does. This connects certificate conclusions
-to CSLib's grind-annotated API (`step_leadsTo`, `leadsTo_trans`,
-`until_frequently_leadsTo_and`, etc. are directly reusable). -/
+`e.LeadsTo p q` does. `StatePred` is literally `Set`, so this is a pure
+statement-level equivalence: certificate conclusions translate losslessly
+into CSLib's grind-annotated API (`step_leadsTo`, `leadsTo_trans`,
+`until_frequently_leadsTo_and`, …), which is directly reusable on Bft state
+predicates (`p ∩ q`, `pᶜ`, `s ∈ p` all work). -/
 theorem leadsTo_statePred_iff {σ : Type u} (p q : StatePred σ) (e : Behavior σ) :
     leadsTo (statePred p) (statePred q) e ↔
-      e.LeadsTo {s | p s} {s | q s} := by
+      e.LeadsTo p q := by
   simp [leadsTo, always, tlaImp, eventually, statePred, Cslib.ωSequence.LeadsTo]
   constructor
   · intro h k hpk
@@ -45,7 +47,7 @@ theorem leadsTo_statePred_iff {σ : Type u} (p q : StatePred σ) (e : Behavior �
 /-- `Step` is CSLib's form of "single-step implication": same shape as the
 step obligation of inductive-invariant proofs. -/
 theorem step_iff {σ : Type u} (p q : StatePred σ) (e : Behavior σ) :
-    e.Step {s | p s} {s | q s} ↔ ∀ k, p (e k) → q (e (k + 1)) :=
+    e.Step p q ↔ ∀ k, p (e k) → q (e (k + 1)) :=
   Iff.rfl
 
 /-! ## 2. SF and `∃ᶠ` -/

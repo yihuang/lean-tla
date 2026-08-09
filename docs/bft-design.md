@@ -63,11 +63,21 @@ general) is expressed by the *absence* of an `SI (tlaImp F G)` instance;
 
 ### 3.3 CSLib bridge
 
+`StatePred σ` is literally `Set σ` (mathlib's `Set` is defined as
+`α → Prop`), matching `Cslib.ωSequence.Temporal`'s `Step`/`LeadsTo`
+signatures. Consequently set notation (`s ∈ p`, `p ∩ q`, `p ∪ q`, `pᶜ`,
+`p ⊆ q`) works directly on state predicates, and CSLib's grind-annotated
+lemmas (`step_leadsTo`, `leadsTo_trans`, `leadsTo_cases_or`,
+`until_frequently_leadsTo_and`, …) apply with no conversion. House style:
+declare state predicates as `StatePred σ` or `{s | …}` (never rely on
+bare `σ → Prop` literals in `Set` positions — `Set` is semireducible, so
+`rw`-family tactics that check at strict transparency reject them; use
+`simp [statePred]` there).
+
 The state-level fragment is pointwise-equivalent to
 `Cslib.ωSequence.Temporal` (`Step`/`LeadsTo`): certificate conclusions
-translate losslessly into CSLib vocabulary, and CSLib's grind-annotated
-lemmas (`step_leadsTo`, `leadsTo_trans`, …) are directly reusable. The
-bridge also covers `InfOcc` (`∃ᶠ`-machinery for SF-style "infinitely
+translate losslessly into CSLib vocabulary via `leadsTo_statePred_iff`.
+The bridge also covers `InfOcc` (`∃ᶠ`-machinery for SF-style "infinitely
 often enabled") and `FLTS` (the executable step is an FLTS; `run = mtr`).
 
 ### 3.4 Finite vs. infinite stuttering: an honest cut

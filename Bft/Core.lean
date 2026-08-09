@@ -27,7 +27,12 @@ namespace Bft
 /-- Infinite behaviors. -/
 abbrev Behavior (σ : Type u) := Cslib.ωSequence σ
 abbrev Pred (σ : Type u) := Behavior σ → Prop
-abbrev StatePred (σ : Type u) := σ → Prop
+/-- State predicates are sets of states — the same type CSLib's
+`Step`/`LeadsTo` take, so CSLib's grind-annotated lemma library applies
+directly (`Set α` is defined as `α → Prop` in mathlib; this abbreviation
+makes the set notation `s ∈ p`, `p ∩ q`, `p ∪ q`, `pᶜ`, `p ⊆ q` available
+on state predicates, exactly as in `Cslib.ωSequence.Temporal`). -/
+abbrev StatePred (σ : Type u) := Set σ
 abbrev Action (σ : Type u) := σ → σ → Prop
 
 /-- Suffix. Reuses CSLib directly; no custom definition. -/

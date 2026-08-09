@@ -68,13 +68,13 @@ noncomputable def toCert : RelRankCert σ (fun s => t.x ∈ t.queue s)
   c2 := fun e hH k hφ => by
     by_cases hq : t.x ∉ t.queue (e (k + 1))
     · exact Or.inl hq
-    · push_neg at hq
+    · push Not at hq
       refine Or.inr ⟨hq, fun i hi => ⟨hφ, ?_⟩⟩
       exact Nat.lt_of_lt_of_le hi.2 (t.hc2 e hH k hφ hq)
   c3 := fun e hH k hφ hr => by
     by_cases hq : t.x ∉ t.queue (e (k + 1))
     · exact Or.inl hq
-    · push_neg at hq
+    · push Not at hq
       have hlt := t.hc3 e hH k hφ hr hq
       have hpos : 1 ≤ (t.queue (e k)).idxOf t.x := by omega
       refine Or.inr ⟨(t.queue (e k)).idxOf t.x - 1, ⟨hφ, by omega⟩, ?_⟩

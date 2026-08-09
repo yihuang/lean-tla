@@ -14,6 +14,12 @@ experiment. If it causes inference surprises, drop this file and use explicit
 instance {σ : Type u} : Coe (σ → Prop) (Behavior σ → Prop) :=
   ⟨statePred⟩
 
+/-- The same for `Set`-typed state predicates (`StatePred σ`): typeclass
+synthesis does not unfold the `Set` definition, so the `σ → Prop` instance
+above does not serve `Set σ` values. -/
+instance {σ : Type u} : Coe (Set σ) (Behavior σ → Prop) :=
+  ⟨statePred⟩
+
 /-- Actions appear directly where temporal formulas are expected
 (e.g. `[t| ... ∧ □◇ PollA ∧ ... ]`). -/
 instance {σ : Type u} : Coe (σ → σ → Prop) (Behavior σ → Prop) :=

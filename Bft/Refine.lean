@@ -88,8 +88,7 @@ theorem refine_invariant {abs : τ → σ} {lv : τ → α} {LNext : Action τ}
   intro e hE n
   have h := specSim_entails hinit hstep _ hG e hE n
   rw [statePred_drop, Cslib.ωSequence.get_map] at h
-  rw [statePred_drop]
-  exact h
+  simpa [statePred] using h
 
 /-- Justice lifts through an abstraction: to get `□◇⟨r⟩` on the abstracted
 behavior, exhibit an occurrence of `r` on the abstract states after every
