@@ -173,7 +173,14 @@ lean-tla `StreamletExec` 的 `step` 是 `noncomputable`（guard 含存在量词�
     演示 `Examples/FifoQueue`（Nodup 不变量在 hc2/hc3 内复用、
     每元素活性、Rule 11 合并、执行层 `#eval` 冒烟） | ✅（1020 jobs 绿；
     Rule 10 的 LexRankCert 修正版已在 M1 落地） |
-| 4 | 消息层 refinement：全局函数 spec → 本地状态 + 消息历史（Verdi 网络语义的 Lean 版；**最大研究缺口**） | |
+| 4 | 消息层 refinement 第一层（`Bft/Refine.lean`）：`StepSim`/`InitSim`
+    步模拟 ⇒ `specSim_entails`（任意高层性质经抽象函数迁移，安全活性
+    通用）、`refine_invariant` 不变量运输、`globalJustice_map` justice
+    提升；`Packet`/`NetState` 消息汤模型（list，无 FIFO 假设）。
+    演示 `Examples/BoundedCounter`（abs = 已服务 + 在途消息数，
+    `n ≤ cap` 高层证一次、分布式系统免费继承；执行层 `#eval` 冒烟）。
+    公平性保持显式（与 TicketLock 一致的诚实处理）；完整 Verdi 式
+    网络语义（故障、复制）仍是缺口 | ✅（1022 jobs 绿） |
 | 5 | 案例：Minimmit 全管道（spec → safety → liveness cert → 可运行参考实现） | |
 | 6 | 内核贡献 CSLib；语法皮（`tla_var`、`[a|...]`）作为可替换层 | |
 
