@@ -181,7 +181,20 @@ lean-tla `StreamletExec` 的 `step` 是 `noncomputable`（guard 含存在量词�
     `n ≤ cap` 高层证一次、分布式系统免费继承；执行层 `#eval` 冒烟）。
     公平性保持显式（与 TicketLock 一致的诚实处理）；完整 Verdi 式
     网络语义（故障、复制）仍是缺口 | ✅（1022 jobs 绿） |
-| 5 | 案例：Minimmit 全管道（spec → safety → liveness cert → 可运行参考实现） | |
+| 5 | 案例：Minimmit 投票核心全管道（`Bft/Examples/Minimmit.lean`）。
+    模型：消息集合只增（`Finset` 消息汤）、诚实节点每视图至多一票
+    （guard 拒绝双投）、拜占庭节点任意投票；n ≥ 5f+1、L-公证
+    （n−f 票）/M-公证（2f+1 票）/nullify（2f+1 票）三个法定人数。
+    安全：引擎引理 `exists_honest_inter`（两票集大小之和 > n+f ⇒
+    交集中有诚实节点）一条驱动 X0（同视图 L-公证唯一）、X1（L-公证
+    排除冲突 M-公证）、X2（L-公证视图不可 nullify）三条 quorum
+    相交定理；`HonestUniq` 归纳不变量经 `init_invariant_stut` 提升为
+    时序定理，`consistency` 把三条性质打包为 □ 陈述。执行层：标签
+    化 ExecSpec（honest/byz）、`exec_next_refines`、`exec_safe` 免费
+    继承不变量，`#eval` 冒烟（n=6, f=1，双投被拒、拜占庭 Equivocation
+    达不到法定人数）。范围诚实声明：只建模投票核心——父块依赖、
+    视图推进、contradiction-based nullify 与活性（M-公证引导视图
+    收敛）留待后续里程碑 | ✅（1023 jobs 绿） |
 | 6 | 内核贡献 CSLib；语法皮（`tla_var`、`[a|...]`）作为可替换层 | |
 
 ### 明确不做
