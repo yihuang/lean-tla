@@ -15,6 +15,10 @@ high-level "global function" spec, via an abstraction function.
   liveness, since `P` is arbitrary) holds of the abstracted low-level
   behavior;
 * `refine_invariant` — the common special case, transporting an invariant;
+* `specSim_entails_stutter` — the formula-level closure: any behavior
+  finitely stutter-equivalent (`StutterEq`) to the abstraction satisfies
+  every stutter-invariant (`SI`) high-level consequence. This is the first
+  consumer of the `SI` typeclass;
 * `globalJustice_map` — lifting justice through the abstraction: the
   caller exhibits occurrences of the high-level action on abstract states.
   Low-level fairness is *not* derived here; as in the rest of the library,
@@ -26,6 +30,7 @@ are representable).
 -/
 import Bft.Core
 import Bft.Rules
+import Bft.Stutter
 
 namespace Bft
 
@@ -89,6 +94,23 @@ theorem refine_invariant {abs : τ → σ} {lv : τ → α} {LNext : Action τ}
   have h := specSim_entails hinit hstep _ hG e hE n
   rw [statePred_drop, Cslib.ωSequence.get_map] at h
   rwa [statePred_drop]
+
+/-- Formula-level refinement, closed under finite stuttering: any behavior
+finitely stutter-equivalent to the abstraction of a low-level behavior
+satisfies every stutter-invariant high-level consequence `P`. The first
+consumer of the `SI` typeclass — `SI P` discharges the closure, so
+implementation-correctness statements compose with stutter variation of the
+observed high-level behavior (implementation = spec up to stuttering). -/
+theorem specSim_entails_stutter {abs : τ → σ} {lv : τ → α} {LNext : Action τ}
+    {gv : σ → β} {GNext : Action σ}
+    {LInit : StatePred τ} {GInit : StatePred σ}
+    (hinit : InitSim abs LInit GInit) (hstep : StepSim abs lv LNext gv GNext)
+    (P : Pred σ) [SI P]
+    (hG : Entails (tlaAnd (statePred GInit) (stutAlways GNext gv)) P)
+    (e : Behavior τ)
+    (hE : (tlaAnd (statePred LInit) (stutAlways LNext lv)) e)
+    {e' : Behavior σ} (hst : StutterEq (Behavior.map abs e) e') : P e' :=
+  (SI.congr_stutterEq hst).mp (specSim_entails hinit hstep P hG e hE)
 
 /-- Justice lifts through an abstraction: to get `□◇⟨r⟩` on the abstracted
 behavior, exhibit an occurrence of `r` on the abstract states after every

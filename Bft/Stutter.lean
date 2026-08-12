@@ -481,4 +481,86 @@ instance {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α) : SI (SF_v 
     (always (eventually (statePred (Enabled (AngleAction A v)))))
     (eventually (actionPred (AngleAction A v)))
 
+/-! ## Finite stutter equivalence: the first `SI` consumer
+
+`StutterEq e e'` — `e'` is obtained from `e` by a finite chain of single
+stutter insertions and legal single stutter deletions. It is an equivalence
+(`StutterEq.refl`/`symm`/`trans`), and `SI.congr_stutterEq` shows that
+satisfaction of an `SI` formula is constant on its classes. This is the
+finite-stutter half of TLA legality made executable: refinement correctness
+statements (see `specSim_entails_stutter` in `Bft/Refine.lean`) compose
+with stutter variation of the observed high-level behavior. -/
+
+/-- Finite stutter equivalence: the closure of single insertions and legal
+single deletions, built up on the right argument. -/
+inductive StutterEq {σ : Type u} : Behavior σ → Behavior σ → Prop where
+  | refl (e : Behavior σ) : StutterEq e e
+  | ins (e e' : Behavior σ) (n : ℕ) : StutterEq e e' → StutterEq e (insertAt e' n)
+  | del (e e' : Behavior σ) (n : ℕ) : e' n = e' (n + 1) →
+      StutterEq e e' → StutterEq e (removeAt e' n)
+
+/-- Deleting the duplicate inserted at `n` recovers the original behavior. -/
+@[simp] theorem removeAt_insertAt {σ : Type u} (e : Behavior σ) (n : ℕ) :
+    removeAt (insertAt e n) n = e := by
+  ext m
+  simp only [removeAt_apply, insertAt_apply]
+  by_cases hm : m < n
+  · rw [if_pos hm, if_pos (Nat.le_of_lt hm)]
+  · rw [if_neg hm, if_neg (show ¬ m + 1 ≤ n by omega), Nat.add_sub_cancel]
+
+/-- Inserting back at a legal deletion point recovers the original behavior. -/
+@[simp] theorem insertAt_removeAt {σ : Type u} {e : Behavior σ} {n : ℕ}
+    (h : e n = e (n + 1)) : insertAt (removeAt e n) n = e := by
+  ext m
+  simp only [insertAt_apply, removeAt_apply]
+  by_cases hm : m ≤ n
+  · rw [if_pos hm]
+    by_cases hmn : m < n
+    · rw [if_pos hmn]
+    · have heq : m = n := by omega
+      subst m
+      rw [if_neg (Nat.lt_irrefl n)]
+      exact h.symm
+  · rw [if_neg hm, if_neg (show ¬ m - 1 < n by omega),
+      Nat.sub_add_cancel (show 1 ≤ m by omega)]
+
+/-- Chains compose: `StutterEq` is transitive. -/
+theorem StutterEq.trans {σ : Type u} {a b c : Behavior σ}
+    (h1 : StutterEq a b) (h2 : StutterEq b c) : StutterEq a c := by
+  revert h1
+  induction h2 with
+  | refl => exact id
+  | ins e0 m hrec ih => exact fun h1 => .ins a e0 m (ih h1)
+  | del e0 m hdup hrec ih => exact fun h1 => .del a e0 m hdup (ih h1)
+
+/-- Insertions and legal deletions are mutual inverses (at one step), so
+`StutterEq` is symmetric — it really is an equivalence, not a simulation. -/
+theorem StutterEq.symm {σ : Type u} {e e' : Behavior σ}
+    (h : StutterEq e e') : StutterEq e' e := by
+  induction h with
+  | refl => exact .refl e
+  | ins e0 m hrec ih =>
+      -- one legal deletion at `m` undoes the insertion, then follow `ih`
+      have hdup : (insertAt e0 m) m = (insertAt e0 m) (m + 1) := by
+        simp
+      have hstep : StutterEq (insertAt e0 m) (removeAt (insertAt e0 m) m) :=
+        .del (insertAt e0 m) (insertAt e0 m) m hdup (.refl (insertAt e0 m))
+      rw [removeAt_insertAt] at hstep
+      exact hstep.trans ih
+  | del e0 m hdup hrec ih =>
+      have hstep : StutterEq (removeAt e0 m) (insertAt (removeAt e0 m) m) :=
+        .ins (removeAt e0 m) (removeAt e0 m) m (.refl (removeAt e0 m))
+      rw [insertAt_removeAt hdup] at hstep
+      exact hstep.trans ih
+
+/-- `SI` formulas are constant on finite-stutter equivalence classes — the
+raison d'être of the typeclass: legality (stutter invariance) is exactly
+what makes satisfaction transport across stutter-equivalent behaviors. -/
+theorem SI.congr_stutterEq {σ : Type u} {F : Pred σ} [SI F]
+    {e e' : Behavior σ} (h : StutterEq e e') : F e ↔ F e' := by
+  induction h with
+  | refl => exact Iff.rfl
+  | ins e0 m hrec ih => exact ih.trans ((SI.inv (F := F)).2 e0 m).symm
+  | del e0 m hdup hrec ih => exact ih.trans (((SI.inv (F := F)).1 e0 m hdup).symm)
+
 end Bft
