@@ -97,32 +97,21 @@ theorem cstep_inv : ∀ s s', StutAction CNext cvars s s' → s ∈ CInv → s' 
     obtain ⟨hlt, hpend, hlast, hrcvd⟩ := hsend
     refine ⟨?_, ?_, ?_, ?_, ?_⟩
     · intro τ hτ
-      rw [hpend] at hτ
       grind
     · intro τ hτ
-      rw [hq2] at hτ ⊢
-      exact le_trans (h2 τ hτ) (by grind)
+      grind
     · grind
     · intro τ hτ
-      rw [hpend] at hτ
       grind
     · intro x hx
-      rw [hrcvd] at hx
-      rw [hq2]
-      exact hflight x hx
+      grind
   · -- Poll1: m leaves queue 1 and enters queue 2
     obtain ⟨hne, hp1, hl1, hr1, hp2, hl2, hr2⟩ := hpoll1
     refine ⟨?_, ?_, ?_, ?_, ?_⟩
     · intro τ hτ
-      rw [hp1] at hτ
       grind [Finset.mem_of_mem_erase]
     · intro τ hτ
-      rw [hp2] at hτ
-      rcases Finset.mem_union.mp hτ with h | h
-      · have hm := hgt _ (Finset.min'_mem _ hne)
-        grind
-      · rw [Finset.mem_singleton] at h
-        grind
+      grind [Finset.min'_mem]
     · grind [Finset.min'_mem, Finset.min'_le]
     · intro τ hτ
       rw [hp1] at hτ
@@ -132,34 +121,19 @@ theorem cstep_inv : ∀ s s', StutAction CNext cvars s s' → s ∈ CInv → s' 
         grind
       grind
     · intro x hx
-      rw [hr1] at hx
-      rcases List.mem_cons.mp hx with h | h
-      · rw [hp2]
-        grind
-      · rw [hp2, hr2]
-        rcases hflight x h with hl | hr
-        · exact Or.inl (Finset.mem_union_left _ hl)
-        · exact Or.inr hr
+      grind [Finset.mem_union_left]
   · -- Poll2: only queue 2 changes
     obtain ⟨hne, hp2, hl2, hr2⟩ := hpoll2
     refine ⟨?_, ?_, ?_, ?_, ?_⟩
     · intro τ hτ
-      rw [hq1] at hτ
       grind
     · intro τ hτ
-      rw [hp2] at hτ
       grind [Finset.mem_of_mem_erase]
     · grind
     · intro τ hτ
-      rw [hq1] at hτ
       grind
     · intro x hx
-      rw [hp2, hr2]
-      rcases hflight x (hq1 ▸ hx) with hl | hr
-      · by_cases hm : s.q2.pend.min' hne = x
-        · exact Or.inr (by grind)
-        · exact Or.inl (Finset.mem_erase.mpr ⟨Ne.symm hm, hl⟩)
-      · exact Or.inr (List.mem_cons_of_mem _ hr)
+      grind [List.mem_cons_of_mem]
 
 theorem csafety : Entails CHspec (always (statePred CInv)) :=
   init_invariant_stut CInit CNext cvars CInv cinit_inv cstep_inv
@@ -185,12 +159,8 @@ noncomputable def cert₁ (t : ℕ) :
     exact Or.inr ⟨hp, fun _x h => h.2⟩
   c2 := by
     intro e hE k hφ
-    have hN : StutAction CNext cvars (e k) (e (k + 1)) := by
-      have h := hE.1.2 k
-      simpa [stutAlways, always] using h
-    have hinv : (e k) ∈ CInv := by
-      have h := csafety e hE.1 k
-      rwa [statePred_drop] at h
+    have hN : StutAction CNext cvars (e k) (e (k + 1)) := stutAlways_step hE.1.2
+    have hinv : (e k) ∈ CInv := always_statePred_at (csafety e hE.1)
     rcases hN with hnext | hstut
     swap
     · right
@@ -200,42 +170,24 @@ noncomputable def cert₁ (t : ℕ) :
     · -- Send1: φ preserved; δ conserved (new timestamp > last₁ ≥ t)
       obtain ⟨hlt, hpend, _, _⟩ := hsend
       right
-      have ht : t < t' := by
-        have := hinv.1 t hφ; omega
-      refine ⟨by show t ∈ (e (k + 1)).q1.pend; rw [hpend]
-                 grind [Finset.mem_union_left], fun x hx => ?_⟩
-      change x ∈ (e (k + 1)).q1.pend ∧ x ≤ t at hx
-      rw [hpend] at hx
-      grind
+      refine ⟨by grind [Finset.mem_union_left], fun x hx => by grind [CInv]⟩
     · -- Poll1: either t is the minimum (received) or φ ∧ δ conserved
       obtain ⟨hne, hp1, _, hr1, _, _, _⟩ := hpoll1
       by_cases hm : (e k).q1.pend.min' hne = t
       · left
-        show t ∈ (e (k + 1)).q1.rcvd
-        rw [hr1, hm]
-        exact List.mem_cons_self
+        grind
       · right
-        refine ⟨by show t ∈ (e (k + 1)).q1.pend; rw [hp1]; grind,
-          fun x hx => by
-            change x ∈ (e (k + 1)).q1.pend ∧ x ≤ t at hx
-            rw [hp1] at hx
-            grind [Finset.mem_of_mem_erase]⟩
+        refine ⟨by grind, fun x hx => by grind [Finset.mem_of_mem_erase]⟩
     · -- Poll2: queue 1 untouched
       obtain ⟨hne, hp2, _, _⟩ := hpoll2
       right
-      refine ⟨by show t ∈ (e (k + 1)).q1.pend; rw [hq1]; exact hφ,
-        fun x hx => by
-          change x ∈ (e (k + 1)).q1.pend ∧ x ≤ t at hx
-          rw [hq1] at hx
-          exact hx⟩
+      refine ⟨by grind, fun x hx => by grind⟩
   c3 := by
     intro e _hE k hφ hr
     obtain ⟨hne, hp1, _, _, _, _, _⟩ := hr
     right
     refine ⟨(e k).q1.pend.min' hne,
       ⟨Finset.min'_mem _ _, Finset.min'_le _ t hφ⟩, ?_⟩
-    show ¬ ((e k).q1.pend.min' hne ∈ (e (k + 1)).q1.pend ∧ (e k).q1.pend.min' hne ≤ t)
-    rw [hp1]
     grind
 
 /-- Queue 2's certificate, with mid-condition `t ∈ rcvd₁`: an element
@@ -254,20 +206,14 @@ noncomputable def cert₂ (t : ℕ) :
     exact Set.finite_le_nat t
   c1 := by
     intro e hE k hp
-    have hinv : (e k) ∈ CInv := by
-      have h := csafety e hE.1 k
-      rwa [statePred_drop] at h
+    have hinv : (e k) ∈ CInv := always_statePred_at (csafety e hE.1)
     rcases hinv.2.2.2.2 t hp with hl | hr
     · exact Or.inr ⟨hl, fun _x h => h.2⟩
     · exact Or.inl hr
   c2 := by
     intro e hE k hφ
-    have hN : StutAction CNext cvars (e k) (e (k + 1)) := by
-      have h := hE.1.2 k
-      simpa [stutAlways, always] using h
-    have hinv : (e k) ∈ CInv := by
-      have h := csafety e hE.1 k
-      rwa [statePred_drop] at h
+    have hN : StutAction CNext cvars (e k) (e (k + 1)) := stutAlways_step hE.1.2
+    have hinv : (e k) ∈ CInv := always_statePred_at (csafety e hE.1)
     rcases hN with hnext | hstut
     swap
     · right
@@ -276,44 +222,25 @@ noncomputable def cert₂ (t : ℕ) :
     rcases hnext with ⟨t', hsend, hq2⟩ | hpoll1 | ⟨hpoll2, hq1⟩
     · -- Send1: queue 2 untouched
       right
-      refine ⟨by show t ∈ (e (k + 1)).q2.pend; rw [hq2]; exact hφ,
-        fun x hx => by
-          change x ∈ (e (k + 1)).q2.pend ∧ x ≤ t at hx
-          rw [hq2] at hx
-          exact hx⟩
+      refine ⟨by grind, fun x hx => by grind⟩
     · -- Poll1: m enters queue 2, above last₂ ≥ t — φ preserved, δ conserved
       obtain ⟨hne, hp1, _, _, hp2, hl2, _⟩ := hpoll1
       right
-      have hmt : t < (e k).q1.pend.min' hne := by
-        have h2 : t ≤ (e k).q2.last := hinv.2.1 t hφ
-        have h3 := hinv.2.2.2.1 _ (Finset.min'_mem _ hne)
-        grind
-      refine ⟨by show t ∈ (e (k + 1)).q2.pend; rw [hp2]
-                 grind [Finset.mem_union_left], fun x hx => ?_⟩
-      change x ∈ (e (k + 1)).q2.pend ∧ x ≤ t at hx
-      rw [hp2] at hx
-      grind
+      refine ⟨by grind [Finset.mem_union_left],
+        fun x hx => by grind [CInv, Finset.min'_mem]⟩
     · -- Poll2: either t is received, or φ ∧ δ conserved
       obtain ⟨hne, hp2, _, hr2⟩ := hpoll2
       by_cases hm : (e k).q2.pend.min' hne = t
       · left
-        show t ∈ (e (k + 1)).q2.rcvd
-        rw [hr2, hm]
-        exact List.mem_cons_self
+        grind
       · right
-        refine ⟨by show t ∈ (e (k + 1)).q2.pend; rw [hp2]; grind,
-          fun x hx => by
-            change x ∈ (e (k + 1)).q2.pend ∧ x ≤ t at hx
-            rw [hp2] at hx
-            grind [Finset.mem_of_mem_erase]⟩
+        refine ⟨by grind, fun x hx => by grind [Finset.mem_of_mem_erase]⟩
   c3 := by
     intro e _hE k hφ hr
     obtain ⟨hne, hp2, _, _⟩ := hr.1
     right
     refine ⟨(e k).q2.pend.min' hne,
       ⟨Finset.min'_mem _ _, Finset.min'_le _ t hφ⟩, ?_⟩
-    show ¬ ((e k).q2.pend.min' hne ∈ (e (k + 1)).q2.pend ∧ (e k).q2.pend.min' hne ≤ t)
-    rw [hp2]
     grind
 
 /-- McMillan's end-to-end response property for the cascade. -/

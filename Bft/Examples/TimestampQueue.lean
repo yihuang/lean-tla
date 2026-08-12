@@ -82,10 +82,8 @@ theorem step_inv : ∀ s s', StutAction Next vars s s' → s ∈ Inv → s' ∈ 
   rcases hstep with hnext | hstut
   · rcases hnext with ⟨t, hlt, hpend, hlast, _⟩ | ⟨h, hpend, hlast, _⟩
     · intro τ hτ
-      rw [hpend] at hτ
       grind [Inv]
     · intro τ hτ
-      rw [hpend] at hτ
       grind [Inv, Finset.mem_of_mem_erase]
   · change s' = s at hstut
     rwa [hstut]
@@ -112,35 +110,19 @@ noncomputable def cert (t : ℕ) :
     exact Or.inr ⟨hp, fun _x h => h.2⟩
   c2 := by
     intro e hE k hφ
-    have hN : StutAction Next vars (e k) (e (k + 1)) := by
-      have h := hE.2 k
-      simpa [stutAlways, always] using h
-    have hinv : (e k) ∈ Inv := by
-      have h := safety e hE k
-      rwa [statePred_drop] at h
+    have hN : StutAction Next vars (e k) (e (k + 1)) := stutAlways_step hE.2
+    have hinv : (e k) ∈ Inv := always_statePred_at (safety e hE)
     rcases hN with hnext | hstut
     · rcases hnext with ⟨t', hlt, hpend, _, hrcvd⟩ | ⟨hne, hpend, _, hrcvd⟩
       · -- Send: φ preserved; δ conserved (the new timestamp is > last ≥ t)
         right
-        have ht : t < t' := by
-          have := hinv t hφ; omega
-        refine ⟨by show t ∈ (e (k + 1)).pend; rw [hpend]
-                   grind [Finset.mem_union_left], fun x hx => ?_⟩
-        change x ∈ (e (k + 1)).pend ∧ x ≤ t at hx
-        rw [hpend] at hx
-        grind
+        refine ⟨by grind [Finset.mem_union_left], fun x hx => by grind [Inv]⟩
       · -- Poll: either t is the minimum (q reached) or φ ∧ δ conserved
         by_cases hm : (e k).pend.min' hne = t
         · left
-          show t ∈ (e (k + 1)).rcvd
-          rw [hrcvd, hm]
-          exact List.mem_cons_self
+          grind
         · right
-          refine ⟨by show t ∈ (e (k + 1)).pend; rw [hpend]; grind,
-            fun x hx => by
-              change x ∈ (e (k + 1)).pend ∧ x ≤ t at hx
-              rw [hpend] at hx
-              grind [Finset.mem_of_mem_erase]⟩
+          refine ⟨by grind, fun x hx => by grind [Finset.mem_of_mem_erase]⟩
     · -- Stutter
       right
       change e (k + 1) = e k at hstut
@@ -153,8 +135,6 @@ noncomputable def cert (t : ℕ) :
     -- is gone afterwards
     refine ⟨(e k).pend.min' hne,
       ⟨Finset.min'_mem _ _, Finset.min'_le _ t hφ⟩, ?_⟩
-    show ¬ ((e k).pend.min' hne ∈ (e (k + 1)).pend ∧ (e k).pend.min' hne ≤ t)
-    rw [hpend]
     grind
 
 /-- McMillan's property (4): if the receiver polls infinitely often, every

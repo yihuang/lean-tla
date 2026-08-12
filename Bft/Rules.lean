@@ -29,6 +29,21 @@ theorem init_invariant {σ : Type u} (init : StatePred σ) (next : Action σ)
       simpa [statePred] using
         hstep (e n) (e (n + 1)) hstepn (by simpa [statePred] using ih)
 
+/-- One-step extraction: a stuttering machine performs a stuttering step at
+every position. Absorbs the recurring
+`have h := hE.2 k; simpa [stutAlways, always] using h` prologue. -/
+theorem stutAlways_step {σ : Type u} {α : Type v} {a : Action σ} {v : σ → α}
+    {e : Behavior σ} {k : ℕ} (h : stutAlways a v e) :
+    StutAction a v (e k) (e (k + 1)) := by
+  have hk := h k
+  rwa [actionPred_drop] at hk
+
+/-- Invariant extraction in membership normal form. -/
+theorem always_statePred_at {σ : Type u} {inv : StatePred σ} {e : Behavior σ}
+    {k : ℕ} (h : always (statePred inv) e) : e k ∈ inv := by
+  have hk := h k
+  rwa [statePred_drop] at hk
+
 /-- Inductive invariance, stuttering version. -/
 theorem init_invariant_stut {σ : Type u} {α : Type v} (init : StatePred σ)
     (next : Action σ) (v : σ → α) (inv : StatePred σ)
