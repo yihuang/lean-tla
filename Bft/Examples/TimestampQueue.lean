@@ -83,12 +83,10 @@ theorem step_inv : ∀ s s', StutAction Next vars s s' → s ∈ Inv → s' ∈ 
   · rcases hnext with ⟨t, hlt, hpend, hlast, _⟩ | ⟨h, hpend, hlast, _⟩
     · intro τ hτ
       rw [hpend] at hτ
-      rcases Finset.mem_union.mp hτ with h | h
-      · exact le_trans (hinv τ h) (by omega)
-      · rw [Finset.mem_singleton] at h; omega
+      grind [Inv]
     · intro τ hτ
       rw [hpend] at hτ
-      exact hlast ▸ hinv τ (Finset.mem_of_mem_erase hτ)
+      grind [Inv, Finset.mem_of_mem_erase]
   · change s' = s at hstut
     rwa [hstut]
 
@@ -127,12 +125,10 @@ noncomputable def cert (t : ℕ) :
         have ht : t < t' := by
           have := hinv t hφ; omega
         refine ⟨by show t ∈ (e (k + 1)).pend; rw [hpend]
-                   exact Finset.mem_union_left _ hφ, fun x hx => ?_⟩
+                   grind [Finset.mem_union_left], fun x hx => ?_⟩
         change x ∈ (e (k + 1)).pend ∧ x ≤ t at hx
         rw [hpend] at hx
-        rcases Finset.mem_union.mp hx.1 with h | h
-        · exact ⟨h, hx.2⟩
-        · rw [Finset.mem_singleton] at h; omega
+        grind
       · -- Poll: either t is the minimum (q reached) or φ ∧ δ conserved
         by_cases hm : (e k).pend.min' hne = t
         · left
@@ -140,27 +136,26 @@ noncomputable def cert (t : ℕ) :
           rw [hrcvd, hm]
           exact List.mem_cons_self
         · right
-          refine ⟨by show t ∈ (e (k + 1)).pend; rw [hpend]
-                     exact Finset.mem_erase.mpr ⟨Ne.symm hm, hφ⟩, fun x hx => ?_⟩
-          change x ∈ (e (k + 1)).pend ∧ x ≤ t at hx
-          rw [hpend] at hx
-          exact ⟨Finset.mem_of_mem_erase hx.1, hx.2⟩
+          refine ⟨by show t ∈ (e (k + 1)).pend; rw [hpend]; grind,
+            fun x hx => by
+              change x ∈ (e (k + 1)).pend ∧ x ≤ t at hx
+              rw [hpend] at hx
+              grind [Finset.mem_of_mem_erase]⟩
     · -- Stutter
       right
       change e (k + 1) = e k at hstut
-      exact ⟨hstut ▸ hφ, hstut ▸ fun _ h => h⟩
+      grind [Conserves]
   c3 := by
     intro e _hE k hφ hr
     obtain ⟨hne, hpend, _, _⟩ := hr
     right
     -- the removed minimum is ≤ t (since t is pending), hence in δ, and
     -- is gone afterwards
-    refine ⟨(e k).pend.min' hne, ⟨?_, ?_⟩, ?_⟩
-    · exact Finset.min'_mem _ _
-    · exact Finset.min'_le _ t hφ
-    · show ¬ ((e k).pend.min' hne ∈ (e (k + 1)).pend ∧ (e k).pend.min' hne ≤ t)
-      rw [hpend]
-      simp
+    refine ⟨(e k).pend.min' hne,
+      ⟨Finset.min'_mem _ _, Finset.min'_le _ t hφ⟩, ?_⟩
+    show ¬ ((e k).pend.min' hne ∈ (e (k + 1)).pend ∧ (e k).pend.min' hne ≤ t)
+    rw [hpend]
+    grind
 
 /-- McMillan's property (4): if the receiver polls infinitely often, every
 timestamp sent is eventually received. -/
