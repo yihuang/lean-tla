@@ -119,9 +119,7 @@ theorem c2 : ∀ e : Behavior St,
     ∀ k : ℕ, e k ∈ φ →
     e (k + 1) ∈ Goal ∨ (e (k + 1) ∈ φ ∧ Conserves δ (e k) (e (k + 1))) := by
   intro e hE k hφ
-  have hN : StutAction Next vars (e k) (e (k + 1)) := by
-    have := hE.2.1 k
-    simpa [stutAlways, always] using this
+  have hN : StutAction Next vars (e k) (e (k + 1)) := stutAlways_step hE.2.1
   rcases hN with hnext | hstut
   · rcases hnext with ⟨hG, hs'⟩ | ⟨hpc, hserve, hs'⟩
     · -- Serve step: pc unchanged, served+1; the remaining δ elements stay in

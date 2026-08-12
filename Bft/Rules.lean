@@ -55,9 +55,8 @@ theorem init_invariant_stut {σ : Type u} {α : Type v} (init : StatePred σ)
   induction n with
   | zero => exact hinit (e 0) he.1
   | succ n ih =>
-      have hstepn : StutAction next v (e n) (e (n + 1)) := by
-        have := he.2 n
-        simpa [stutAlways, always] using this
+      have hstepn : StutAction next v (e n) (e (n + 1)) :=
+        stutAlways_step he.2
       simpa [statePred] using
         hstep (e n) (e (n + 1)) hstepn (by simpa [statePred] using ih)
 
@@ -99,9 +98,8 @@ theorem wf1 {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Action σ)
     induction j with
     | zero => simpa [statePred] using hpk
     | succ j ih =>
-        have hN : StutAction N v (e (k + j)) (e (k + j + 1)) := by
-          have := h.1 (k + j)
-          simpa [stutAlways, always] using this
+        have hN : StutAction N v (e (k + j)) (e (k + j + 1)) :=
+          stutAlways_step h.1
         rcases hstep _ _ ih hN with hp' | hq'
         · exact hp'
         · exact absurd hq' (hqall (j + 1))
@@ -141,9 +139,8 @@ theorem sf1 {σ : Type u} {α : Type v} (p q : StatePred σ) (N A : Action σ)
     induction j with
     | zero => simpa [statePred] using hpk
     | succ j ih =>
-        have hN : StutAction N v (e (k + j)) (e (k + j + 1)) := by
-          have := h.1 (k + j)
-          simpa [stutAlways, always] using this
+        have hN : StutAction N v (e (k + j)) (e (k + j + 1)) :=
+          stutAlways_step h.1
         rcases hstep _ _ ih hN with hp' | hq'
         · exact hp'
         · exact absurd hq' (hqall (j + 1))

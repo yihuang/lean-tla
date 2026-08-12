@@ -91,10 +91,8 @@ theorem safety : Entails Hspec (always (statePred Inv)) :=
   init_invariant_stut Init Next vars Inv init_inv step_inv
 
 /-- The invariant at every time, for use inside liveness side conditions. -/
-theorem nodup_of_H (e : Behavior St) (hE : Hspec e) (k : ℕ) : (e k).q.Nodup := by
-  have h := safety e hE k
-  rw [statePred_drop] at h
-  exact h
+theorem nodup_of_H (e : Behavior St) (hE : Hspec e) (k : ℕ) : (e k).q.Nodup :=
+  always_statePred_at (safety e hE)
 
 /-! ## Liveness per element (FIFO template)
 
@@ -114,9 +112,7 @@ noncomputable def tmpl (x : Fin 3) : FifoTemplate St (Fin 3) where
   hc2 := by
     intro e hE k hmem hmem'
     have hnd : (e k).q.Nodup := nodup_of_H e hE k
-    have hN : StutAction Next vars (e k) (e (k + 1)) := by
-      have h := hE.2 k
-      simpa [stutAlways, always] using h
+    have hN : StutAction Next vars (e k) (e (k + 1)) := stutAlways_step hE.2
     rcases hN with hnext | hstut
     · rcases hnext with ⟨hne, hs'⟩ | ⟨y, _hg, hs'⟩
       · -- Dequeue: position stays or drops by one
@@ -189,9 +185,7 @@ noncomputable def outCert (i : Fin 3) :
   c2 := by
     intro e hE k hφ
     simp at hφ
-    have hN : StutAction Next vars (e k) (e (k + 1)) := by
-      have h := hE.2 k
-      simpa [stutAlways, always] using h
+    have hN : StutAction Next vars (e k) (e (k + 1)) := stutAlways_step hE.2
     rcases hN with hnext | hstut
     · rcases hnext with ⟨hne, hs'⟩ | ⟨y, _hg, hs'⟩
       · -- Dequeue produces output: the goal holds at k+1
