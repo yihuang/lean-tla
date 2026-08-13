@@ -56,11 +56,11 @@ variable (n f : ℕ) (Byz : Finset (Fin n))
 /-- Global state: epoch clock and the votes cast so far. -/
 structure St (n : ℕ) where
   ep : ℕ
-  msgs : List (Fin n × Blk)
+  msgs : Finset (Fin n × Blk)
 
 /-- The distinct voters of a block. -/
 def voters (s : St n) (b : Blk) : Finset (Fin n) :=
-  (s.msgs.toFinset.filter fun p => p.2 = b).image Prod.fst
+  (s.msgs.filter fun p => p.2 = b).image Prod.fst
 
 /-- Notarization threshold: `2f+1` out of (at most) `3f+1`. -/
 def quorum (f : ℕ) : ℕ := 2 * f + 1
@@ -90,11 +90,11 @@ def VoteH (i : Fin n) (b : Blk) : Action (St n) := fun s s' =>
   (∀ b', (i, b') ∈ s.msgs → bep b' ≠ s.ep) ∧
   NotarizedChain n f s b.tail ∧
   (∀ c : Blk, NotarizedChain n f s c → c.length ≤ b.tail.length) ∧
-  s'.msgs = (i, b) :: s.msgs ∧ s'.ep = s.ep
+  s'.msgs = insert (i, b) s.msgs ∧ s'.ep = s.ep
 
 /-- A Byzantine vote: any well-formed chain, any time. -/
 def VoteB (i : Fin n) (b : Blk) : Action (St n) := fun s s' =>
-  i ∈ Byz ∧ ValidChain b ∧ s'.msgs = (i, b) :: s.msgs ∧ s'.ep = s.ep
+  i ∈ Byz ∧ ValidChain b ∧ s'.msgs = insert (i, b) s.msgs ∧ s'.ep = s.ep
 
 /-- The step relation. -/
 def Next : Action (St n) := fun s s' =>
@@ -104,7 +104,7 @@ def Next : Action (St n) := fun s s' =>
 def vars (n : ℕ) : St n → St n := id
 
 /-- Initially: epoch 0, no votes. -/
-def Init (n : ℕ) : StatePred (St n) := { s | s.ep = 0 ∧ s.msgs = [] }
+def Init (n : ℕ) : StatePred (St n) := { s | s.ep = 0 ∧ s.msgs = ∅ }
 
 /-- The specification. -/
 def Hspec : Pred (St n) := tlaAnd (statePred (Init n)) (stutAlways (Next n f Byz) (vars n))
@@ -116,8 +116,8 @@ theorem voters_mono {s t : St n} (h : ∀ p, p ∈ s.msgs → p ∈ t.msgs) (b :
   intro i hi
   rw [voters, Finset.mem_image] at hi ⊢
   obtain ⟨p, hp, hpi⟩ := hi
-  rw [Finset.mem_filter, List.mem_toFinset] at hp
-  exact ⟨p, Finset.mem_filter.mpr ⟨List.mem_toFinset.mpr (h p hp.1), hp.2⟩, hpi⟩
+  rw [Finset.mem_filter] at hp
+  exact ⟨p, Finset.mem_filter.mpr ⟨h p hp.1, hp.2⟩, hpi⟩
 
 theorem Notarized.mono {s t : St n} (h : ∀ p, p ∈ s.msgs → p ∈ t.msgs) (b : Blk) :
     Notarized n f s b → Notarized n f t b := by
@@ -128,6 +128,8 @@ theorem Notarized.mono {s t : St n} (h : ∀ p, p ∈ s.msgs → p ∈ t.msgs) (
 theorem NotarizedChain.mono {s t : St n} (h : ∀ p, p ∈ s.msgs → p ∈ t.msgs)
     (c : Blk) : NotarizedChain n f s c → NotarizedChain n f t c :=
   fun hnc d hd hs => (hnc d hd hs).mono n f h d
+
+attribute [grind =>] Notarized.mono NotarizedChain.mono
 
 /-! ## The invariant bundle
 
@@ -163,106 +165,16 @@ theorem step_inv : ∀ s s', StutAction (Next n f Byz) (vars n) s s' → s ∈ I
   · change s' = s at hstut
     rwa [hstut]
   obtain ⟨hv, h0, h1, h2, h5⟩ := hinv
-  rcases hnext with ⟨hep, hmsgs⟩ | ⟨i, b, hvote⟩ | ⟨i, b, hvote⟩
+  rcases hnext with htick | ⟨i, b, hvote⟩ | ⟨i, b, hvote⟩
   · -- Tick: clock advances, votes unchanged
-    refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> rw [hmsgs]
-    · exact hv
-    · intro i b hi hb; rw [hep]; exact le_trans (h0 i b hi hb) (by omega)
-    · exact h1
-    · intro i b hi hb
-      exact (h2 i b hi (hmsgs ▸ hb)).mono n f (fun p hp => hmsgs ▸ hp) b.tail
-    · exact h5
-  · -- Honest vote
+    obtain ⟨hep, hmsgs⟩ := htick
+    constructor <;> grind
+  · -- Honest vote: guarded, adds exactly its own vote
     obtain ⟨hi, hval, hep, hfirst, hpar, hlong, hmsgs, hep2⟩ := hvote
-    have hmono : ∀ p, p ∈ s.msgs → p ∈ s'.msgs := by
-      intro p hp; rw [hmsgs]; exact List.mem_cons_of_mem _ hp
-    refine ⟨?_, ?_, ?_, ?_, ?_⟩
-    · intro j b' hj
-      rw [hmsgs] at hj
-      rcases List.mem_cons.mp hj with h | h
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h; exact hval
-      · exact hv j b' h
-    · intro j b' hj hb'
-      rw [hmsgs] at hb'
-      rcases List.mem_cons.mp hb' with h | h
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h
-        rw [hep2]; exact le_of_eq hep
-      · exact le_trans (h0 j b' hj h) (by omega)
-    · intro j b₁ b₂ hj hb₁ hb₂ heq
-      rw [hmsgs] at hb₁ hb₂
-      rcases List.mem_cons.mp hb₁ with h₁ | h₁ <;>
-        rcases List.mem_cons.mp hb₂ with h₂ | h₂
-      · obtain ⟨_, rfl⟩ := Prod.mk.inj h₁
-        obtain ⟨_, rfl⟩ := Prod.mk.inj h₂; rfl
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h₁
-        exact absurd (heq.symm.trans hep) (hfirst b₂ h₂)
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h₂
-        exact absurd (heq.trans hep) (hfirst b₁ h₁)
-      · exact h1 j b₁ b₂ hj h₁ h₂ heq
-    · intro j b' hj hb'
-      rw [hmsgs] at hb'
-      rcases List.mem_cons.mp hb' with h | h
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h
-        exact hpar.mono n f hmono b'.tail
-      · exact (h2 j b' hj h).mono n f hmono b'.tail
-    · intro j b₁ b₂ hj hb₁ hb₂ hlt
-      rw [hmsgs] at hb₁ hb₂
-      rcases List.mem_cons.mp hb₂ with h₂ | h₂
-      · -- b₂ is the new vote: b₁'s parent was notarized-longest at s
-        obtain ⟨rfl, rfl⟩ := Prod.mk.inj h₂
-        rcases List.mem_cons.mp hb₁ with h₁ | h₁
-        · obtain ⟨-, rfl⟩ := Prod.mk.inj h₁
-          exact absurd hlt (lt_irrefl _)
-        · exact hlong b₁.tail (h2 j b₁ hj h₁)
-      · rcases List.mem_cons.mp hb₁ with h₁ | h₁
-        · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h₁
-          have hle : bep b₂ ≤ s.ep := h0 j b₂ hj h₂
-          exact absurd hlt (by omega)
-        · exact h5 j b₁ b₂ hj h₁ h₂ hlt
-  · -- Byzantine vote: honest-node facts untouched, notarization monotone
+    constructor <;> grind
+  · -- Byzantine vote: any well-formed chain, honest-node facts untouched
     obtain ⟨hi, hval, hmsgs, hep⟩ := hvote
-    have hmono : ∀ p, p ∈ s.msgs → p ∈ s'.msgs := by
-      intro p hp; rw [hmsgs]; exact List.mem_cons_of_mem _ hp
-    refine ⟨?_, ?_, ?_, ?_, ?_⟩
-    · intro j b' hj
-      rw [hmsgs] at hj
-      rcases List.mem_cons.mp hj with h | h
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h; exact hval
-      · exact hv j b' h
-    · intro j b' hj hb'
-      rw [hmsgs] at hb'
-      rcases List.mem_cons.mp hb' with h | h
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h
-        exact (hj hi).elim
-      · rw [hep]; exact h0 j b' hj h
-    · intro j b₁ b₂ hj hb₁ hb₂ heq
-      rw [hmsgs] at hb₁ hb₂
-      rcases List.mem_cons.mp hb₁ with h₁ | h₁ <;>
-        rcases List.mem_cons.mp hb₂ with h₂ | h₂
-      · obtain ⟨_, rfl⟩ := Prod.mk.inj h₁
-        obtain ⟨_, rfl⟩ := Prod.mk.inj h₂; rfl
-      · obtain ⟨hji, -⟩ := Prod.mk.inj h₁
-        exact absurd hi (hji ▸ hj)
-      · obtain ⟨hji, -⟩ := Prod.mk.inj h₂
-        exact absurd hi (hji ▸ hj)
-      · exact h1 j b₁ b₂ hj h₁ h₂ heq
-    · intro j b' hj hb'
-      rw [hmsgs] at hb'
-      rcases List.mem_cons.mp hb' with h | h
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h
-        exact (hj hi).elim
-      · exact (h2 j b' hj h).mono n f hmono b'.tail
-    · intro j b₁ b₂ hj hb₁ hb₂ hlt
-      rw [hmsgs] at hb₁ hb₂
-      rcases List.mem_cons.mp hb₁ with h₁ | h₁ <;>
-        rcases List.mem_cons.mp hb₂ with h₂ | h₂
-      · obtain ⟨hji, -⟩ := Prod.mk.inj h₁
-        exact absurd hi (hji ▸ hj)
-      · obtain ⟨hji, -⟩ := Prod.mk.inj h₁
-        exact absurd hi (hji ▸ hj)
-      · obtain ⟨hji, -⟩ := Prod.mk.inj h₂
-        exact absurd hi (hji ▸ hj)
-      · exact h5 j b₁ b₂ hj h₁ h₂ hlt
+    constructor <;> grind
 
 theorem safety : Entails (Hspec n f Byz) (always (statePred (Inv n f Byz))) :=
   init_invariant_stut (Init n) (Next n f Byz) (vars n) (Inv n f Byz) (init_inv n f Byz) (step_inv n f Byz)
@@ -273,7 +185,7 @@ theorem safety : Entails (Hspec n f Byz) (always (statePred (Inv n f Byz))) :=
 /-- Membership in a block's voter set is just having cast that vote. -/
 @[tla_msgs] theorem mem_voters {s : St n} {i : Fin n} {b : Blk} :
     i ∈ voters n s b ↔ (i, b) ∈ s.msgs := by
-  simp [voters, List.mem_toFinset]
+  simp [voters]
 
 /-- A valid chain whose epoch is 0 can only be genesis. -/
 theorem ValidChain.eq_genesis {c : Blk} (hv : ValidChain c) (he : bep c = 0) : c = [0] := by
