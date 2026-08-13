@@ -30,10 +30,19 @@ Mathlib, `cslib`, and `aesop` are in `.lake/packages/`.
   them positionally: `chainNotarizedSeen_mono n f hseenmono …`,
   `voteCast_send n hinf hseen i b`, `propCast_send n L hinf hseen e b`.
   When unsure of the true parameter order, use `#check @lemma_name`.
-- **`grind` does not scale to large structure invariants.** It closes
-  Finset/conjunction invariants quickly, but hits the heartbeat (200000) on a
-  14-field structure invariant with `∃`-predicates and `↔`-transport. Hand-write
-  those step proofs; use `grind` only for small membership goals.
+- **`grind` closes the *monotone safety fields* of a structure invariant, but not the
+  `∃`/`↔`-transport fields.** For `StreamletProto.Inv` (14 fields), after building the
+  `hseenmono` / `hcvmono` / `hcpmono` / `hclockmono` helpers, `constructor <;> first
+  | grind | <hard> | <bridge>` closes the 12 safety fields with `grind` (with the
+  `[grind =>]`-tagged `_mono` lemmas). Hand-write only `propLongest`/`votedLongest`
+  under `VoteH` (they need `notarizedBy_stable_cast_vote`) and the two bridge fields
+  (`castVotes_iff`/`castProps_iff`). Without the helpers, `grind` just hits its
+  term-generation limit (`gen := 8`), not the heartbeat.
+- **`first | t₁ | t₂` backtracks only on *failure*, not on "progress without closing".**
+  A `simp`/`rw` alternative that rewrites the goal but leaves it open is treated as
+  success and blocks later alternatives. So put `grind` first, and make every
+  fallback either fully close or fail *before* rewriting (start it with an `intro`/
+  `rw` that type-errors on non-matching goals).
 - **`[grind =>]` is the attribute that powers `constructor <;> grind`** for
   conjunction invariants: tag your `_mono` lemmas with it. `[grind →]` is rejected
   on rules with `∀` premises (“failed to find patterns in the antecedents”).

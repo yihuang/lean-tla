@@ -383,12 +383,12 @@ theorem init_inv : ∀ s, s ∈ PInit n → s ∈ InvState n Byz Δ f L := by
   obtain ⟨_hnow, hinf, hseen, hcv, hcp⟩ := hs
   constructor <;> simp [hinf, hseen, hcv, hcp, voteCast, propCast]
 
-/-- The invariant is preserved by every protocol step. Each safety field is
-transported by the cast history (direct membership), the bridge fields by
-unfolding `voteCast`/`propCast` over the unchanged frame. -/
-/- The invariant is preserved by every protocol step. Each safety field is
-transported by the cast history (direct membership), the bridge fields by
-unfolding `voteCast`/`propCast` over the unchanged frame. -/
+/-- The invariant is preserved by every protocol step. The 12 safety fields —
+stated over the monotone cast histories — are closed by `grind` with the
+`[grind =>]`-tagged monotonicity lemmas, exactly as in `Streamlet`. Only the
+two bridge fields (`castVotes_iff` / `castProps_iff`) and the vote-stability
+transports (`propLongest` / `votedLongest` under `VoteH`) need the
+hand-written `∃`/`↔` message reasoning. -/
 theorem step_inv : ∀ s s', StutAction (PNext n Byz Δ GST f L) (vars n) s s' →
     s ∈ InvState n Byz Δ f L → s' ∈ InvState n Byz Δ f L := by
   intro s s' hstep hinv
@@ -406,30 +406,7 @@ theorem step_inv : ∀ s s', StutAction (PNext n Byz Δ GST f L) (vars n) s s' �
     have hcpmono : s.castProps ⊆ s'.castProps := by intro p hp; rw [hcp]; exact hp
     have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by rw [hnow]; exact curEpoch_mono Δ (Nat.le_succ s.now)
     constructor <;> first
-    | intro i b hi hvb
-      exact chainNotarizedSeen_mono n f hseenmono (hvsp i b hi (by simpa [hcv] using hvb))
-    | intro e b hpb hL
-      exact hpv e b (by simpa [hcp] using hpb) hL
-    | intro e b hpb hL C hC
-      exact hpl e b (by simpa [hcp] using hpb) hL C (notarizedBy_mono_cast n f hcvmono' hC)
-    | intro e b hpb hL
-      exact le_trans (hpc e b (by simpa [hcp] using hpb) hL) hclockmono
-    | intro i b hi hvb
-      exact le_trans (hvc i b hi (by simpa [hcv] using hvb)) hclockmono
-    | intro i b hi hvb
-      exact hcpmono (hvpr i b hi (by simpa [hcv] using hvb))
-    | intro i b hi hvb
-      exact chainNotarizedBy_mono_cast n f hcvmono (hvsp2 i b hi (by simpa [hcv] using hvb))
-    | intro i b hi hvb C hC
-      exact hvl i b hi (by simpa [hcv] using hvb) C (notarizedBy_mono_cast n f hcvmono' hC)
-    | intro e b hpb hL
-      exact chainNotarizedBy_mono_cast n f hcvmono (hpsp e b (by simpa [hcp] using hpb) hL)
-    | intro e b hpb hL
-      exact hpe e b (by simpa [hcp] using hpb) hL
-    | intro e b₁ b₂ hpb₁ hpb₂ hL
-      exact hpu e b₁ b₂ (by simpa [hcp] using hpb₁) (by simpa [hcp] using hpb₂) hL
-    | intro i b hi hvb
-      exact hvv i b hi (by simpa [hcv] using hvb)
+    | grind
     | simp [hcv, hinf, hseen, voteCast, hcviff]
     | simp [hcp, hinf, hseen, propCast, hcpiff]
   · -- Propose: adds its own proposal to castProps
@@ -441,45 +418,7 @@ theorem step_inv : ∀ s s', StutAction (PNext n Byz Δ GST f L) (vars n) s s' �
     have hcpmono : s.castProps ⊆ s'.castProps := by intro p hp; rw [hcp]; exact Finset.mem_insert_of_mem hp
     have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by rw [hnow]
     constructor <;> first
-    | intro j b' hj hvb
-      exact chainNotarizedSeen_mono n f hseenmono (hvsp j b' hj (by simpa [hcv] using hvb))
-    | intro e' b' hpb hL
-      rw [hcp, Finset.mem_insert] at hpb; rcases hpb with h | h
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h; exact hval
-      · exact hpv e' b' h hL
-    | intro e' b' hpb hL C hC
-      rw [hcp, Finset.mem_insert] at hpb; rcases hpb with h | h
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h; exact hlong C (notarizedBy_mono_cast n f hcvmono' hC)
-      · exact hpl e' b' h hL C (notarizedBy_mono_cast n f hcvmono' hC)
-    | intro e' b' hpb hL
-      rw [hcp, Finset.mem_insert] at hpb; rcases hpb with h | h
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h; exact le_trans (le_of_eq hcur.symm) hclockmono
-      · exact le_trans (hpc e' b' h hL) hclockmono
-    | intro j b' hj hvb
-      exact le_trans (hvc j b' hj (by simpa [hcv] using hvb)) hclockmono
-    | intro j b' hj hvb
-      exact hcpmono (hvpr j b' hj (by simpa [hcv] using hvb))
-    | intro j b' hj hvb
-      exact chainNotarizedBy_mono_cast n f hcvmono (hvsp2 j b' hj (by simpa [hcv] using hvb))
-    | intro j b' hj hvb C hC
-      exact hvl j b' hj (by simpa [hcv] using hvb) C (notarizedBy_mono_cast n f hcvmono' hC)
-    | intro e' b' hpb hL
-      rw [hcp, Finset.mem_insert] at hpb; rcases hpb with h | h
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h; exact chainNotarizedBy_mono_cast n f hcvmono hparcast
-      · exact chainNotarizedBy_mono_cast n f hcvmono (hpsp e' b' h hL)
-    | intro e' b' hpb hL
-      rw [hcp, Finset.mem_insert] at hpb; rcases hpb with h | h
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h; exact hbep
-      · exact hpe e' b' h hL
-    | intro e1 b₁ b₂ hpb₁ hpb₂ hL
-      rw [hcp, Finset.mem_insert] at hpb₁ hpb₂
-      rcases hpb₁ with h₁ | h₁ <;> rcases hpb₂ with h₂ | h₂
-      · obtain ⟨_, rfl⟩ := Prod.mk.inj h₁; obtain ⟨_, rfl⟩ := Prod.mk.inj h₂; rfl
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h₁; exfalso; exact hprior b₂ ((hcpiff e1 b₂).1 h₂)
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h₂; exfalso; exact hprior b₁ ((hcpiff e1 b₁).1 h₁)
-      · exact hpu e1 b₁ b₂ h₁ h₂ hL
-    | intro j b' hj hvb
-      exact hvv j b' hj (by simpa [hcv] using hvb)
+    | grind
     | intro i b
       rw [hcv, hcviff i b]
       rw [voteCast_send n hinf hseen i b]
@@ -506,50 +445,21 @@ theorem step_inv : ∀ s s', StutAction (PNext n Byz Δ GST f L) (vars n) s s' �
     have hcpmono : s.castProps ⊆ s'.castProps := by intro p hp; rw [hcp]; exact hp
     have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by rw [hnow]
     constructor <;> first
-    | intro j b' hj hvb
-      rw [hcv, Finset.mem_insert] at hvb; rcases hvb with h | h
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h; exact chainNotarizedSeen_mono n f hseenmono hparseen
-      · exact chainNotarizedSeen_mono n f hseenmono (hvsp j b' hj h)
-    | intro e' b' hpb hL
-      exact hpv e' b' (by simpa [hcp] using hpb) hL
+    | grind
     | intro e' b' hpb hL C hC
       have hgt : e' - 1 < bep b := by
         have hle : e' ≤ curEpoch Δ s.now := hpc e' b' (by simpa [hcp] using hpb) hL
         omega
       exact hpl e' b' (by simpa [hcp] using hpb) hL C ((notarizedBy_stable_cast_vote n f hcv hgt).2 hC)
-    | intro e' b' hpb hL
-      exact le_trans (hpc e' b' (by simpa [hcp] using hpb) hL) hclockmono
-    | intro j b' hj hvb
-      rw [hcv, Finset.mem_insert] at hvb; rcases hvb with h | h
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h; exact le_trans (le_of_eq hbcur) hclockmono
-      · exact le_trans (hvc j b' hj h) hclockmono
-    | intro j b' hj hvb
-      rw [hcv, Finset.mem_insert] at hvb; rcases hvb with h | h
-      · obtain ⟨hji, hbb⟩ := Prod.mk.inj h; subst j; subst b'
-        exact hcpmono ((hcpiff (bep b) b).2 hprop)
-      · exact hcpmono (hvpr j b' hj h)
-    | intro j b' hj hvb
-      rw [hcv, Finset.mem_insert] at hvb; rcases hvb with h | h
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h; exact chainNotarizedBy_mono_cast n f hcvmono hparcast
-      · exact chainNotarizedBy_mono_cast n f hcvmono (hvsp2 j b' hj h)
     | intro j b' hj hvb C hC
-      rw [hcv, Finset.mem_insert] at hvb; rcases hvb with h | h
+      rw [hcv, Finset.mem_insert] at hvb
+      rcases hvb with h | h
       · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h
         exact hlong C ((notarizedBy_stable_cast_vote n f hcv (by omega)).2 hC)
       · have hgt : bep b' - 1 < bep b := by
           have hle : bep b' ≤ curEpoch Δ s.now := hvc j b' hj h
           omega
         exact hvl j b' hj h C ((notarizedBy_stable_cast_vote n f hcv hgt).2 hC)
-    | intro e' b' hpb hL
-      exact chainNotarizedBy_mono_cast n f hcvmono (hpsp e' b' (by simpa [hcp] using hpb) hL)
-    | intro e' b' hpb hL
-      exact hpe e' b' (by simpa [hcp] using hpb) hL
-    | intro e₁ b₁ b₂ hpb₁ hpb₂ hL
-      exact hpu e₁ b₁ b₂ (by simpa [hcp] using hpb₁) (by simpa [hcp] using hpb₂) hL
-    | intro j b' hj hvb
-      rw [hcv, Finset.mem_insert] at hvb; rcases hvb with h | h
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h; exact hval
-      · exact hvv j b' hj h
     | intro j b'
       rw [hcv, Finset.mem_insert, hcviff j b']
       rw [voteCast_send n hinf hseen j b']
@@ -576,30 +486,7 @@ theorem step_inv : ∀ s s', StutAction (PNext n Byz Δ GST f L) (vars n) s s' �
     have hcpmono : s.castProps ⊆ s'.castProps := by intro p hp; rw [hcp]; exact hp
     have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by rw [hnow]
     constructor <;> first
-    | intro i b hi hvb
-      exact chainNotarizedSeen_mono n f hseenmono (hvsp i b hi (by simpa [hcv] using hvb))
-    | intro e b hpb hL
-      exact hpv e b (by simpa [hcp] using hpb) hL
-    | intro e b hpb hL C hC
-      exact hpl e b (by simpa [hcp] using hpb) hL C (notarizedBy_mono_cast n f hcvmono' hC)
-    | intro e b hpb hL
-      exact le_trans (hpc e b (by simpa [hcp] using hpb) hL) hclockmono
-    | intro i b hi hvb
-      exact le_trans (hvc i b hi (by simpa [hcv] using hvb)) hclockmono
-    | intro i b hi hvb
-      exact hcpmono (hvpr i b hi (by simpa [hcv] using hvb))
-    | intro i b hi hvb
-      exact chainNotarizedBy_mono_cast n f hcvmono (hvsp2 i b hi (by simpa [hcv] using hvb))
-    | intro i b hi hvb C hC
-      exact hvl i b hi (by simpa [hcv] using hvb) C (notarizedBy_mono_cast n f hcvmono' hC)
-    | intro e b hpb hL
-      exact chainNotarizedBy_mono_cast n f hcvmono (hpsp e b (by simpa [hcp] using hpb) hL)
-    | intro e b hpb hL
-      exact hpe e b (by simpa [hcp] using hpb) hL
-    | intro e b₁ b₂ hpb₁ hpb₂ hL
-      exact hpu e b₁ b₂ (by simpa [hcp] using hpb₁) (by simpa [hcp] using hpb₂) hL
-    | intro i b hi hvb
-      exact hvv i b hi (by simpa [hcv] using hvb)
+    | grind
     | intro i b
       rw [hcv, hcviff i b]
       unfold voteCast
@@ -616,7 +503,6 @@ theorem step_inv : ∀ s s', StutAction (PNext n Byz Δ GST f L) (vars n) s s' �
         exact ⟨x, (sent_eq_deliver n hmem hinf hseen x).2 hx, hsrc, hb⟩
       · rintro ⟨x, hx, hsrc, hb⟩
         exact ⟨x, (sent_eq_deliver n hmem hinf hseen x).1 hx, hsrc, hb⟩
-
 theorem spec_entails_inv :
     Entails (PSpec n Byz Δ GST f L) (always (statePred (InvState n Byz Δ f L))) :=
   init_invariant_stut (PInit n) (PNext n Byz Δ GST f L) (vars n) (InvState n Byz Δ f L)

@@ -41,37 +41,16 @@ def sentGrows (s s' : St n) : Prop :=
 theorem pnext_sentGrows {s s' : St n} (hstep : PNext n Byz Δ GST f L s s') : sentGrows n s s' := by
   rcases hstep with htick | ⟨e, b, hpr⟩ | ⟨i, b, hv⟩ | ⟨m0, hd⟩
   · obtain ⟨_hnow, hinf, hseen, hcv, _hcp, _hguard⟩ := htick
-    constructor
-    · intro m hm; rw [hinf, hseen]; exact hm
-    · intro p hp; rw [hcv]; exact hp
+    constructor <;> grind
   · obtain ⟨_hprior, _hL, _hval, _hbep, _hcur, _hparseen, _hparcast, _hlong, hsend⟩ := hpr
     obtain ⟨_hr, _hninf, _hnseen, _hnow, hinf, hseen, hcv, _hcp⟩ := hsend
-    constructor
-    · intro m hm
-      rw [hinf, hseen]
-      rcases hm with hm | hm
-      · left; exact Finset.mem_insert_of_mem hm
-      · right; exact hm
-    · intro p hp
-      rw [hcv]
-      simpa using hp
+    constructor <;> grind
   · obtain ⟨_hi, _hval, _hbpos, _hbcur, _hfirst, _hprop, _hparseen, _hparcast, _hlong, hsend⟩ := hv
     obtain ⟨_hr, _hninf, _hnseen, _hnow, hinf, hseen, hcv, _hcp⟩ := hsend
-    constructor
-    · intro m hm
-      rw [hinf, hseen]
-      rcases hm with hm | hm
-      · left; exact Finset.mem_insert_of_mem hm
-      · right; exact hm
-    · intro p hp
-      rw [hcv]
-      exact Finset.mem_insert_of_mem hp
+    constructor <;> grind
   · obtain ⟨hmem, _hguard, _hnow, hinf, hseen, hcv, _hcp⟩ := hd
     have hsent := sent_eq_deliver n hmem hinf hseen
-    constructor
-    · intro m hm
-      exact (hsent m).2 hm
-    · intro p hp; rw [hcv]; exact hp
+    constructor <;> grind
 
 /-- `propCast` is monotone in the sent set. -/
 theorem propCast_mono {s s' : St n} (h : sentGrows n s s') {e : ℕ} {b : Blk} :

@@ -132,6 +132,8 @@ delivery assumption. -/
 def NoOverdue : StatePred (St n) := { s |
   ∀ m, m ∈ s.inflight → m.src ∉ Byz → s.now ≤ deadline n Δ GST m }
 
+attribute [grind unfold] NoOverdue deadline
+
 theorem init_inv : ∀ s, s ∈ Init n → s ∈ NoOverdue n Byz Δ GST := by
   intro s hs
   obtain ⟨_hnow, hinf, _hseen, _, _⟩ := hs
@@ -146,30 +148,12 @@ theorem step_inv : ∀ s s', StutAction (Next n Byz Δ GST) (vars n) s s' →
   · have hss' : s' = s := hstut
     rwa [hss']
   rcases hnext with htick | ⟨m, hs⟩ | ⟨m, hd⟩
-  · -- Tick: the guard is exactly NoOverdue at the new round
-    obtain ⟨hnow, hinf, _hseen, _, _, hguard⟩ := htick
-    intro x hx hsrc
-    rw [hinf] at hx
-    exact hguard x hx hsrc
-  · -- Send: the new message is on time (round = now), the rest inherit
-    obtain ⟨hr, _hninf, _hnseen, hnow, hinf, _hseen, _, _⟩ := hs
-    intro x hx hsrc
-    rw [hinf] at hx
-    rw [Finset.mem_insert] at hx
-    rcases hx with hx | hx
-    · rw [hnow, hx]
-      change s.now ≤ max GST (m.round + Δ)
-      rw [hr]
-      omega
-    · rw [hnow]
-      exact hinv x hx hsrc
-  · -- Deliver: in-flight shrinks, so the property is preserved
-    obtain ⟨_hmem, _hguard, hnow, hinf, _hseen, _, _⟩ := hd
-    intro x hx hsrc
-    rw [hinf] at hx
-    have hx' : x ∈ s.inflight := Finset.mem_of_mem_erase hx
-    rw [hnow]
-    exact hinv x hx' hsrc
+  · obtain ⟨hnow, hinf, _hseen, _, _, hguard⟩ := htick
+    grind
+  · obtain ⟨hr, _hninf, _hnseen, hnow, hinf, _hseen, _, _⟩ := hs
+    grind
+  · obtain ⟨_hmem, _hguard, hnow, hinf, _hseen, _, _⟩ := hd
+    grind
 
 /-- The safety half of the delivery guarantee is an invariant of the spec. -/
 theorem delivery_safety :
@@ -216,6 +200,8 @@ def seenOf (m : Msg n) : StatePred (St n) := { s | m ∈ s.seen }
 def pending (m : Msg n) : StatePred (St n) := { s |
   m ∈ s.inflight ∧ (m.src ∉ Byz → s.now ≤ deadline n Δ GST m) }
 
+attribute [grind unfold] pending seenOf
+
 theorem pending_step (m : Msg n) : ∀ s s',
     s ∈ pending n Byz Δ GST m → StutAction (Next n Byz Δ GST) (vars n) s s' →
     s' ∈ pending n Byz Δ GST m ∨ s' ∈ seenOf n m := by
@@ -226,37 +212,14 @@ theorem pending_step (m : Msg n) : ∀ s s',
     have hss' : s' = s := hstut
     rwa [hss']
   rcases hnext with htick | ⟨m', hs⟩ | ⟨m', hd⟩
-  · -- Tick: the guard keeps the deadline condition at the new round
-    left
+  · left
     obtain ⟨hnow, hinf, _hseen, _, _, hguard⟩ := htick
-    refine ⟨?_, ?_⟩
-    · rw [hinf]
-      exact hsp.1
-    · intro hsrc
-      exact hguard m hsp.1 hsrc
-  · -- Send of another message: `m` stays in flight, `now` unchanged
-    left
+    grind
+  · left
     obtain ⟨_hr, _hninf, _hnseen, hnow, hinf, _hseen, _, _⟩ := hs
-    refine ⟨?_, ?_⟩
-    · rw [hinf]
-      exact Finset.mem_insert_of_mem hsp.1
-    · intro hsrc
-      rw [hnow]
-      exact hsp.2 hsrc
-  · -- Deliver: `m` itself is delivered, or stays pending
-    obtain ⟨_hmem, _hguard, hnow, hinf, hseen, _, _⟩ := hd
-    by_cases heq : m = m'
-    · right
-      change m ∈ s'.seen
-      rw [hseen, heq]
-      exact Finset.mem_insert_self m' s.seen
-    · left
-      refine ⟨?_, ?_⟩
-      · rw [hinf]
-        exact Finset.mem_erase_of_ne_of_mem heq hsp.1
-      · intro hsrc
-        rw [hnow]
-        exact hsp.2 hsrc
+    grind
+  · obtain ⟨_hmem, _hguard, hnow, hinf, hseen, _, _⟩ := hd
+    grind
 
 theorem pending_aq (m : Msg n) : ∀ s s',
     s ∈ pending n Byz Δ GST m → AngleAction (Deliver n Byz Δ GST m) (vars n) s s' →
