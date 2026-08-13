@@ -46,13 +46,13 @@ theorem pnext_sentGrows {s s' : St n} (hstep : PNext n Byz Δ GST f L s s') : se
     obtain ⟨_hr, _hninf, _hnseen, _hnow, hinf, hseen⟩ := hsend
     rw [hinf, hseen]
     rcases hm with hm | hm
-    · left; exact List.mem_cons_of_mem _ hm
+    · left; exact Finset.mem_insert_of_mem hm
     · right; exact hm
   · obtain ⟨_hi, _hval, _hbpos, _hbcur, _hfirst, _hprop, _hparseen, _hparcast, _hlong, hsend⟩ := hv
     obtain ⟨_hr, _hninf, _hnseen, _hnow, hinf, hseen⟩ := hsend
     rw [hinf, hseen]
     rcases hm with hm | hm
-    · left; exact List.mem_cons_of_mem _ hm
+    · left; exact Finset.mem_insert_of_mem hm
     · right; exact hm
   · obtain ⟨hmem, _hguard, _hnow, hinf, hseen⟩ := hd
     have hsent := sent_eq_deliver n hmem hinf hseen
