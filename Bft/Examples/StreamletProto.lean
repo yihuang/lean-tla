@@ -552,6 +552,151 @@ theorem inv_sent_step {s s' : St n}
   | intro j b' hj hvc
     exact hinv.voteValid j b' hj ((voteCast_sent_eq n hsent j b').1 hvc)
 
+/-- A cast vote that is not the newly sent one is an old vote. -/
+theorem voteCast_back_vote_of_ne {i : Fin n} {b : Blk} {s s' : St n} {t : ℕ}
+    (hinf : s'.inflight = ⟨i, t, Body.vote b⟩ :: s.inflight)
+    (hseen : s'.seen = s.seen) {j : Fin n} {b' : Blk}
+    (hjb : ¬ (j = i ∧ b' = b)) (hvc : voteCast n s' j b') : voteCast n s j b' := by
+  have hne : j ≠ i ∨ b' ≠ b := by
+    by_cases hji : j = i
+    · right; intro hbb; exact hjb ⟨hji, hbb⟩
+    · left; exact hji
+  exact voteCast_back_vote n hinf hseen hne hvc
+
+/-- A Propose step preserves `Inv`: it adds exactly its own proposal, so every
+field either transports unchanged (votes, `NotarizedBy`) or lands on the new
+proposal (validity, epoch, longest-parent), discharging via the action's own
+guarantees. -/
+theorem inv_prop_step {s s' : St n} (hp : Propose n Byz Δ f L e bp s s')
+    (hinv : Inv n Byz Δ f L s) : Inv n Byz Δ f L s' := by
+  obtain ⟨hprior, _, hval, hbep, hcur, _, hparcast, hlong, hsend⟩ := hp
+  obtain ⟨_hr, _hninf, _hnseen, hnow, hinf, hseen⟩ := hsend
+  have hseenmono : ∀ x, x ∈ s.seen → x ∈ s'.seen := by intro x hx; rw [hseen]; exact hx
+  constructor <;> first
+  | intro j b' hj hvc
+    exact chainNotarizedSeen_mono n f hseenmono
+      (hinv.voteSeenParent j b' hj ((voteCast_send_prop n L hinf hseen j b').1 hvc))
+  | intro e' b' hpc hL'
+    have hpc' := (propCast_send_prop_iff n L hinf hseen e' b').1 hpc
+    rcases hpc' with hpc' | ⟨he, hb⟩
+    · exact hinv.propValid e' b' hpc' hL'
+    · subst e'; subst b'; exact hval
+  | intro e' b' hpc hL' C hC
+    have hpc' := (propCast_send_prop_iff n L hinf hseen e' b').1 hpc
+    rcases hpc' with hpc' | ⟨he, hb⟩
+    · exact hinv.propLongest e' b' hpc' hL' C ((notarizedBy_stable_prop n f L hinf hseen).2 hC)
+    · subst e'; subst b'
+      exact hlong C ((notarizedBy_stable_prop n f L hinf hseen).2 hC)
+  | intro e' b' hpc hL'
+    have hpc' := (propCast_send_prop_iff n L hinf hseen e' b').1 hpc
+    rcases hpc' with hpc' | ⟨he, hb⟩
+    · simpa [hnow] using (hinv.propCur e' b' hpc' hL')
+    · subst e'; subst b'; simpa [hnow] using (le_of_eq hcur.symm)
+  | intro j b' hj hvc
+    simpa [hnow] using (hinv.voteCur j b' hj ((voteCast_send_prop n L hinf hseen j b').1 hvc))
+  | intro j b' hj hvc
+    exact (propCast_send_prop_iff n L hinf hseen (bep b') b').2
+      (Or.inl (hinv.votedProposed j b' hj ((voteCast_send_prop n L hinf hseen j b').1 hvc)))
+  | intro j b' hj hvc
+    exact (chainNotarizedBy_stable_prop n f L hinf hseen b'.tail (bep b' - 1)).1
+      (hinv.votedSeenParent j b' hj ((voteCast_send_prop n L hinf hseen j b').1 hvc))
+  | intro j b' hj hvc C hC
+    exact hinv.votedLongest j b' hj ((voteCast_send_prop n L hinf hseen j b').1 hvc) C
+      ((notarizedBy_stable_prop n f L hinf hseen).2 hC)
+  | intro e' b' hpc hL'
+    have hpc' := (propCast_send_prop_iff n L hinf hseen e' b').1 hpc
+    rcases hpc' with hpc' | ⟨he, hb⟩
+    · exact (chainNotarizedBy_stable_prop n f L hinf hseen b'.tail (e' - 1)).1 (hinv.proposedSeenParent e' b' hpc' hL')
+    · subst e'; subst b'
+      exact (chainNotarizedBy_stable_prop n f L hinf hseen bp.tail (e - 1)).1 hparcast
+  | intro e' b' hpc hL'
+    have hpc' := (propCast_send_prop_iff n L hinf hseen e' b').1 hpc
+    rcases hpc' with hpc' | ⟨he, hb⟩
+    · exact hinv.proposedEpoch e' b' hpc' hL'
+    · subst e'; subst b'; exact hbep
+  | intro e₁ b₁ b₂ hpc₁ hpc₂ hL₁
+    have hpc₁' := (propCast_send_prop_iff n L hinf hseen e₁ b₁).1 hpc₁
+    have hpc₂' := (propCast_send_prop_iff n L hinf hseen e₁ b₂).1 hpc₂
+    rcases hpc₁' with hpc₁' | ⟨he1, hb1⟩
+    · rcases hpc₂' with hpc₂' | ⟨he2, hb2⟩
+      · exact hinv.propUniq e₁ b₁ b₂ hpc₁' hpc₂' hL₁
+      · subst e₁; subst b₂; exfalso; exact hprior b₁ hpc₁'
+    · subst e₁; subst b₁
+      rcases hpc₂' with hpc₂' | ⟨he2, hb2⟩
+      · exfalso; exact hprior b₂ hpc₂'
+      · subst b₂; rfl
+  | intro j b' hj hvc
+    exact hinv.voteValid j b' hj ((voteCast_send_prop n L hinf hseen j b').1 hvc)
+
+/-- A VoteH step preserves `Inv`: it adds exactly its own vote, so each
+honest-vote field splits on "is this the new vote?" — new-vote branches use the
+action's own guarantees, old-vote branches transport through
+`voteCast_back_vote`/the stability lemmas. -/
+theorem inv_vote_step {s s' : St n} (hv : VoteH n Byz Δ f L i b s s')
+    (hinv : Inv n Byz Δ f L s) : Inv n Byz Δ f L s' := by
+  obtain ⟨_, hval, hbpos, hbcur, _, hprop, hparseen, hparcast, hlong, hsend⟩ := hv
+  obtain ⟨_hr, _hninf, _hnseen, hnow, hinf, hseen⟩ := hsend
+  have hseenmono : ∀ x, x ∈ s.seen → x ∈ s'.seen := by intro x hx; rw [hseen]; exact hx
+  constructor <;> first
+  | intro j b' hj hvc
+    by_cases hjb : j = i ∧ b' = b
+    · rcases hjb with ⟨rfl, rfl⟩
+      exact chainNotarizedSeen_mono n f hseenmono hparseen
+    · exact chainNotarizedSeen_mono n f hseenmono
+        (hinv.voteSeenParent j b' hj (voteCast_back_vote_of_ne n hinf hseen hjb hvc))
+  | intro e' b' hpc hL'
+    exact hinv.propValid e' b' ((propCast_send_vote n L hinf hseen e' b').1 hpc) hL'
+  | intro e' b' hpc hL' C hC
+    have hle' : e' ≤ curEpoch Δ s.now := hinv.propCur e' b' ((propCast_send_vote n L hinf hseen e' b').1 hpc) hL'
+    have hgt : e' - 1 < bep b := by omega
+    exact hinv.propLongest e' b' ((propCast_send_vote n L hinf hseen e' b').1 hpc) hL' C
+      ((notarizedBy_stable_vote n f hinf hseen hgt).2 hC)
+  | intro e' b' hpc hL'
+    simpa [hnow] using (hinv.propCur e' b' ((propCast_send_vote n L hinf hseen e' b').1 hpc) hL')
+  | intro j b' hj hvc
+    by_cases hjb : j = i ∧ b' = b
+    · rcases hjb with ⟨rfl, rfl⟩
+      simpa [hnow] using (le_of_eq hbcur)
+    · simpa [hnow] using (hinv.voteCur j b' hj (voteCast_back_vote_of_ne n hinf hseen hjb hvc))
+  | intro j b' hj hvc
+    by_cases hjb : j = i ∧ b' = b
+    · rcases hjb with ⟨hji, hbb⟩
+      subst j; subst b'
+      exact (propCast_send_vote n L hinf hseen (bep b) b).2 hprop
+    · exact (propCast_send_vote n L hinf hseen (bep b') b').2
+        (hinv.votedProposed j b' hj (voteCast_back_vote_of_ne n hinf hseen hjb hvc))
+  | intro j b' hj hvc
+    by_cases hjb : j = i ∧ b' = b
+    · rcases hjb with ⟨rfl, rfl⟩
+      exact (chainNotarizedBy_stable_vote n f hinf hseen (by omega)).1 hparcast
+    · have hle' : bep b' ≤ curEpoch Δ s.now := hinv.voteCur j b' hj (voteCast_back_vote_of_ne n hinf hseen hjb hvc)
+      have hgt : bep b' - 1 < bep b := by omega
+      exact (chainNotarizedBy_stable_vote n f hinf hseen hgt).1
+        (hinv.votedSeenParent j b' hj (voteCast_back_vote_of_ne n hinf hseen hjb hvc))
+  | intro j b' hj hvc C hC
+    by_cases hjb : j = i ∧ b' = b
+    · rcases hjb with ⟨rfl, rfl⟩
+      exact hlong C ((notarizedBy_stable_vote n f hinf hseen (by omega)).2 hC)
+    · have hle' : bep b' ≤ curEpoch Δ s.now := hinv.voteCur j b' hj (voteCast_back_vote_of_ne n hinf hseen hjb hvc)
+      have hgt : bep b' - 1 < bep b := by omega
+      exact hinv.votedLongest j b' hj (voteCast_back_vote_of_ne n hinf hseen hjb hvc) C
+        ((notarizedBy_stable_vote n f hinf hseen hgt).2 hC)
+  | intro e' b' hpc hL'
+    have hle' : e' ≤ curEpoch Δ s.now := hinv.propCur e' b' ((propCast_send_vote n L hinf hseen e' b').1 hpc) hL'
+    have hgt : e' - 1 < bep b := by omega
+    exact (chainNotarizedBy_stable_vote n f hinf hseen hgt).1
+      (hinv.proposedSeenParent e' b' ((propCast_send_vote n L hinf hseen e' b').1 hpc) hL')
+  | intro e' b' hpc hL'
+    exact hinv.proposedEpoch e' b' ((propCast_send_vote n L hinf hseen e' b').1 hpc) hL'
+  | intro e₁ b₁ b₂ hpc₁ hpc₂ hL₁
+    exact hinv.propUniq e₁ b₁ b₂ ((propCast_send_vote n L hinf hseen e₁ b₁).1 hpc₁)
+      ((propCast_send_vote n L hinf hseen e₁ b₂).1 hpc₂) hL₁
+  | intro j b' hj hvc
+    by_cases hjb : j = i ∧ b' = b
+    · rcases hjb with ⟨rfl, rfl⟩
+      exact hval
+    · exact hinv.voteValid j b' hj (voteCast_back_vote_of_ne n hinf hseen hjb hvc)
+
 /-- The invariant is preserved by every protocol step. -/
 theorem step_inv : ∀ s s', StutAction (PNext n Byz Δ GST f L) (vars n) s s' →
     s ∈ InvState n Byz Δ f L → s' ∈ InvState n Byz Δ f L := by
@@ -568,167 +713,10 @@ theorem step_inv : ∀ s s', StutAction (PNext n Byz Δ GST f L) (vars n) s s' �
       (by intro x hx; rw [hseen]; exact hx)
       (by rw [hnow]; exact curEpoch_mono Δ (Nat.le_succ s.now))
       hinv
-  · -- Propose e b
-    obtain ⟨hprior, hL, hval, hbep, hcur, hparseen, hparcast, hlong, hsend⟩ := hp
-    obtain ⟨_hr, _hninf, _hnseen, hnow, hinf, hseen⟩ := hsend
-    have hseenmono : ∀ x, x ∈ s.seen → x ∈ s'.seen := by
-      intro x hx; rw [hseen]; exact hx
-    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-    · intro j b' hj hvc
-      have hvc' : voteCast n s j b' := (voteCast_send_prop n L hinf hseen j b').1 hvc
-      exact chainNotarizedSeen_mono n f hseenmono (hinv.voteSeenParent j b' hj hvc')
-    · intro e' b' hpc hL'
-      have hpc' := (propCast_send_prop_iff n L hinf hseen e' b').1 hpc
-      rcases hpc' with hpc' | ⟨he, hb⟩
-      · exact hinv.propValid e' b' hpc' hL'
-      · subst e'; subst b'; exact hval
-    · intro e' b' hpc hL' C hC
-      have hpc' := (propCast_send_prop_iff n L hinf hseen e' b').1 hpc
-      rcases hpc' with hpc' | ⟨he, hb⟩
-      · have hC' : NotarizedBy n f s C (e' - 1) := (notarizedBy_stable_prop n f L hinf hseen).2 hC
-        exact hinv.propLongest e' b' hpc' hL' C hC'
-      · subst e'; subst b'
-        exact hlong C ((notarizedBy_stable_prop n f L hinf hseen).2 hC)
-    · intro e' b' hpc hL'
-      have hpc' := (propCast_send_prop_iff n L hinf hseen e' b').1 hpc
-      rcases hpc' with hpc' | ⟨he, hb⟩
-      · simpa [hnow] using (hinv.propCur e' b' hpc' hL')
-      · subst e'; subst b'; simpa [hnow] using (le_of_eq hcur.symm)
-    · intro j b' hj hvc
-      have hvc' : voteCast n s j b' := (voteCast_send_prop n L hinf hseen j b').1 hvc
-      simpa [hnow] using (hinv.voteCur j b' hj hvc')
-    · intro j b' hj hvc
-      have hvc' : voteCast n s j b' := (voteCast_send_prop n L hinf hseen j b').1 hvc
-      exact (propCast_send_prop_iff n L hinf hseen (bep b') b').2 (Or.inl (hinv.votedProposed j b' hj hvc'))
-    · intro j b' hj hvc
-      have hvc' : voteCast n s j b' := (voteCast_send_prop n L hinf hseen j b').1 hvc
-      exact (chainNotarizedBy_stable_prop n f L hinf hseen b'.tail (bep b' - 1)).1 (hinv.votedSeenParent j b' hj hvc')
-    · intro j b' hj hvc C hC
-      have hvc' : voteCast n s j b' := (voteCast_send_prop n L hinf hseen j b').1 hvc
-      have hC' : NotarizedBy n f s C (bep b' - 1) := (notarizedBy_stable_prop n f L hinf hseen).2 hC
-      exact hinv.votedLongest j b' hj hvc' C hC'
-    · intro e' b' hpc hL'
-      have hpc' := (propCast_send_prop_iff n L hinf hseen e' b').1 hpc
-      rcases hpc' with hpc' | ⟨he, hb⟩
-      · exact (chainNotarizedBy_stable_prop n f L hinf hseen b'.tail (e' - 1)).1 (hinv.proposedSeenParent e' b' hpc' hL')
-      · subst e'; subst b'
-        exact (chainNotarizedBy_stable_prop n f L hinf hseen bp.tail (e - 1)).1 hparcast
-    · intro e' b' hpc hL'
-      have hpc' := (propCast_send_prop_iff n L hinf hseen e' b').1 hpc
-      rcases hpc' with hpc' | ⟨he, hb⟩
-      · exact hinv.proposedEpoch e' b' hpc' hL'
-      · subst e'; subst b'; exact hbep
-    · intro e₁ b₁ b₂ hpc₁ hpc₂ hL₁
-      have hpc₁' := (propCast_send_prop_iff n L hinf hseen e₁ b₁).1 hpc₁
-      have hpc₂' := (propCast_send_prop_iff n L hinf hseen e₁ b₂).1 hpc₂
-      rcases hpc₁' with hpc₁' | ⟨he1, hb1⟩
-      · rcases hpc₂' with hpc₂' | ⟨he2, hb2⟩
-        · exact hinv.propUniq e₁ b₁ b₂ hpc₁' hpc₂' hL₁
-        · subst e₁; subst b₂; exfalso; exact hprior b₁ hpc₁'
-      · subst e₁; subst b₁
-        rcases hpc₂' with hpc₂' | ⟨he2, hb2⟩
-        · exfalso; exact hprior b₂ hpc₂'
-        · subst b₂; rfl
-    · intro j b' hj hvc
-      have hvc' : voteCast n s j b' := (voteCast_send_prop n L hinf hseen j b').1 hvc
-      exact hinv.voteValid j b' hj hvc'
-  · -- VoteH i b
-    obtain ⟨hi, hval, hbpos, hbcur, hfirst, hprop, hparseen, hparcast, hlong, hsend⟩ := hv
-    obtain ⟨_hr, _hninf, _hnseen, hnow, hinf, hseen⟩ := hsend
-    have hseenmono : ∀ x, x ∈ s.seen → x ∈ s'.seen := by
-      intro x hx; rw [hseen]; exact hx
-    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-    · intro j b' hj hvc
-      by_cases hjb : j = i ∧ b' = b
-      · rcases hjb with ⟨rfl, rfl⟩
-        exact chainNotarizedSeen_mono n f hseenmono hparseen
-      · have hne : j ≠ i ∨ b' ≠ b := by
-          by_cases hji : j = i
-          · right; intro hbb; exact hjb ⟨hji, hbb⟩
-          · left; exact hji
-        have hvc' : voteCast n s j b' := voteCast_back_vote n hinf hseen hne hvc
-        exact chainNotarizedSeen_mono n f hseenmono (hinv.voteSeenParent j b' hj hvc')
-    · intro e' b' hpc hL'
-      have hpc' : propCast n L s e' b' := (propCast_send_vote n L hinf hseen e' b').1 hpc
-      exact hinv.propValid e' b' hpc' hL'
-    · intro e' b' hpc hL' C hC
-      have hpc' : propCast n L s e' b' := (propCast_send_vote n L hinf hseen e' b').1 hpc
-      have hle' : e' ≤ curEpoch Δ s.now := hinv.propCur e' b' hpc' hL'
-      have hgt : e' - 1 < bep b := by omega
-      have hC' : NotarizedBy n f s C (e' - 1) := (notarizedBy_stable_vote n f hinf hseen hgt).2 hC
-      exact hinv.propLongest e' b' hpc' hL' C hC'
-    · intro e' b' hpc hL'
-      have hpc' : propCast n L s e' b' := (propCast_send_vote n L hinf hseen e' b').1 hpc
-      simpa [hnow] using (hinv.propCur e' b' hpc' hL')
-    · intro j b' hj hvc
-      by_cases hjb : j = i ∧ b' = b
-      · rcases hjb with ⟨rfl, rfl⟩
-        simpa [hnow] using (le_of_eq hbcur)
-      · have hne : j ≠ i ∨ b' ≠ b := by
-          by_cases hji : j = i
-          · right; intro hbb; exact hjb ⟨hji, hbb⟩
-          · left; exact hji
-        have hvc' : voteCast n s j b' := voteCast_back_vote n hinf hseen hne hvc
-        simpa [hnow] using (hinv.voteCur j b' hj hvc')
-    · intro j b' hj hvc
-      by_cases hjb : j = i ∧ b' = b
-      · rcases hjb with ⟨hji, hbb⟩
-        subst j
-        subst b'
-        exact (propCast_send_vote n L hinf hseen (bep b) b).2 hprop
-      · have hne : j ≠ i ∨ b' ≠ b := by
-          by_cases hji : j = i
-          · right; intro hbb; exact hjb ⟨hji, hbb⟩
-          · left; exact hji
-        have hvc' : voteCast n s j b' := voteCast_back_vote n hinf hseen hne hvc
-        exact (propCast_send_vote n L hinf hseen (bep b') b').2 (hinv.votedProposed j b' hj hvc')
-    · intro j b' hj hvc
-      by_cases hjb : j = i ∧ b' = b
-      · rcases hjb with ⟨rfl, rfl⟩
-        exact (chainNotarizedBy_stable_vote n f hinf hseen (by omega)).1 hparcast
-      · have hne : j ≠ i ∨ b' ≠ b := by
-          by_cases hji : j = i
-          · right; intro hbb; exact hjb ⟨hji, hbb⟩
-          · left; exact hji
-        have hvc' : voteCast n s j b' := voteCast_back_vote n hinf hseen hne hvc
-        have hle' : bep b' ≤ curEpoch Δ s.now := hinv.voteCur j b' hj hvc'
-        have hgt : bep b' - 1 < bep b := by omega
-        exact (chainNotarizedBy_stable_vote n f hinf hseen hgt).1 (hinv.votedSeenParent j b' hj hvc')
-    · intro j b' hj hvc C hC
-      by_cases hjb : j = i ∧ b' = b
-      · rcases hjb with ⟨rfl, rfl⟩
-        exact hlong C ((notarizedBy_stable_vote n f hinf hseen (by omega)).2 hC)
-      · have hne : j ≠ i ∨ b' ≠ b := by
-          by_cases hji : j = i
-          · right; intro hbb; exact hjb ⟨hji, hbb⟩
-          · left; exact hji
-        have hvc' : voteCast n s j b' := voteCast_back_vote n hinf hseen hne hvc
-        have hle' : bep b' ≤ curEpoch Δ s.now := hinv.voteCur j b' hj hvc'
-        have hgt : bep b' - 1 < bep b := by omega
-        have hC' : NotarizedBy n f s C (bep b' - 1) := (notarizedBy_stable_vote n f hinf hseen hgt).2 hC
-        exact hinv.votedLongest j b' hj hvc' C hC'
-    · intro e' b' hpc hL'
-      have hpc' : propCast n L s e' b' := (propCast_send_vote n L hinf hseen e' b').1 hpc
-      have hle' : e' ≤ curEpoch Δ s.now := hinv.propCur e' b' hpc' hL'
-      have hgt : e' - 1 < bep b := by omega
-      exact (chainNotarizedBy_stable_vote n f hinf hseen hgt).1 (hinv.proposedSeenParent e' b' hpc' hL')
-    · intro e' b' hpc hL'
-      have hpc' : propCast n L s e' b' := (propCast_send_vote n L hinf hseen e' b').1 hpc
-      exact hinv.proposedEpoch e' b' hpc' hL'
-    · intro e₁ b₁ b₂ hpc₁ hpc₂ hL₁
-      have hpc₁' : propCast n L s e₁ b₁ := (propCast_send_vote n L hinf hseen e₁ b₁).1 hpc₁
-      have hpc₂' : propCast n L s e₁ b₂ := (propCast_send_vote n L hinf hseen e₁ b₂).1 hpc₂
-      exact hinv.propUniq e₁ b₁ b₂ hpc₁' hpc₂' hL₁
-    · intro j b' hj hvc
-      by_cases hjb : j = i ∧ b' = b
-      · rcases hjb with ⟨rfl, rfl⟩
-        exact hval
-      · have hne : j ≠ i ∨ b' ≠ b := by
-          by_cases hji : j = i
-          · right; intro hbb; exact hjb ⟨hji, hbb⟩
-          · left; exact hji
-        have hvc' : voteCast n s j b' := voteCast_back_vote n hinf hseen hne hvc
-        exact hinv.voteValid j b' hj hvc'
+  · -- Propose e bp: adds exactly its own proposal
+    exact inv_prop_step n Byz Δ f L hp hinv
+  · -- VoteH i b: adds exactly its own vote
+    exact inv_vote_step n Byz Δ f L hv hinv
   · -- Deliver m: sent set unchanged, seen grows
     obtain ⟨hmem, _, hnow, hinf, hseen⟩ := hd
     exact inv_sent_step n Byz Δ f L
