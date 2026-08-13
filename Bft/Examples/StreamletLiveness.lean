@@ -89,7 +89,7 @@ theorem chain_notarized_block {s : St n} {b : Blk} {e : ℕ}
 theorem proposal_ne_genesis_of {s : St n} (hinv : Inv n Byz Δ f L s) {e : ℕ} {b : Blk}
     (hp : propCast n L s e b) (hL : L e ∉ Byz) (hpos : 0 < e) : b ≠ [0] := by
   intro hb; subst b
-  have he : bep [0] = e := hinv.proposedEpoch e [0] hp hL
+  have he : bep [0] = e := hinv.proposedEpoch e [0] ((hinv.castProps_iff e [0]).2 hp) hL
   simp [bep] at he
   omega
 
@@ -113,24 +113,24 @@ theorem longest_chain_by (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ f
   intro C hC
   rcases hC with ⟨hN, hbepC⟩
   rcases honest_in_quorum n Byz f hB hN with ⟨i0, hi0, hih⟩
-  have hv0 : voteCast n s i0 C := (mem_votersCast n).mp hi0
-  have hCP : propCast n L s (bep C) C := hinv.votedProposed i0 C hih hv0
+  have hv0 : (i0, C) ∈ s.castVotes := (mem_votersCast n).mp hi0
+  have hCP : (bep C, C) ∈ s.castProps := hinv.votedProposed i0 C hih hv0
   have hCval : ValidChain C := hinv.voteValid i0 C hih hv0
   have hb1ne : b1 ≠ [0] := proposal_succ_ne_genesis n Byz Δ f L hinv hp1 hL1
   have hb2ne : b2 ≠ [0] := proposal_ne_genesis_of n Byz Δ f L hinv hp2 hL2 (Nat.succ_pos (e + 1))
   by_cases h1 : bep C = e
-  · have hCb : propCast n L s e C := by simpa [h1] using hCP
-    have hC0 : C = b0 := hinv.propUniq e C b0 hCb hp0 hL0
+  · have hCb : (e, C) ∈ s.castProps := by simpa [h1] using hCP
+    have hC0 : C = b0 := hinv.propUniq e C b0 hCb ((hinv.castProps_iff e b0).2 hp0) hL0
     subst C
     omega
   · by_cases h2 : bep C = e + 1
-    · have hCb : propCast n L s (e + 1) C := by simpa [h2] using hCP
-      have hC1 : C = b1 := hinv.propUniq (e + 1) C b1 hCb hp1 hL1
+    · have hCb : (e + 1, C) ∈ s.castProps := by simpa [h2] using hCP
+      have hC1 : C = b1 := hinv.propUniq (e + 1) C b1 hCb ((hinv.castProps_iff (e + 1) b1).2 hp1) hL1
       subst C
       omega
     · by_cases h3 : bep C = e + 2
-      · have hCb : propCast n L s (e + 2) C := by simpa [h3] using hCP
-        have hC2' : C = b2 := hinv.propUniq (e + 2) C b2 hCb hp2 hL2
+      · have hCb : (e + 2, C) ∈ s.castProps := by simpa [h3] using hCP
+        have hC2' : C = b2 := hinv.propUniq (e + 2) C b2 hCb ((hinv.castProps_iff (e + 2) b2).2 hp2) hL2
         subst C
         omega
       · have hlt : bep C < e := by
@@ -143,7 +143,7 @@ theorem longest_chain_by (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ f
             · exact (h3 hc2).elim
         by_cases hg : C = [0]
         · subst C
-          have hb2n : b2 ≠ [] := ne_nil_of_valid (hinv.propValid (e + 2) b2 hp2 hL2)
+          have hb2n : b2 ≠ [] := ne_nil_of_valid (hinv.propValid (e + 2) b2 ((hinv.castProps_iff (e + 2) b2).2 hp2) hL2)
           have hb2pos : 0 < b2.length := List.length_pos_of_ne_nil hb2n
           simpa using (Nat.succ_le_of_lt hb2pos)
         · have hCpos : 0 < bep C := by
@@ -159,10 +159,10 @@ theorem longest_chain_by (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ f
           have hN' : NotarizedBy n f s C.tail e :=
             notarizedBy_mono n f (Nat.le_trans (Nat.sub_le (bep C) 1) (le_of_lt hlt)) hN
           have hlenP : C.tail.length ≤ b1.tail.length :=
-            hinv.propLongest (e + 1) b1 hp1 hL1 C.tail hN'
+            hinv.propLongest (e + 1) b1 ((hinv.castProps_iff (e + 1) b1).2 hp1) hL1 C.tail hN'
           have hClen' : C.length = C.tail.length + 1 := length_tail_succ hCn
           have hb1len : b1.length = b1.tail.length + 1 :=
-            length_tail_succ (ne_nil_of_valid (hinv.propValid (e + 1) b1 hp1 hL1))
+            length_tail_succ (ne_nil_of_valid (hinv.propValid (e + 1) b1 ((hinv.castProps_iff (e + 1) b1).2 hp1) hL1))
           have hCleq : C.length ≤ b1.length := by
             rw [hClen', hb1len]
             exact Nat.succ_le_succ hlenP
@@ -181,31 +181,31 @@ theorem main_liveness_lemma (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz �
     ∀ C : Blk, C ≠ b2 → C.length = b2.length → ¬ NotarizedCast n f s C := by
   intro C hCne hClen hNC
   rcases honest_in_quorum n Byz f hB hNC with ⟨i0, hi0, hih⟩
-  have hv0 : voteCast n s i0 C := (mem_votersCast n).mp hi0
-  have hCP : propCast n L s (bep C) C := hinv.votedProposed i0 C hih hv0
+  have hv0 : (i0, C) ∈ s.castVotes := (mem_votersCast n).mp hi0
+  have hCP : (bep C, C) ∈ s.castProps := hinv.votedProposed i0 C hih hv0
   have hCval : ValidChain C := hinv.voteValid i0 C hih hv0
   have hb1ne : b1 ≠ [0] := proposal_succ_ne_genesis n Byz Δ f L hinv hp1 hL1
   have hb2ne : b2 ≠ [0] := proposal_ne_genesis_of n Byz Δ f L hinv hp2 hL2 (Nat.succ_pos (e + 1))
   by_cases h1 : bep C = e
-  · have hCb : propCast n L s e C := by simpa [h1] using hCP
-    have hC0 : C = b0 := hinv.propUniq e C b0 hCb hp0 hL0
+  · have hCb : (e, C) ∈ s.castProps := by simpa [h1] using hCP
+    have hC0 : C = b0 := hinv.propUniq e C b0 hCb ((hinv.castProps_iff e b0).2 hp0) hL0
     subst C
     omega
   · by_cases h2 : bep C = e + 1
-    · have hCb : propCast n L s (e + 1) C := by simpa [h2] using hCP
-      have hC1 : C = b1 := hinv.propUniq (e + 1) C b1 hCb hp1 hL1
+    · have hCb : (e + 1, C) ∈ s.castProps := by simpa [h2] using hCP
+      have hC1 : C = b1 := hinv.propUniq (e + 1) C b1 hCb ((hinv.castProps_iff (e + 1) b1).2 hp1) hL1
       subst C
       omega
     · by_cases h3 : bep C = e + 2
-      · have hCb : propCast n L s (e + 2) C := by simpa [h3] using hCP
-        have hC2' : C = b2 := hinv.propUniq (e + 2) C b2 hCb hp2 hL2
+      · have hCb : (e + 2, C) ∈ s.castProps := by simpa [h3] using hCP
+        have hC2' : C = b2 := hinv.propUniq (e + 2) C b2 hCb ((hinv.castProps_iff (e + 2) b2).2 hp2) hL2
         exact (hCne hC2').elim
       · by_cases hlt : bep C < e
         · have hb2pos : 0 < bep b2 := by
-            have h : bep b2 = e + 2 := hinv.proposedEpoch (e + 2) b2 hp2 hL2
+            have h : bep b2 = e + 2 := hinv.proposedEpoch (e + 2) b2 ((hinv.castProps_iff (e + 2) b2).2 hp2) hL2
             omega
           have hb2ge2 : 2 ≤ b2.length :=
-            length_ge_two_of_bep_pos (hinv.propValid (e + 2) b2 hp2 hL2) hb2pos
+            length_ge_two_of_bep_pos (hinv.propValid (e + 2) b2 ((hinv.castProps_iff (e + 2) b2).2 hp2) hL2) hb2pos
           have hCge2 : 2 ≤ C.length := by rw [hClen]; exact hb2ge2
           have hCpos : 0 < bep C := by
             by_contra hnot
@@ -222,10 +222,10 @@ theorem main_liveness_lemma (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz �
           have hN' : NotarizedBy n f s C.tail e :=
             notarizedBy_mono n f (Nat.le_trans (Nat.sub_le (bep C) 1) (le_of_lt hlt)) hN
           have hlenP : C.tail.length ≤ b1.tail.length :=
-            hinv.propLongest (e + 1) b1 hp1 hL1 C.tail hN'
+            hinv.propLongest (e + 1) b1 ((hinv.castProps_iff (e + 1) b1).2 hp1) hL1 C.tail hN'
           have hClen' : C.length = C.tail.length + 1 := length_tail_succ hCn
           have hb1len : b1.length = b1.tail.length + 1 :=
-            length_tail_succ (ne_nil_of_valid (hinv.propValid (e + 1) b1 hp1 hL1))
+            length_tail_succ (ne_nil_of_valid (hinv.propValid (e + 1) b1 ((hinv.castProps_iff (e + 1) b1).2 hp1) hL1))
           have hCleq : C.length ≤ b1.length := by
             rw [hClen', hb1len]
             exact Nat.succ_le_succ hlenP
@@ -235,7 +235,7 @@ theorem main_liveness_lemma (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz �
         · have hgt : e + 2 < bep C := by omega
           have hlong : ∀ C' : Blk, NotarizedBy n f s C' (bep C - 1) → C'.length ≤ C.tail.length :=
             hinv.votedLongest i0 C hih hv0
-          have hb2n : b2 ≠ [] := ne_nil_of_valid (hinv.propValid (e + 2) b2 hp2 hL2)
+          have hb2n : b2 ≠ [] := ne_nil_of_valid (hinv.propValid (e + 2) b2 ((hinv.castProps_iff (e + 2) b2).2 hp2) hL2)
           have hb2N : NotarizedBy n f s b2 (e + 2) := chain_notarized_block n f hC2 hb2n
           have hle' : e + 2 ≤ bep C - 1 := by omega
           have hb2N' : NotarizedBy n f s b2 (bep C - 1) := notarizedBy_mono n f hle' hb2N
@@ -280,14 +280,14 @@ theorem liveness_finality (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ 
   have hb2ne : b2 ≠ [0] := proposal_ne_genesis_of n Byz Δ f L hinv hp2 hL2 (Nat.succ_pos (e + 1))
   have hb3ne : b3 ≠ [0] := proposal_ne_genesis_of n Byz Δ f L hinv hp3 hL3 (Nat.succ_pos (e + 2))
   have hb4ne : b4 ≠ [0] := proposal_ne_genesis_of n Byz Δ f L hinv hp4 hL4 (Nat.succ_pos (e + 3))
-  have hb2n : b2 ≠ [] := ne_nil_of_valid (hinv.propValid (e + 2) b2 hp2 hL2)
-  have hb3n : b3 ≠ [] := ne_nil_of_valid (hinv.propValid (e + 3) b3 hp3 hL3)
-  have hb4n : b4 ≠ [] := ne_nil_of_valid (hinv.propValid (e + 4) b4 hp4 hL4)
+  have hb2n : b2 ≠ [] := ne_nil_of_valid (hinv.propValid (e + 2) b2 ((hinv.castProps_iff (e + 2) b2).2 hp2) hL2)
+  have hb3n : b3 ≠ [] := ne_nil_of_valid (hinv.propValid (e + 3) b3 ((hinv.castProps_iff (e + 3) b3).2 hp3) hL3)
+  have hb4n : b4 ≠ [] := ne_nil_of_valid (hinv.propValid (e + 4) b4 ((hinv.castProps_iff (e + 4) b4).2 hp4) hL4)
   have hb3pos : 0 < bep b3 := by
-    have h : bep b3 = e + 3 := hinv.proposedEpoch (e + 3) b3 hp3 hL3
+    have h : bep b3 = e + 3 := hinv.proposedEpoch (e + 3) b3 ((hinv.castProps_iff (e + 3) b3).2 hp3) hL3
     omega
   have hb4pos : 0 < bep b4 := by
-    have h : bep b4 = e + 4 := hinv.proposedEpoch (e + 4) b4 hp4 hL4
+    have h : bep b4 = e + 4 := hinv.proposedEpoch (e + 4) b4 ((hinv.castProps_iff (e + 4) b4).2 hp4) hL4
     omega
   -- `b₃` extends `b₂`
   have hAdj23 : b3 = (e + 3) :: b2 := by
@@ -296,31 +296,31 @@ theorem liveness_finality (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ 
         apply le_antisymm
         · by_cases hg : b3.tail = [0]
           · have hb2ge2 : 2 ≤ b2.length :=
-              length_ge_two_of_bep_pos (hinv.propValid (e + 2) b2 hp2 hL2) (by
-                have h : bep b2 = e + 2 := hinv.proposedEpoch (e + 2) b2 hp2 hL2
+              length_ge_two_of_bep_pos (hinv.propValid (e + 2) b2 ((hinv.castProps_iff (e + 2) b2).2 hp2) hL2) (by
+                have h : bep b2 = e + 2 := hinv.proposedEpoch (e + 2) b2 ((hinv.castProps_iff (e + 2) b2).2 hp2) hL2
                 omega)
             rw [hg]
             change 1 ≤ b2.length
             exact le_trans (by omega : 1 ≤ 2) hb2ge2
           · have hN3 : NotarizedBy n f s b3.tail (e + 2) := by
               have hc : ChainNotarizedBy n f s b3.tail (e + 2) :=
-                hinv.proposedSeenParent (e + 3) b3 hp3 hL3
-              exact chain_notarized_block n f hc (ne_nil_tail_of_bep_pos (hinv.propValid (e + 3) b3 hp3 hL3) hb3pos)
+                hinv.proposedSeenParent (e + 3) b3 ((hinv.castProps_iff (e + 3) b3).2 hp3) hL3
+              exact chain_notarized_block n f hc (ne_nil_tail_of_bep_pos (hinv.propValid (e + 3) b3 ((hinv.castProps_iff (e + 3) b3).2 hp3) hL3) hb3pos)
             exact longest_chain_by n Byz Δ f L hB hinv hp0 hp1 hp2 hL0 hL1 hL2 hG01 hG12 hC2 b3.tail hN3
         · have hN : NotarizedBy n f s b2 (e + 2) := chain_notarized_block n f hC2 hb2n
-          exact hinv.propLongest (e + 3) b3 hp3 hL3 b2 hN
+          exact hinv.propLongest (e + 3) b3 ((hinv.castProps_iff (e + 3) b3).2 hp3) hL3 b2 hN
       by_contra hne
       by_cases hg : b3.tail = [0]
       · have hb3taillen : b3.tail.length = 1 := by rw [hg]; rfl
         have hb2ge2 : 2 ≤ b2.length :=
-          length_ge_two_of_bep_pos (hinv.propValid (e + 2) b2 hp2 hL2) (by
-            have h : bep b2 = e + 2 := hinv.proposedEpoch (e + 2) b2 hp2 hL2
+          length_ge_two_of_bep_pos (hinv.propValid (e + 2) b2 ((hinv.castProps_iff (e + 2) b2).2 hp2) hL2) (by
+            have h : bep b2 = e + 2 := hinv.proposedEpoch (e + 2) b2 ((hinv.castProps_iff (e + 2) b2).2 hp2) hL2
             omega)
         omega
       · have hN3 : NotarizedBy n f s b3.tail (e + 2) := by
           have hc : ChainNotarizedBy n f s b3.tail (e + 2) :=
-            hinv.proposedSeenParent (e + 3) b3 hp3 hL3
-          exact chain_notarized_block n f hc (ne_nil_tail_of_bep_pos (hinv.propValid (e + 3) b3 hp3 hL3) hb3pos)
+            hinv.proposedSeenParent (e + 3) b3 ((hinv.castProps_iff (e + 3) b3).2 hp3) hL3
+          exact chain_notarized_block n f hc (ne_nil_tail_of_bep_pos (hinv.propValid (e + 3) b3 ((hinv.castProps_iff (e + 3) b3).2 hp3) hL3) hb3pos)
         have hN3' : NotarizedCast n f s b3.tail := hN3.1
         exact (main_liveness_lemma n Byz Δ f L hB hinv hp0 hp1 hp2 hL0 hL1 hL2 hG01 hG12 hC2
           b3.tail hne hlen hN3')
@@ -328,7 +328,7 @@ theorem liveness_finality (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ 
       cases b3 with
       | nil => exact (hb3n rfl).elim
       | cons a t => rfl
-    have hb3E : bep b3 = e + 3 := hinv.proposedEpoch (e + 3) b3 hp3 hL3
+    have hb3E : bep b3 = e + 3 := hinv.proposedEpoch (e + 3) b3 ((hinv.castProps_iff (e + 3) b3).2 hp3) hL3
     rw [hb3pred, hb3E] at hb3eq
     exact hb3eq
   -- `b₄` extends `b₃`
@@ -338,27 +338,27 @@ theorem liveness_finality (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ 
         apply le_antisymm
         · by_cases hg : b4.tail = [0]
           · have hb3ge2 : 2 ≤ b3.length :=
-              length_ge_two_of_bep_pos (hinv.propValid (e + 3) b3 hp3 hL3) hb3pos
+              length_ge_two_of_bep_pos (hinv.propValid (e + 3) b3 ((hinv.castProps_iff (e + 3) b3).2 hp3) hL3) hb3pos
             rw [hg]
             change 1 ≤ b3.length
             exact le_trans (by omega : 1 ≤ 2) hb3ge2
           · have hN4 : NotarizedBy n f s b4.tail (e + 3) := by
               have hc : ChainNotarizedBy n f s b4.tail (e + 3) :=
-                hinv.proposedSeenParent (e + 4) b4 hp4 hL4
-              exact chain_notarized_block n f hc (ne_nil_tail_of_bep_pos (hinv.propValid (e + 4) b4 hp4 hL4) hb4pos)
+                hinv.proposedSeenParent (e + 4) b4 ((hinv.castProps_iff (e + 4) b4).2 hp4) hL4
+              exact chain_notarized_block n f hc (ne_nil_tail_of_bep_pos (hinv.propValid (e + 4) b4 ((hinv.castProps_iff (e + 4) b4).2 hp4) hL4) hb4pos)
             exact longest_chain_by n Byz Δ f L hB hinv hp1 hp2 hp3 hL1 hL2 hL3 hG12 hG23 hC3 b4.tail hN4
         · have hN : NotarizedBy n f s b3 (e + 3) := chain_notarized_block n f hC3 hb3n
-          exact hinv.propLongest (e + 4) b4 hp4 hL4 b3 hN
+          exact hinv.propLongest (e + 4) b4 ((hinv.castProps_iff (e + 4) b4).2 hp4) hL4 b3 hN
       by_contra hne
       by_cases hg : b4.tail = [0]
       · have hb4taillen : b4.tail.length = 1 := by rw [hg]; rfl
         have hb3ge2 : 2 ≤ b3.length :=
-          length_ge_two_of_bep_pos (hinv.propValid (e + 3) b3 hp3 hL3) hb3pos
+          length_ge_two_of_bep_pos (hinv.propValid (e + 3) b3 ((hinv.castProps_iff (e + 3) b3).2 hp3) hL3) hb3pos
         omega
       · have hN4 : NotarizedBy n f s b4.tail (e + 3) := by
           have hc : ChainNotarizedBy n f s b4.tail (e + 3) :=
-            hinv.proposedSeenParent (e + 4) b4 hp4 hL4
-          exact chain_notarized_block n f hc (ne_nil_tail_of_bep_pos (hinv.propValid (e + 4) b4 hp4 hL4) hb4pos)
+            hinv.proposedSeenParent (e + 4) b4 ((hinv.castProps_iff (e + 4) b4).2 hp4) hL4
+          exact chain_notarized_block n f hc (ne_nil_tail_of_bep_pos (hinv.propValid (e + 4) b4 ((hinv.castProps_iff (e + 4) b4).2 hp4) hL4) hb4pos)
         have hN4' : NotarizedCast n f s b4.tail := hN4.1
         exact (main_liveness_lemma n Byz Δ f L hB hinv hp1 hp2 hp3 hL1 hL2 hL3 hG12 hG23 hC3
           b4.tail hne hlen hN4')
@@ -366,11 +366,12 @@ theorem liveness_finality (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ 
       cases b4 with
       | nil => exact (hb4n rfl).elim
       | cons a t => rfl
-    have hb4E : bep b4 = e + 4 := hinv.proposedEpoch (e + 4) b4 hp4 hL4
+    have hb4E : bep b4 = e + 4 := hinv.proposedEpoch (e + 4) b4 ((hinv.castProps_iff (e + 4) b4).2 hp4) hL4
     rw [hb4pred, hb4E] at hb4eq
     exact hb4eq
-  refine ⟨Nat.succ_pos (e + 1), hinv.proposedEpoch (e + 2) b2 hp2 hL2,
-    hinv.proposedEpoch (e + 3) b3 hp3 hL3, hinv.proposedEpoch (e + 4) b4 hp4 hL4,
+  refine ⟨Nat.succ_pos (e + 1), hinv.proposedEpoch (e + 2) b2 ((hinv.castProps_iff (e + 2) b2).2 hp2) hL2,
+    hinv.proposedEpoch (e + 3) b3 ((hinv.castProps_iff (e + 3) b3).2 hp3) hL3,
+    hinv.proposedEpoch (e + 4) b4 ((hinv.castProps_iff (e + 4) b4).2 hp4) hL4,
     hAdj23, hAdj34, ?_⟩
   intro d hd hdsuf
   exact (hC4 d hd hdsuf).1

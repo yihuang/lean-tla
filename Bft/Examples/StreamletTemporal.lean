@@ -32,45 +32,59 @@ variable (n : ℕ) (Byz : Finset (Fin n)) (Δ GST f : ℕ) (L : ℕ → Fin n)
 
 /-! ## Monotonicity under protocol steps -/
 
-/-- The sent set of `s'` contains that of `s`. -/
+/-- The sent set and cast-vote history of `s'` contain those of `s`. -/
 def sentGrows (s s' : St n) : Prop :=
-  ∀ m, (m ∈ s.inflight ∨ m ∈ s.seen) → (m ∈ s'.inflight ∨ m ∈ s'.seen)
+  (∀ m, (m ∈ s.inflight ∨ m ∈ s.seen) → (m ∈ s'.inflight ∨ m ∈ s'.seen)) ∧
+    s.castVotes ⊆ s'.castVotes
 
 /-- Every protocol step preserves (grows) the sent set. -/
 theorem pnext_sentGrows {s s' : St n} (hstep : PNext n Byz Δ GST f L s s') : sentGrows n s s' := by
-  intro m hm
   rcases hstep with htick | ⟨e, b, hpr⟩ | ⟨i, b, hv⟩ | ⟨m0, hd⟩
-  · obtain ⟨_hnow, hinf, hseen, _⟩ := htick
-    rw [hinf, hseen]; exact hm
+  · obtain ⟨_hnow, hinf, hseen, hcv, _hcp, _hguard⟩ := htick
+    constructor
+    · intro m hm; rw [hinf, hseen]; exact hm
+    · intro p hp; rw [hcv]; exact hp
   · obtain ⟨_hprior, _hL, _hval, _hbep, _hcur, _hparseen, _hparcast, _hlong, hsend⟩ := hpr
-    obtain ⟨_hr, _hninf, _hnseen, _hnow, hinf, hseen⟩ := hsend
-    rw [hinf, hseen]
-    rcases hm with hm | hm
-    · left; exact Finset.mem_insert_of_mem hm
-    · right; exact hm
+    obtain ⟨_hr, _hninf, _hnseen, _hnow, hinf, hseen, hcv, _hcp⟩ := hsend
+    constructor
+    · intro m hm
+      rw [hinf, hseen]
+      rcases hm with hm | hm
+      · left; exact Finset.mem_insert_of_mem hm
+      · right; exact hm
+    · intro p hp
+      rw [hcv]
+      simpa using hp
   · obtain ⟨_hi, _hval, _hbpos, _hbcur, _hfirst, _hprop, _hparseen, _hparcast, _hlong, hsend⟩ := hv
-    obtain ⟨_hr, _hninf, _hnseen, _hnow, hinf, hseen⟩ := hsend
-    rw [hinf, hseen]
-    rcases hm with hm | hm
-    · left; exact Finset.mem_insert_of_mem hm
-    · right; exact hm
-  · obtain ⟨hmem, _hguard, _hnow, hinf, hseen⟩ := hd
+    obtain ⟨_hr, _hninf, _hnseen, _hnow, hinf, hseen, hcv, _hcp⟩ := hsend
+    constructor
+    · intro m hm
+      rw [hinf, hseen]
+      rcases hm with hm | hm
+      · left; exact Finset.mem_insert_of_mem hm
+      · right; exact hm
+    · intro p hp
+      rw [hcv]
+      exact Finset.mem_insert_of_mem hp
+  · obtain ⟨hmem, _hguard, _hnow, hinf, hseen, hcv, _hcp⟩ := hd
     have hsent := sent_eq_deliver n hmem hinf hseen
-    exact (hsent m).2 hm
+    constructor
+    · intro m hm
+      exact (hsent m).2 hm
+    · intro p hp; rw [hcv]; exact hp
 
 /-- `propCast` is monotone in the sent set. -/
 theorem propCast_mono {s s' : St n} (h : sentGrows n s s') {e : ℕ} {b : Blk} :
     propCast n L s e b → propCast n L s' e b := by
   rintro ⟨m, hm, hsrc, hb⟩
-  exact ⟨m, h m hm, hsrc, hb⟩
+  exact ⟨m, h.1 m hm, hsrc, hb⟩
 
 /-- `votersCast` is monotone in the sent set. -/
 theorem votersCast_mono {s s' : St n} (h : sentGrows n s s') (b : Blk) :
     votersCast n s b ⊆ votersCast n s' b := by
   intro i hi
   rw [mem_votersCast n] at hi ⊢
-  rcases hi with ⟨m, hm, hsrc, hb⟩
-  exact ⟨m, h m hm, hsrc, hb⟩
+  exact h.2 hi
 
 /-- `NotarizedCast` is monotone in the sent set. -/
 theorem notarizedCast_mono {s s' : St n} (h : sentGrows n s s') {b : Blk} :
@@ -160,11 +174,11 @@ theorem window_finality (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ f 
   have hL2 : L (e0 + 2) ∉ Byz := hL (e0 + 2) (by omega) (by omega)
   have hL3 : L (e0 + 3) ∉ Byz := hL (e0 + 3) (by omega) (by omega)
   have hL4 : L (e0 + 4) ∉ Byz := hL (e0 + 4) (by omega) (by omega)
-  have hb0ne : b0 ≠ [] := ne_nil_of_valid (hinv.propValid e0 b0 hp0 hL0)
-  have hb1ne : b1 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 1) b1 hp1 hL1)
-  have hb2ne : b2 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 2) b2 hp2 hL2)
-  have hb3ne : b3 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 3) b3 hp3 hL3)
-  have hb4ne : b4 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 4) b4 hp4 hL4)
+  have hb0ne : b0 ≠ [] := ne_nil_of_valid (hinv.propValid e0 b0 ((hinv.castProps_iff e0 b0).2 hp0) hL0)
+  have hb1ne : b1 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 1) b1 ((hinv.castProps_iff (e0 + 1) b1).2 hp1) hL1)
+  have hb2ne : b2 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 2) b2 ((hinv.castProps_iff (e0 + 2) b2).2 hp2) hL2)
+  have hb3ne : b3 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 3) b3 ((hinv.castProps_iff (e0 + 3) b3).2 hp3) hL3)
+  have hb4ne : b4 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 4) b4 ((hinv.castProps_iff (e0 + 4) b4).2 hp4) hL4)
   have hG01 : b0.length < b1.length :=
     proposal_growth n Byz Δ f L hinv hp0 hp1 hL0 hL1
       ⟨b0, chain_notarized_block n f hc0 hb0ne, le_rfl⟩

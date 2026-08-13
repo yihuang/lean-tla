@@ -68,11 +68,16 @@ structure Msg (n : ℕ) where
 deriving DecidableEq, Repr
 
 /-- Network state: the current round, the messages in flight (sent, not yet
-delivered), and the messages delivered to the honest broadcast group. -/
+delivered), the messages delivered to the honest broadcast group, and — as
+auxiliary *history variables* (Lamport) — the votes and proposals cast so far.
+`castVotes`/`castProps` are monotone accumulators of what was sent; they are
+what the safety invariant is stated over. -/
 structure St (n : ℕ) where
   now : ℕ
   inflight : Finset (Msg n)
   seen : Finset (Msg n)
+  castVotes : Finset (Fin n × Blk)
+  castProps : Finset (ℕ × Blk)
 deriving DecidableEq
 
 /-- The delivery deadline of `m`: round `max GST (m.round + Δ)`. -/
@@ -84,20 +89,24 @@ def deadline (m : Msg n) : ℕ := max GST (m.round + Δ)
 message still in flight. -/
 def Tick : Action (St n) := fun s s' =>
   s'.now = s.now + 1 ∧ s'.inflight = s.inflight ∧ s'.seen = s.seen ∧
+  s'.castVotes = s.castVotes ∧ s'.castProps = s.castProps ∧
   (∀ m, m ∈ s.inflight → m.src ∉ Byz → s'.now ≤ deadline n Δ GST m)
 
 /-- A node broadcasts a message: it enters the network, stamped with the
 current round. A message is sent at most once. -/
 def Send (m : Msg n) : Action (St n) := fun s s' =>
   m.round = s.now ∧ m ∉ s.inflight ∧ m ∉ s.seen ∧
-  s'.now = s.now ∧ s'.inflight = insert m s.inflight ∧ s'.seen = s.seen
+  s'.now = s.now ∧ s'.inflight = insert m s.inflight ∧ s'.seen = s.seen ∧
+  s'.castVotes = (match m.body with | Body.vote b => insert (m.src, b) s.castVotes | _ => s.castVotes) ∧
+  s'.castProps = (match m.body with | Body.prop e b => insert (e, b) s.castProps | _ => s.castProps)
 
 /-- Delivery: an in-flight message becomes visible to all honest nodes.
 After GST, an honest-sent message is delivered within `Δ` of being sent —
 the guard forbids late delivery. -/
 def Deliver (m : Msg n) : Action (St n) := fun s s' =>
   m ∈ s.inflight ∧ (m.src ∉ Byz → s.now ≤ deadline n Δ GST m) ∧
-  s'.now = s.now ∧ s'.inflight = s.inflight.erase m ∧ s'.seen = insert m s.seen
+  s'.now = s.now ∧ s'.inflight = s.inflight.erase m ∧ s'.seen = insert m s.seen ∧
+  s'.castVotes = s.castVotes ∧ s'.castProps = s.castProps
 
 /-- The step relation. -/
 def Next : Action (St n) := fun s s' =>
@@ -108,7 +117,7 @@ def Next : Action (St n) := fun s s' =>
 def vars (n : ℕ) : St n → St n := id
 
 /-- Initially: round 0, nothing in flight, nothing seen. -/
-def Init : StatePred (St n) := { s | s.now = 0 ∧ s.inflight = ∅ ∧ s.seen = ∅ }
+def Init : StatePred (St n) := { s | s.now = 0 ∧ s.inflight = ∅ ∧ s.seen = ∅ ∧ s.castVotes = ∅ ∧ s.castProps = ∅ }
 
 /-- The specification. -/
 def Hspec : Pred (St n) := tlaAnd (statePred (Init n)) (stutAlways (Next n Byz Δ GST) (vars n))
@@ -125,9 +134,9 @@ def NoOverdue : StatePred (St n) := { s |
 
 theorem init_inv : ∀ s, s ∈ Init n → s ∈ NoOverdue n Byz Δ GST := by
   intro s hs
-  obtain ⟨_hnow, hinf, _hseen⟩ := hs
+  obtain ⟨_hnow, hinf, _hseen, _, _⟩ := hs
   intro m hm _hsrc
-  exact False.elim (by simpa [hinf] using hm)
+  simp [hinf] at hm
 
 theorem step_inv : ∀ s s', StutAction (Next n Byz Δ GST) (vars n) s s' →
     s ∈ NoOverdue n Byz Δ GST → s' ∈ NoOverdue n Byz Δ GST := by
@@ -138,12 +147,12 @@ theorem step_inv : ∀ s s', StutAction (Next n Byz Δ GST) (vars n) s s' →
     rwa [hss']
   rcases hnext with htick | ⟨m, hs⟩ | ⟨m, hd⟩
   · -- Tick: the guard is exactly NoOverdue at the new round
-    obtain ⟨hnow, hinf, _hseen, hguard⟩ := htick
+    obtain ⟨hnow, hinf, _hseen, _, _, hguard⟩ := htick
     intro x hx hsrc
     rw [hinf] at hx
     exact hguard x hx hsrc
   · -- Send: the new message is on time (round = now), the rest inherit
-    obtain ⟨hr, _hninf, _hnseen, hnow, hinf, _hseen⟩ := hs
+    obtain ⟨hr, _hninf, _hnseen, hnow, hinf, _hseen, _, _⟩ := hs
     intro x hx hsrc
     rw [hinf] at hx
     rw [Finset.mem_insert] at hx
@@ -155,7 +164,7 @@ theorem step_inv : ∀ s s', StutAction (Next n Byz Δ GST) (vars n) s s' →
     · rw [hnow]
       exact hinv x hx hsrc
   · -- Deliver: in-flight shrinks, so the property is preserved
-    obtain ⟨_hmem, _hguard, hnow, hinf, _hseen⟩ := hd
+    obtain ⟨_hmem, _hguard, hnow, hinf, _hseen, _, _⟩ := hd
     intro x hx hsrc
     rw [hinf] at hx
     have hx' : x ∈ s.inflight := Finset.mem_of_mem_erase hx
@@ -219,7 +228,7 @@ theorem pending_step (m : Msg n) : ∀ s s',
   rcases hnext with htick | ⟨m', hs⟩ | ⟨m', hd⟩
   · -- Tick: the guard keeps the deadline condition at the new round
     left
-    obtain ⟨hnow, hinf, _hseen, hguard⟩ := htick
+    obtain ⟨hnow, hinf, _hseen, _, _, hguard⟩ := htick
     refine ⟨?_, ?_⟩
     · rw [hinf]
       exact hsp.1
@@ -227,7 +236,7 @@ theorem pending_step (m : Msg n) : ∀ s s',
       exact hguard m hsp.1 hsrc
   · -- Send of another message: `m` stays in flight, `now` unchanged
     left
-    obtain ⟨_hr, _hninf, _hnseen, hnow, hinf, _hseen⟩ := hs
+    obtain ⟨_hr, _hninf, _hnseen, hnow, hinf, _hseen, _, _⟩ := hs
     refine ⟨?_, ?_⟩
     · rw [hinf]
       exact Finset.mem_insert_of_mem hsp.1
@@ -235,7 +244,7 @@ theorem pending_step (m : Msg n) : ∀ s s',
       rw [hnow]
       exact hsp.2 hsrc
   · -- Deliver: `m` itself is delivered, or stays pending
-    obtain ⟨_hmem, _hguard, hnow, hinf, hseen⟩ := hd
+    obtain ⟨_hmem, _hguard, hnow, hinf, hseen, _, _⟩ := hd
     by_cases heq : m = m'
     · right
       change m ∈ s'.seen
@@ -254,7 +263,7 @@ theorem pending_aq (m : Msg n) : ∀ s s',
     s' ∈ seenOf n m := by
   intro s s' _hsp hang
   obtain ⟨hdel, _⟩ := hang
-  obtain ⟨_hmem, _hguard, _hnow, _hinf, hseen⟩ := hdel
+  obtain ⟨_hmem, _hguard, _hnow, _hinf, hseen, _, _⟩ := hdel
   change m ∈ s'.seen
   rw [hseen]
   exact Finset.mem_insert_self m s.seen
@@ -264,10 +273,10 @@ theorem pending_enable (m : Msg n) : ∀ s,
       s ∈ Enabled (AngleAction (Deliver n Byz Δ GST m) (vars n)) ∨ s ∈ seenOf n m := by
   intro s hsp
   left
-  let s' : St n := { now := s.now, inflight := s.inflight.erase m, seen := insert m s.seen }
+  let s' : St n := { now := s.now, inflight := s.inflight.erase m, seen := insert m s.seen, castVotes := s.castVotes, castProps := s.castProps }
   refine ⟨s', ?_⟩
   constructor
-  · exact ⟨hsp.1, hsp.2, rfl, rfl, rfl⟩
+  · exact ⟨hsp.1, hsp.2, rfl, rfl, rfl, rfl, rfl⟩
   · change s' ≠ s
     intro hss
     have hinfle : s.inflight.erase m = s.inflight := by
