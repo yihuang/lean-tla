@@ -43,6 +43,22 @@ macro "tla_unfold" : tactic => `(tactic| (tla_temporal; tla_action))
 init/step obligations. -/
 macro "tla_inv" : tactic => `(tactic| apply Bft.init_invariant_stut)
 
+/-! ## The message-soup layer -/
+
+/-- User-extensible simp set for message-soup membership: register the
+`mem_voters`-style equivalences (`x ∈ voters … ↔ voteCast …`) here once
+proved, and `tla_membership`/plain `simp [tla_msgs]` rewrite membership
+back into the element language. -/
+register_simp_attr tla_msgs
+
+/-- Close a message-soup membership goal: unfold the `image/filter/toFinset/append`
+bridges and finish the residual `∃/∧` bookkeeping with `grind`. Pass the outer
+defs (`votersCast`, `voteCast`, …) in the local simp set or via a preceding
+`simp only […]`. -/
+macro "tla_membership" : tactic => `(tactic| (
+  simp only [tla_msgs, Finset.mem_image, Finset.mem_filter, List.mem_toFinset, List.mem_append]
+  <;> grind))
+
 /-- Unfold then finish by grind: the workhorse for action-layer obligations. -/
 macro "tla_grind" : tactic => `(tactic| (tla_unfold; grind))
 

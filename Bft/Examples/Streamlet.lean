@@ -46,7 +46,7 @@ epoch 7 whose parent chain is `[6, 5, 2, 0]`. -/
 abbrev Blk := List ℕ
 
 /-- A well-formed chain: strictly decreasing epochs anchored at genesis. -/
-def ValidChain (c : Blk) : Prop := 0 ∈ c ∧ c.Chain' (· > ·)
+def ValidChain (c : Blk) : Prop := 0 ∈ c ∧ c.IsChain (· > ·)
 
 /-- The block's own epoch (0 for the empty chain, which never votes). -/
 def bep (b : Blk) : ℕ := b.head?.getD 0
@@ -271,14 +271,9 @@ theorem safety : Entails (Hspec n f Byz) (always (statePred (Inv n f Byz))) :=
 /-! ## Lemma 1: at most one notarized block per epoch -/
 
 /-- Membership in a block's voter set is just having cast that vote. -/
-theorem mem_voters {s : St n} {i : Fin n} {b : Blk} :
+@[tla_msgs] theorem mem_voters {s : St n} {i : Fin n} {b : Blk} :
     i ∈ voters n s b ↔ (i, b) ∈ s.msgs := by
-  simp only [voters, Finset.mem_image, Finset.mem_filter, List.mem_toFinset]
-  constructor
-  · rintro ⟨x, ⟨hm, hxb⟩, hxi⟩
-    cases hxi; cases hxb; exact hm
-  · intro hm
-    exact ⟨(i, b), ⟨hm, rfl⟩, rfl⟩
+  simp [voters, List.mem_toFinset]
 
 /-- A valid chain whose epoch is 0 can only be genesis. -/
 theorem ValidChain.eq_genesis {c : Blk} (hv : ValidChain c) (he : bep c = 0) : c = [0] := by
