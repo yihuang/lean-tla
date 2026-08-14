@@ -171,7 +171,12 @@ theorem window_finality (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ f 
     proposal_growth n Byz Δ f L hinv hp3 hp4 hL3 hL4
       ⟨b3, chain_notarized_block n f hc3 hb3ne, le_rfl⟩
   exact ⟨e0 + 2, b2, b3, b4,
-    liveness_finality n Byz Δ f L hB hinv hp0 hp1 hp2 hp3 hp4 hL0 hL1 hL2 hL3 hL4
+    liveness_finality n Byz Δ f L hB hinv
+      ⟨(hinv.castProps_iff e0 b0).2 hp0, hL0⟩
+      ⟨(hinv.castProps_iff (e0 + 1) b1).2 hp1, hL1⟩
+      ⟨(hinv.castProps_iff (e0 + 2) b2).2 hp2, hL2⟩
+      ⟨(hinv.castProps_iff (e0 + 3) b3).2 hp3, hL3⟩
+      ⟨(hinv.castProps_iff (e0 + 4) b4).2 hp4, hL4⟩
       hG01 hG12 hG23 hG34 hc2 hc3 hc4⟩
 
 /-! ## The honest-timing assumptions -/

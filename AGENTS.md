@@ -64,6 +64,13 @@ Mathlib, `cslib`, and `aesop` are in `.lake/packages/`.
 - **Do not write spec-coupled custom tactics/elaborators.** A `tla_field` elab was
   tried and rejected: it was line-neutral, coupled to the spec, and harder to read.
   Prefer explicit hand-written branches plus small generic lemmas.
+- **State-level theorems: factor the shared skeletons into named lemmas.** The
+  liveness proofs (`longest_chain_by`, `main_liveness_lemma`, `liveness_finality`)
+  only become readable after pulling their repeated steps out: `voted_eq_proposal_of_epoch`
+  (`votedProposed` + `propUniq` epoch identification), `voted_le_proposal_of_earlier_epoch` /
+  `proposal_le_voted_of_later_epoch` (the two `propLongest`/`votedLongest` directions), and
+  `next_proposal_extends` (the adjacency used twice in Theorem 6). Keep each theorem body
+  to the case split plus lemma calls.
 
 ## Editing
 
