@@ -231,6 +231,17 @@ theorem mem_tail_of_bep_pos {c : Blk} (h0 : 0 ∈ c) (hb : 0 < bep c) : 0 ∈ c.
     · simp [bep] at hb
     · exact h0
 
+/-- Two genuinely voted blocks share an honest voter: quorum intersection
+(`Minimmit.exists_honest_inter`) plus `mem_voters`. -/
+theorem exists_honest_voter_of_two_quorums (hn : n = 3 * f + 1) (hB : Byz.card ≤ f)
+    {s : St n} {u v : Blk} (hu : quorum f ≤ (voters n s u).card)
+    (hv : quorum f ≤ (voters n s v).card) :
+    ∃ i, i ∉ Byz ∧ (i, u) ∈ s.msgs ∧ (i, v) ∈ s.msgs := by
+  obtain ⟨i, hi1, hi2, hih⟩ := Minimmit.exists_honest_inter n f Byz hB (quorum f) (quorum f)
+    hu hv (by rw [quorum]; omega)
+  rw [mem_voters] at hi1 hi2
+  exact ⟨i, hih, hi1, hi2⟩
+
 /-- The paper's Lemma 1: per epoch, at most one block is notarized.
 Quorum intersection yields an honest node in both voter sets; I1
 (honest nodes vote at most once per epoch) finishes. -/
@@ -254,9 +265,7 @@ theorem unique_notarized (hn : n = 3 * f + 1) (hB : Byz.card ≤ f)
   · rcases hn2 with hg2 | hq2
     · subst hg2
       exact ValidChain.eq_genesis (valid_of_quorum hq1) he
-    · obtain ⟨i, hi1, hi2, hih⟩ := Minimmit.exists_honest_inter n f Byz hB (quorum f) (quorum f)
-        hq1 hq2 (by rw [quorum]; omega)
-      rw [mem_voters] at hi1 hi2
+    · obtain ⟨i, hih, hi1, hi2⟩ := exists_honest_voter_of_two_quorums n f Byz hn hB hq1 hq2
       exact h1 i b₁ b₂ hih hi1 hi2 he
 
 /-! ## Consistency -/
@@ -328,22 +337,14 @@ theorem consistency_of_inv (hn : n = 3 * f + 1) (hB : Byz.card ≤ f)
   have Xne0 : X ≠ [0] := by
     intro hc; rw [hc] at hXlen; simp at hXlen; omega
   have qX : quorum f ≤ (voters n s X).card := hnotX.resolve_left Xne0
-  -- Shared honest voter of two genuinely voted blocks.
-  have inter : ∀ {u v : Blk}, quorum f ≤ (voters n s u).card →
-      quorum f ≤ (voters n s v).card →
-      ∃ i, i ∉ Byz ∧ (i, u) ∈ s.msgs ∧ (i, v) ∈ s.msgs := by
-    intro u v hu hv'
-    obtain ⟨i, hi1, hi2, hih⟩ := Minimmit.exists_honest_inter n f Byz hB (quorum f) (quorum f)
-      hu hv' (by rw [quorum]; omega)
-    rw [mem_voters] at hi1 hi2
-    exact ⟨i, hih, hi1, hi2⟩
-  -- Five-way epoch analysis.
+  -- Shared honest voter of two genuinely voted blocks
+  -- (`exists_honest_voter_of_two_quorums`).
   rcases lt_trichotomy (bep X) (bep bMid) with hlt | heq | hgt
   · rcases lt_trichotomy (bep X) (bep bPrev) with hlt2 | heq2 | hgt2
     · -- epoch X < epoch bPrev: honest i voted X (earlier) and bPrev
       have PrevNe0 : bPrev ≠ [0] := by
         intro hc; rw [hc] at hlt2; simp [bep] at hlt2
-      obtain ⟨i, hih, hiX, hiPrev⟩ := inter qX (nPrev.resolve_left PrevNe0)
+      obtain ⟨i, hih, hiX, hiPrev⟩ := exists_honest_voter_of_two_quorums n f Byz hn hB qX (nPrev.resolve_left PrevNe0)
       have hle := h5 i X bPrev hih hiX hiPrev hlt2
       rw [List.length_tail, List.length_tail] at hle
       omega
@@ -361,7 +362,7 @@ theorem consistency_of_inv (hn : n = 3 * f + 1) (hB : Byz.card ≤ f)
       rw [hXNext, lenNextEq] at hXlen
       omega
     · -- epoch X > epoch bNext: honest i voted bNext (earlier) and X
-      obtain ⟨i, hih, hiX, hiNext⟩ := inter qX qNext
+      obtain ⟨i, hih, hiX, hiNext⟩ := exists_honest_voter_of_two_quorums n f Byz hn hB qX qNext
       have hle := h5 i bNext X hih hiNext hiX hgt2
       rw [List.length_tail, List.length_tail] at hle
       omega

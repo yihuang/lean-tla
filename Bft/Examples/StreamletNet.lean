@@ -37,7 +37,7 @@ The transport model is the standard Global Stabilization Time (GST) regime
 
 The Streamlet *protocol* layer (proposals, votes, notarization, the
 leader schedule, and the paper's Fact 2 / Fact 3 / Lemma 5) is built on top
-of this transport layer in a follow-up file.
+of this transport layer in `StreamletProto.lean`.
 
 **Status of the two halves (explicit, not hidden).** The transport's Δ-bound
 is fully proved here: `NoOverdue` (no late honest delivery) is an invariant

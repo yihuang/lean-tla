@@ -11,8 +11,8 @@ the partial-sync transport (`StreamletNet`) and the protocol invariants
 `TlaDsl/Examples/StreamletLiveness.lean` to the message-based model.
 
 The facts are pure state-level theorems from the invariant bundle `Inv`; the
-temporal wrapper (per-epoch leads-to progress, composed to Theorem 4) is a
-follow-up. The two key ingredients beyond the safety facts:
+temporal wrapper (per-epoch leads-to progress, composed to Theorem 4) is
+`StreamletTemporal.lean`. The two key ingredients beyond the safety facts:
 
 * **`propUniq`** — each epoch has at most one proposal (enforced by the
   `Propose` "no prior proposal" guard), so the epoch case-analysis in
@@ -138,6 +138,25 @@ theorem proposal_le_voted_of_later_epoch {s : St n} (hinv : Inv n Byz Δ f L s)
   have hb2N' : NotarizedBy n Byz f s b2 (bep C - 1) := notarizedBy_mono n Byz f hle' hb2N
   exact hlong b2 hb2N'
 
+/-- A block `C` honestly voted at some point satisfies the five-way epoch
+case split against the three honest proposals: it equals one of them, or is
+strictly earlier (`bep C < e`), or strictly later (`e + 2 < bep C`). This is
+the shared skeleton of `longest_chain_by` and `main_liveness_lemma`. -/
+theorem vote_case_of_proposals {s : St n} (hinv : Inv n Byz Δ f L s)
+    {e : ℕ} {b0 b1 b2 C : Blk} {i : Fin n}
+    (hp0 : HonestProposal n Byz L s e b0)
+    (hp1 : HonestProposal n Byz L s (e + 1) b1)
+    (hp2 : HonestProposal n Byz L s (e + 2) b2)
+    (hih : i ∉ Byz) (hv : (i, C) ∈ s.castVotes) :
+    C = b0 ∨ C = b1 ∨ C = b2 ∨ bep C < e ∨ e + 2 < bep C := by
+  by_cases h1 : bep C = e
+  · exact Or.inl (voted_eq_proposal_of_epoch n Byz Δ f L hinv hp0 hih hv h1)
+  · by_cases h2 : bep C = e + 1
+    · exact Or.inr (Or.inl (voted_eq_proposal_of_epoch n Byz Δ f L hinv hp1 hih hv h2))
+    · by_cases h3 : bep C = e + 2
+      · exact Or.inr (Or.inr (Or.inl (voted_eq_proposal_of_epoch n Byz Δ f L hinv hp2 hih hv h3)))
+      · exact Or.inr (Or.inr (Or.inr (by omega)))
+
 /-- **The longest-chain bound**: a block notarized by `e+2` is no longer
 than the honest `b₂`. -/
 theorem longest_chain_by (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ f L s)
@@ -152,25 +171,20 @@ theorem longest_chain_by (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ f
   rcases honest_in_quorum n Byz f hB hN with ⟨i0, hi0, hih⟩
   have hv0 : (i0, C) ∈ s.castVotes := ((mem_votersCast n Byz).mp hi0).1
   have hCval : ValidChain C := hinv.voteValid i0 C hih hv0
-  by_cases h1 : bep C = e
-  · have hC0 : C = b0 := voted_eq_proposal_of_epoch n Byz Δ f L hinv hp0 hih hv0 h1
-    subst C; omega
-  · by_cases h2 : bep C = e + 1
-    · have hC1 : C = b1 := voted_eq_proposal_of_epoch n Byz Δ f L hinv hp1 hih hv0 h2
-      subst C; omega
-    · by_cases h3 : bep C = e + 2
-      · have hC2' : C = b2 := voted_eq_proposal_of_epoch n Byz Δ f L hinv hp2 hih hv0 h3
-        subst C; omega
-      · -- `bep C < e`: an older vote; bound `C` by `b₁` via `propLongest`
-        have hlt : bep C < e := by omega
-        by_cases hg : C = [0]
-        · subst C
-          have hb2n : b2 ≠ [] := ne_nil_of_valid (hinv.propValid (e + 2) b2 hp2.mem hp2.honest)
-          have hb2pos : 0 < b2.length := List.length_pos_of_ne_nil hb2n
-          simpa using (Nat.succ_le_of_lt hb2pos)
-        · have hCleq : C.length ≤ b1.length :=
-            voted_le_proposal_of_earlier_epoch n Byz Δ f L hinv hp1 hih hv0 hCval hg hlt
-          exact le_trans hCleq (le_of_lt hG12)
+  rcases vote_case_of_proposals n Byz Δ f L hinv hp0 hp1 hp2 hih hv0 with hC0 | hC1 | hC2 | hlt | hgt
+  · subst C; omega
+  · subst C; omega
+  · subst C; omega
+  · -- `bep C < e`: an older vote; bound `C` by `b₁` via `propLongest`
+    by_cases hg : C = [0]
+    · subst C
+      have hb2n : b2 ≠ [] := ne_nil_of_valid (hinv.propValid (e + 2) b2 hp2.mem hp2.honest)
+      have hb2pos : 0 < b2.length := List.length_pos_of_ne_nil hb2n
+      simpa using (Nat.succ_le_of_lt hb2pos)
+    · have hCleq : C.length ≤ b1.length :=
+        voted_le_proposal_of_earlier_epoch n Byz Δ f L hinv hp1 hih hv0 hCval hg hlt
+      exact le_trans hCleq (le_of_lt hG12)
+  · omega  -- `e + 2 < bep C` contradicts `hbepC : bep C ≤ e + 2`
 
 /-- **Lemma 5** (main liveness lemma): three consecutive honest-leader
 proposals with growing lengths and the third chain-notarized on time — no
@@ -187,37 +201,30 @@ theorem main_liveness_lemma (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz �
   rcases honest_in_quorum n Byz f hB hNC with ⟨i0, hi0, hih⟩
   have hv0 : (i0, C) ∈ s.castVotes := ((mem_votersCast n Byz).mp hi0).1
   have hCval : ValidChain C := hinv.voteValid i0 C hih hv0
-  by_cases h1 : bep C = e
-  · have hC0 : C = b0 := voted_eq_proposal_of_epoch n Byz Δ f L hinv hp0 hih hv0 h1
-    subst C; omega
-  · by_cases h2 : bep C = e + 1
-    · have hC1 : C = b1 := voted_eq_proposal_of_epoch n Byz Δ f L hinv hp1 hih hv0 h2
-      subst C; omega
-    · by_cases h3 : bep C = e + 2
-      · have hC2' : C = b2 := voted_eq_proposal_of_epoch n Byz Δ f L hinv hp2 hih hv0 h3
-        exact (hCne hC2').elim
-      · by_cases hlt : bep C < e
-        · -- earlier: `C ≤ b₁ < b₂ = C`, contradiction
-          have hb2ge2 : 2 ≤ b2.length := by
-            have hb2pos : 0 < bep b2 := by
-              have h : bep b2 = e + 2 := hinv.proposedEpoch (e + 2) b2 hp2.mem hp2.honest
-              omega
-            exact length_ge_two_of_bep_pos (hinv.propValid (e + 2) b2 hp2.mem hp2.honest) hb2pos
-          have hCge2 : 2 ≤ C.length := by rw [hClen]; exact hb2ge2
-          have hCn0 : C ≠ [0] := by
-            intro hCg; subst C; simp at hCge2
-          have hCleq : C.length ≤ b1.length :=
-            voted_le_proposal_of_earlier_epoch n Byz Δ f L hinv hp1 hih hv0 hCval hCn0 hlt
-          have hlt' : C.length < b2.length := lt_of_le_of_lt hCleq hG12
-          rw [hClen] at hlt'
-          exact (lt_irrefl b2.length) hlt'
-        · -- later: `e+2 < bep C`, so `b₂ ≤ C.tail < C`
-          have hgt : e + 2 < bep C := by omega
-          have hb2le : b2.length ≤ C.tail.length :=
-            proposal_le_voted_of_later_epoch n Byz Δ f L hinv hp2 hC2 hih hv0 hgt
-          have hCn : C ≠ [] := ne_nil_of_valid hCval
-          have hClen' : C.length = C.tail.length + 1 := length_tail_succ hCn
-          omega
+  rcases vote_case_of_proposals n Byz Δ f L hinv hp0 hp1 hp2 hih hv0 with hC0 | hC1 | hC2 | hlt | hgt
+  · subst C; omega
+  · subst C; omega
+  · exact (hCne hC2).elim
+  · -- earlier: `C ≤ b₁ < b₂ = C`, contradiction
+    have hb2ge2 : 2 ≤ b2.length := by
+      have hb2pos : 0 < bep b2 := by
+        have h : bep b2 = e + 2 := hinv.proposedEpoch (e + 2) b2 hp2.mem hp2.honest
+        omega
+      exact length_ge_two_of_bep_pos (hinv.propValid (e + 2) b2 hp2.mem hp2.honest) hb2pos
+    have hCge2 : 2 ≤ C.length := by rw [hClen]; exact hb2ge2
+    have hCn0 : C ≠ [0] := by
+      intro hCg; subst C; simp at hCge2
+    have hCleq : C.length ≤ b1.length :=
+      voted_le_proposal_of_earlier_epoch n Byz Δ f L hinv hp1 hih hv0 hCval hCn0 hlt
+    have hlt' : C.length < b2.length := lt_of_le_of_lt hCleq hG12
+    rw [hClen] at hlt'
+    exact (lt_irrefl b2.length) hlt'
+  · -- later: `e+2 < bep C`, so `b₂ ≤ C.tail < C`
+    have hb2le : b2.length ≤ C.tail.length :=
+      proposal_le_voted_of_later_epoch n Byz Δ f L hinv hp2 hC2 hih hv0 hgt
+    have hCn : C ≠ [] := ne_nil_of_valid hCval
+    have hClen' : C.length = C.tail.length + 1 := length_tail_succ hCn
+    omega
 
 /-! ## Theorem 6: five honest leaders finalize -/
 
@@ -234,6 +241,17 @@ def Finalized (s : St n) (e : ℕ) (b0 b b2 : Blk) : Prop :=
 /-- Some block is final. -/
 def FinalSome (s : St n) : Prop :=
   ∃ e b0 b b2, Finalized n Byz f s e b0 b b2
+
+/-- `b₃`'s parent is notarized by `e+2`: the `e+3` proposal extends a
+longest chain notarized by `e+2` (`proposedSeenParent`), and the parent is
+nonempty (the proposal has positive epoch). -/
+theorem proposal_parent_notarized {s : St n} (hinv : Inv n Byz Δ f L s)
+    {e : ℕ} {b3 : Blk} (hp3 : HonestProposal n Byz L s (e + 3) b3)
+    (hb3pos : 0 < bep b3) : NotarizedBy n Byz f s b3.tail (e + 2) := by
+  have hc : ChainNotarizedBy n Byz f s b3.tail (e + 2) :=
+    hinv.proposedSeenParent (e + 3) b3 hp3.mem hp3.honest
+  exact chain_notarized_block n Byz f hc
+    (ne_nil_tail_of_bep_pos (hinv.propValid (e + 3) b3 hp3.mem hp3.honest) hb3pos)
 
 /-- **Adjacency**: four honest proposals at `e…e+3` with strictly growing
 lengths and the last two chain-notarized — the `e+3` proposal extends the
@@ -268,24 +286,16 @@ theorem next_proposal_extends (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz
         · rw [hg]
           change 1 ≤ b2.length
           exact le_trans (by omega : 1 ≤ 2) hb2ge2
-        · have hN3 : NotarizedBy n Byz f s b3.tail (e + 2) := by
-            have hc : ChainNotarizedBy n Byz f s b3.tail (e + 2) :=
-              hinv.proposedSeenParent (e + 3) b3 hp3.mem hp3.honest
-            exact chain_notarized_block n Byz f hc
-              (ne_nil_tail_of_bep_pos (hinv.propValid (e + 3) b3 hp3.mem hp3.honest) hb3pos)
-          exact longest_chain_by n Byz Δ f L hB hinv hp0 hp1 hp2 hG01 hG12 b3.tail hN3
+        · exact longest_chain_by n Byz Δ f L hB hinv hp0 hp1 hp2 hG01 hG12 b3.tail
+            (proposal_parent_notarized n Byz Δ f L hinv hp3 hb3pos)
       · have hN : NotarizedBy n Byz f s b2 (e + 2) := chain_notarized_block n Byz f hC2 hb2n
         exact hinv.propLongest (e + 3) b3 hp3.mem hp3.honest b2 hN
     by_contra hne
     by_cases hg : b3.tail = [0]
     · have hb3taillen : b3.tail.length = 1 := by rw [hg]; rfl
       omega
-    · have hN3 : NotarizedBy n Byz f s b3.tail (e + 2) := by
-        have hc : ChainNotarizedBy n Byz f s b3.tail (e + 2) :=
-          hinv.proposedSeenParent (e + 3) b3 hp3.mem hp3.honest
-        exact chain_notarized_block n Byz f hc
-          (ne_nil_tail_of_bep_pos (hinv.propValid (e + 3) b3 hp3.mem hp3.honest) hb3pos)
-      have hN3' : NotarizedCast n Byz f s b3.tail := hN3.1
+    · have hN3' : NotarizedCast n Byz f s b3.tail :=
+        (proposal_parent_notarized n Byz Δ f L hinv hp3 hb3pos).1
       exact (main_liveness_lemma n Byz Δ f L hB hinv hp0 hp1 hp2 hG01 hG12 hC2
         b3.tail hne hlen hN3')
   have hb3eq : b3 = bep b3 :: b3.tail := by

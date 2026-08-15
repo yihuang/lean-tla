@@ -229,11 +229,11 @@ theorem fact2 (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ f L s)
 /-- **Fact 3** (mathematical core): an honest `L(e+1)` that proposed `b₁`
 extends a longest chain notarized by epoch `e` (`Inv.propLongest`); if some
 chain of length ≥ `b₀.length` was notarized by epoch `e`, then
-`b₀.length < b₁.length`. -/
+`b₀.length < b₁.length`. The `b₀`-side hypotheses are intentionally absent:
+only the length of some notarized chain matters. -/
 theorem proposal_growth {s : St n} (hinv : Inv n Byz Δ f L s)
     {e : ℕ} {b₀ b₁ : Blk}
-    (_hp0 : propCast n L s e b₀) (hp1 : propCast n L s (e + 1) b₁)
-    (_hL0 : L e ∉ Byz) (hL1 : L (e + 1) ∉ Byz)
+    (hp1 : propCast n L s (e + 1) b₁) (hL1 : L (e + 1) ∉ Byz)
     (hseen : ∃ C : Blk, NotarizedBy n Byz f s C e ∧ b₀.length ≤ C.length) :
     b₀.length < b₁.length := by
   rcases hseen with ⟨C, hC, hlen⟩
@@ -246,6 +246,17 @@ theorem proposal_growth {s : St n} (hinv : Inv n Byz Δ f L s)
     have h : b₁.tail.length = b₁.length - 1 := List.length_tail
     omega
   omega
+
+/-- Fact 3 in the form the liveness theorems use: an honest `L(e+1)`
+proposal `b₁` outgrows any nonempty block `b₀` chain-notarized by epoch
+`e`. -/
+theorem proposal_growth_chain {s : St n} (hinv : Inv n Byz Δ f L s)
+    {e : ℕ} {b₀ b₁ : Blk}
+    (hp1 : propCast n L s (e + 1) b₁) (hL1 : L (e + 1) ∉ Byz)
+    (hb0ne : b₀ ≠ []) (hc0 : ChainNotarizedBy n Byz f s b₀ e) :
+    b₀.length < b₁.length :=
+  proposal_growth n Byz Δ f L hinv hp1 hL1
+    ⟨b₀, hc0 b₀ hb0ne (List.suffix_refl b₀), le_rfl⟩
 
 /-! ## The protocol actions -/
 

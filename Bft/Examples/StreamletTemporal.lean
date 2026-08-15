@@ -113,17 +113,13 @@ theorem window_finality (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ f 
   have hb3ne : b3 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 3) b3 hp3 hL3)
   have hb4ne : b4 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 4) b4 hp4 hL4)
   have hG01 : b0.length < b1.length :=
-    proposal_growth n Byz Δ f L hinv hp0 hp1 hL0 hL1
-      ⟨b0, chain_notarized_block n Byz f hc0 hb0ne, le_rfl⟩
+    proposal_growth_chain n Byz Δ f L hinv hp1 hL1 hb0ne hc0
   have hG12 : b1.length < b2.length :=
-    proposal_growth n Byz Δ f L hinv hp1 hp2 hL1 hL2
-      ⟨b1, chain_notarized_block n Byz f hc1 hb1ne, le_rfl⟩
+    proposal_growth_chain n Byz Δ f L hinv hp2 hL2 hb1ne hc1
   have hG23 : b2.length < b3.length :=
-    proposal_growth n Byz Δ f L hinv hp2 hp3 hL2 hL3
-      ⟨b2, chain_notarized_block n Byz f hc2 hb2ne, le_rfl⟩
+    proposal_growth_chain n Byz Δ f L hinv hp3 hL3 hb2ne hc2
   have hG34 : b3.length < b4.length :=
-    proposal_growth n Byz Δ f L hinv hp3 hp4 hL3 hL4
-      ⟨b3, chain_notarized_block n Byz f hc3 hb3ne, le_rfl⟩
+    proposal_growth_chain n Byz Δ f L hinv hp4 hL4 hb3ne hc3
   exact ⟨e0 + 2, b2, b3, b4,
     liveness_finality n Byz Δ f L hB hinv
       ⟨hp0, hL0⟩ ⟨hp1, hL1⟩ ⟨hp2, hL2⟩ ⟨hp3, hL3⟩ ⟨hp4, hL4⟩
@@ -185,9 +181,8 @@ theorem epoch_step {e' : ℕ} {e : Behavior (St n)} (hH : H n Byz Δ GST f L e) 
           ∃ b : Blk, propCast n L (e (k + j1)) e' b := by simpa using hj1
       rcases hj1' with ⟨hj1cur, b, hpb⟩
       exact ⟨j1, b, hj1cur, hpb⟩
-    · have hsome : ∃ b : Blk, propCast n L (e k) e' b := by
-        simpa [not_forall, not_not] using hnone
-      rcases hsome with ⟨b, hpb⟩
+    · push Not at hnone
+      rcases hnone with ⟨b, hpb⟩
       exact ⟨0, b, hcur', hpb⟩
   -- Phase 2: honest votes chain-notarize it, still within epoch `e'`
   rcases (hVote e' (k + j1) (by simpa using ⟨hj1cur, ⟨b1, hj1prop⟩⟩)) with ⟨j2, hj2⟩
@@ -219,6 +214,33 @@ theorem window_rank_sub (e0 k : ℕ) (hk : k ≤ 5) (hkpos : 0 < k) :
     (e0 + 5 - k) + 1 = e0 + 5 - (k - 1) := by
   omega
 
+/-- A completed window stays complete after `j` protocol steps: the epochs
+completed before `e'` persist (`propCast`/`ChainNotarizedBy` persistence)
+and the just-completed epoch `e'` is now done. -/
+theorem windowDone_advance {e : Behavior (St n)}
+    (hS : ∀ m, StutAction (PNext n Byz Δ GST f L) (vars n) (e m) (e (m + 1)))
+    {e0 e' : ℕ} {n' j : ℕ}
+    (hW : WindowDone n Byz Δ f L e0 (e n'))
+    (hcur' : curEpoch Δ (e n').now = e')
+    (hcurj' : curEpoch Δ (e (n' + j)).now = e' + 1)
+    (hfact' : ∃ b : Blk, propCast n L (e (n' + j)) e' b ∧ ChainNotarizedBy n Byz f (e (n' + j)) b e') :
+    WindowDone n Byz Δ f L e0 (e (n' + j)) := by
+  intro e'' he0'' hlt''
+  have hltj : e'' < e' + 1 := by
+    rw [hcurj'] at hlt''
+    exact hlt''
+  by_cases hlt : e'' < e'
+  · have hlt0 : e'' < curEpoch Δ (e n').now := by simpa [hcur'] using hlt
+    rcases hW e'' he0'' (by simpa using hlt0) with ⟨b, hpb, hcb⟩
+    refine ⟨b, ?_, ?_⟩
+    · exact propCast_persist_along n Byz Δ GST f L hS (k := n') (j := j) (by simpa using hpb)
+    · exact chainNotarizedBy_persist_along n Byz Δ GST f L hS (k := n') (j := j) (by simpa using hcb)
+  · have heq : e'' = e' := by
+      have hge : e' ≤ e'' := le_of_not_gt hlt
+      exact le_antisymm (Nat.le_of_lt_succ hltj) hge
+    subst e''
+    exact hfact'
+
 /-- From `k` epochs remaining in the window, the window completes. -/
 theorem window_progress (e0 : ℕ) (k : ℕ) (hk : k ≤ 5) {e : Behavior (St n)}
     (hH : H n Byz Δ GST f L e) :
@@ -247,22 +269,9 @@ theorem window_progress (e0 : ℕ) (k : ℕ) (hk : k ≤ 5) {e : Behavior (St n)
         have hcurj' : curEpoch Δ (e (n' + j)).now = e' + 1 := by simpa using hcurj
         have hfact' : ∃ b : Blk, propCast n L (e (n' + j)) e' b ∧
             ChainNotarizedBy n Byz f (e (n' + j)) b e' := by simpa using hfact
-        have hW' : WindowDone n Byz Δ f L e0 (e (n' + j)) := by
-          intro e'' he0'' hlt''
-          have hltj : e'' < e' + 1 := by
-            rw [hcurj'] at hlt''
-            exact hlt''
-          by_cases hlt : e'' < e'
-          · have hlt0 : e'' < curEpoch Δ (e n').now := by simpa [hcur'] using hlt
-            rcases hW e'' he0'' (by simpa using hlt0) with ⟨b, hpb, hcb⟩
-            refine ⟨b, ?_, ?_⟩
-            · exact propCast_persist_along n Byz Δ GST f L hS (k := n') (j := j) (by simpa using hpb)
-            · exact chainNotarizedBy_persist_along n Byz Δ GST f L hS (k := n') (j := j) (by simpa using hcb)
-          · have heq : e'' = e' := by
-              have hge : e' ≤ e'' := le_of_not_gt hlt
-              exact le_antisymm (Nat.le_of_lt_succ hltj) hge
-            subst e''
-            exact hfact'
+        have hW' : WindowDone n Byz Δ f L e0 (e (n' + j)) :=
+          windowDone_advance n Byz Δ GST f L hS
+            (by simpa [Cslib.ωSequence.drop, Cslib.ωSequence.head] using hW) hcur' hcurj' hfact'
         have hrank : curEpoch Δ (e (n' + j)).now = e0 + 5 - (k - 1) := by
           have hsub : e' + 1 = e0 + 5 - (k - 1) := by
             simpa [e'] using window_rank_sub e0 k hk hkpos
