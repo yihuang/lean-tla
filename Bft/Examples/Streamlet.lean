@@ -49,13 +49,13 @@ abbrev Blk := List ℕ
 def ValidChain (c : Blk) : Prop := 0 ∈ c ∧ c.IsChain (· > ·)
 
 /-- The block's own epoch (0 for the empty chain, which never votes). -/
-def bep (b : Blk) : ℕ := b.head?.getD 0
+def Blk.epoch (b : Blk) : ℕ := b.head?.getD 0
 
 variable (n f : ℕ) (Byz : Finset (Fin n))
 
 /-- Global state: epoch clock and the votes cast so far. -/
 structure St (n : ℕ) where
-  ep : ℕ
+  epoch : ℕ
   msgs : Finset (Fin n × Blk)
 
 /-- The distinct voters of a block. -/
@@ -79,22 +79,22 @@ def NotarizedChain (f : ℕ) (s : St n) (c : Blk) : Prop :=
 
 /-- Time passes. -/
 def Tick : Action (St n) := fun s s' =>
-  s'.ep = s.ep + 1 ∧ s'.msgs = s.msgs
+  s'.epoch = s.epoch + 1 ∧ s'.msgs = s.msgs
 
 /-- An honest vote: in the block's own epoch, the node's first vote this
 epoch, on a block whose parent chain is notarized and is (one of) the
 longest notarized chain(s) seen. -/
 def VoteH (i : Fin n) (b : Blk) : Action (St n) := fun s s' =>
   i ∉ Byz ∧
-  ValidChain b ∧ bep b = s.ep ∧
-  (∀ b', (i, b') ∈ s.msgs → bep b' ≠ s.ep) ∧
+  ValidChain b ∧ b.epoch = s.epoch ∧
+  (∀ b', (i, b') ∈ s.msgs → b'.epoch ≠ s.epoch) ∧
   NotarizedChain n f s b.tail ∧
   (∀ c : Blk, NotarizedChain n f s c → c.length ≤ b.tail.length) ∧
-  s'.msgs = insert (i, b) s.msgs ∧ s'.ep = s.ep
+  s'.msgs = insert (i, b) s.msgs ∧ s'.epoch = s.epoch
 
 /-- A Byzantine vote: any well-formed chain, any time. -/
 def VoteB (i : Fin n) (b : Blk) : Action (St n) := fun s s' =>
-  i ∈ Byz ∧ ValidChain b ∧ s'.msgs = insert (i, b) s.msgs ∧ s'.ep = s.ep
+  i ∈ Byz ∧ ValidChain b ∧ s'.msgs = insert (i, b) s.msgs ∧ s'.epoch = s.epoch
 
 /-- The step relation. -/
 def Next : Action (St n) := fun s s' =>
@@ -106,7 +106,7 @@ attribute [grind unfold] Tick VoteH VoteB
 def vars (n : ℕ) : St n → St n := id
 
 /-- Initially: epoch 0, no votes. -/
-def Init (n : ℕ) : StatePred (St n) := { s | s.ep = 0 ∧ s.msgs = ∅ }
+def Init (n : ℕ) : StatePred (St n) := { s | s.epoch = 0 ∧ s.msgs = ∅ }
 
 /-- The specification, bundled (for `Spec.init_invariant`). -/
 def StreamletSpec (n f : ℕ) (Byz : Finset (Fin n)) : Spec (St n) (St n) :=
@@ -117,7 +117,7 @@ def Hspec : Pred (St n) := (StreamletSpec n f Byz).pred
 
 /-! ## Monotonicity of notarization -/
 
-theorem voters_mono {s t : St n} (h : s.msgs ⊆ t.msgs) (b : Blk) :
+theorem voters.mono {s t : St n} (h : s.msgs ⊆ t.msgs) (b : Blk) :
     voters n s b ⊆ voters n t b := by
   intro i hi
   change ∀ m, m ∈ s.msgs → m ∈ t.msgs at h
@@ -130,7 +130,7 @@ theorem Notarized.mono {s t : St n} (h : s.msgs ⊆ t.msgs) (b : Blk) :
     Notarized n f s b → Notarized n f t b := by
   rintro (hb | hq)
   · exact Or.inl hb
-  · exact Or.inr (le_trans hq (Finset.card_le_card (voters_mono n h b)))
+  · exact Or.inr (le_trans hq (Finset.card_le_card (voters.mono n h b)))
 
 theorem NotarizedChain.mono {s t : St n} (h : ∀ p, p ∈ s.msgs → p ∈ t.msgs)
     (c : Blk) : NotarizedChain n f s c → NotarizedChain n f t c :=
@@ -146,32 +146,32 @@ structure `Inv` (as in `StreamletProto.Inv`), not an anonymous conjunct. -/
 /-- The inductive invariant: one field per paper invariant.
 
 * IV (`valid`): every vote cast is on a well-formed chain (ideal hashes);
-* I0 (`bepLeEp`): honest votes happen in their own epoch, hence at most
+* I0 (`honestVoteEpochLeClock`): honest votes happen in their own epoch, hence at most
   the clock;
 * I1 (`honestUniq`): an honest node votes at most once per epoch;
 * I2 (`parentNotarized`): an honest vote's parent chain was notarized at
   vote time — and stays notarized (monotonicity);
 * I5 (`lengthMono`): an honest node's later votes extend longer parents:
-  for any two honest votes `x`, `y` of the same node, `bep x < bep y`
+  for any two honest votes `x`, `y` of the same node, `x.epoch < y.epoch`
   implies `x.tail.length ≤ y.tail.length`. This single inequality is the
   whole content of the paper's Case 1 / Case 2 argument. -/
 structure Inv (s : St n) : Prop where
   /-- IV: every vote cast is on a well-formed chain (ideal hashes). -/
   valid : ∀ i b, (i, b) ∈ s.msgs → ValidChain b
   /-- I0: honest votes happen in their own epoch, hence at most the clock. -/
-  bepLeEp : ∀ i b, i ∉ Byz → (i, b) ∈ s.msgs → bep b ≤ s.ep
+  honestVoteEpochLeClock : ∀ i b, i ∉ Byz → (i, b) ∈ s.msgs → b.epoch ≤ s.epoch
   /-- I1 (HonestUniq): an honest node votes at most once per epoch. -/
   honestUniq : ∀ i b₁ b₂, i ∉ Byz → (i, b₁) ∈ s.msgs → (i, b₂) ∈ s.msgs →
-    bep b₁ = bep b₂ → b₁ = b₂
+    b₁.epoch = b₂.epoch → b₁ = b₂
   /-- I2: an honest vote's parent chain was notarized at vote time — and
   stays notarized (monotonicity). -/
   parentNotarized : ∀ i b, i ∉ Byz → (i, b) ∈ s.msgs → NotarizedChain n f s b.tail
   /-- I5: an honest node's later votes extend longer parents: for any two
-  honest votes `x`, `y` of the same node, `bep x < bep y` implies
+  honest votes `x`, `y` of the same node, `x.epoch < y.epoch` implies
   `x.tail.length ≤ y.tail.length`. This single inequality is the whole
   content of the paper's Case 1 / Case 2 argument. -/
   lengthMono : ∀ i b₁ b₂, i ∉ Byz → (i, b₁) ∈ s.msgs → (i, b₂) ∈ s.msgs →
-    bep b₁ < bep b₂ → b₁.tail.length ≤ b₂.tail.length
+    b₁.epoch < b₂.epoch → b₁.tail.length ≤ b₂.tail.length
 
 /-- `Inv` as a state predicate, for the TLA induction. -/
 def InvState : StatePred (St n) := { s | Inv n f Byz s }
@@ -220,12 +220,12 @@ theorem genesis_mem_of_quorum {s : St n} (hs : Inv n f Byz s) {b : Blk}
   (valid_of_quorum n f Byz hs hq).1
 
 /-- A valid chain whose epoch is 0 can only be genesis. -/
-theorem ValidChain.eq_genesis {c : Blk} (hv : ValidChain c) (he : bep c = 0) : c = [0] := by
+theorem ValidChain.eq_genesis {c : Blk} (hv : ValidChain c) (he : c.epoch = 0) : c = [0] := by
   obtain ⟨h0, hchain⟩ := hv
   cases c with
   | nil => simp at h0
   | cons a t =>
-    have ha : a = 0 := by simpa [bep] using he
+    have ha : a = 0 := by simpa [Blk.epoch] using he
     cases t with
     | nil => rw [ha]
     | cons b u =>
@@ -235,18 +235,18 @@ theorem ValidChain.eq_genesis {c : Blk} (hv : ValidChain c) (he : bep c = 0) : c
         exact absurd hab (Nat.not_lt_zero b)
 
 /-- A block with positive epoch is nonempty. -/
-theorem ne_of_bep_pos {c : Blk} (h : 0 < bep c) : c ≠ [] := by
-  intro hc; rw [hc] at h; simp [bep] at h
+theorem Blk.epoch.ne_of_pos {c : Blk} (h : 0 < c.epoch) : c ≠ [] := by
+  intro hc; rw [hc] at h; simp [Blk.epoch] at h
 
 /-- Genesis sits in the tail of any chain with positive epoch that
 contains it. -/
-theorem mem_tail_of_bep_pos {c : Blk} (h0 : 0 ∈ c) (hb : 0 < bep c) : 0 ∈ c.tail := by
+theorem Blk.epoch.mem_tail_of_pos {c : Blk} (h0 : 0 ∈ c) (hb : 0 < c.epoch) : 0 ∈ c.tail := by
   cases c with
-  | nil => simp [bep] at hb
+  | nil => simp [Blk.epoch] at hb
   | cons a t =>
     rw [List.mem_cons] at h0
     rcases h0 with rfl | h0
-    · simp [bep] at hb
+    · simp [Blk.epoch] at hb
     · exact h0
 
 /-- Two genuinely voted blocks share an honest voter: quorum intersection
@@ -265,7 +265,7 @@ Quorum intersection yields an honest node in both voter sets; I1
 (honest nodes vote at most once per epoch) finishes. -/
 theorem unique_notarized (hn : n = 3 * f + 1) (hB : Byz.card ≤ f)
     {s : St n} (hs : Inv n f Byz s) {b₁ b₂ : Blk}
-    (hn1 : Notarized n f s b₁) (hn2 : Notarized n f s b₂) (he : bep b₁ = bep b₂) :
+    (hn1 : Notarized n f s b₁) (hn2 : Notarized n f s b₂) (he : b₁.epoch = b₂.epoch) :
     b₁ = b₂ := by
   have h1 := hs.honestUniq
   rcases hn1 with hg1 | hq1
@@ -283,12 +283,12 @@ theorem unique_notarized (hn : n = 3 * f + 1) (hB : Byz.card ≤ f)
 
 /-- Three adjacent blocks with consecutive epochs: `bNext`'s parent is
 `bMid`, `bMid`'s parent is `bPrev`, and the epochs increase by one at
-each step (`bep bMid = bep bPrev + 1`, `bep bNext = bep bMid + 1`). The
+each step (`bMid.epoch = bPrev.epoch + 1`, `bNext.epoch = bMid.epoch + 1`). The
 finalization rule: three such blocks at the head of a notarized chain
 finalize the middle one's prefix. -/
 def Consecutive (bPrev bMid bNext : Blk) : Prop :=
   bNext.tail = bMid ∧ bMid.tail = bPrev ∧
-  bep bMid = bep bPrev + 1 ∧ bep bNext = bep bMid + 1
+  bMid.epoch = bPrev.epoch + 1 ∧ bNext.epoch = bMid.epoch + 1
 
 /-- `X` conflicts with `b`: a different block of the same length. -/
 def Conflicts (X b : Blk) : Prop := X ≠ b ∧ X.length = b.length
@@ -312,63 +312,63 @@ theorem consistency_of_inv (hn : n = 3 * f + 1) (hB : Byz.card ≤ f)
   intro hnotX
   -- The three blocks are nonempty, notarized (suffixes of bNext), and
   -- bNext is genuinely voted, hence valid; so genesis lies in all of them.
-  have bepMidPos : 0 < bep bMid := by omega
-  have bepNextPos : 0 < bep bNext := by omega
-  have neMid : bMid ≠ [] := ne_of_bep_pos bepMidPos
-  have neNext : bNext ≠ [] := ne_of_bep_pos bepNextPos
-  have nNext : Notarized n f s bNext := hChain bNext neNext (List.suffix_refl bNext)
-  have nMid : Notarized n f s bMid := hChain bMid neMid (hNextMid ▸ List.tail_suffix bNext)
-  have NextNe0 : bNext ≠ [0] := by
-    intro hc; rw [hc] at heNext; simp [bep] at heNext
-  have qNext : quorum f ≤ (voters n s bNext).card := nNext.resolve_left NextNe0
-  have h0Next : 0 ∈ bNext := genesis_mem_of_quorum n f Byz hs qNext
-  have h0Mid : 0 ∈ bMid := hNextMid ▸ mem_tail_of_bep_pos h0Next bepNextPos
-  have h0Prev : 0 ∈ bPrev := hMidPrev ▸ mem_tail_of_bep_pos h0Mid bepMidPos
-  have nePrev : bPrev ≠ [] := by intro hc; rw [hc] at h0Prev; simp at h0Prev
-  have hPrevSuf : bPrev <:+ bNext :=
+  have bepMidPos : 0 < bMid.epoch := by omega
+  have bepNextPos : 0 < bNext.epoch := by omega
+  have hMid_ne_nil : bMid ≠ [] := Blk.epoch.ne_of_pos bepMidPos
+  have hNext_ne_nil : bNext ≠ [] := Blk.epoch.ne_of_pos bepNextPos
+  have hNext_notarized : Notarized n f s bNext := hChain bNext hNext_ne_nil (List.suffix_refl bNext)
+  have hMid_notarized : Notarized n f s bMid := hChain bMid hMid_ne_nil (hNextMid ▸ List.tail_suffix bNext)
+  have hNext_ne_genesis : bNext ≠ [0] := by
+    intro hc; rw [hc] at heNext; simp [Blk.epoch] at heNext
+  have hNext_quorum : quorum f ≤ (voters n s bNext).card := hNext_notarized.resolve_left hNext_ne_genesis
+  have hNext_has_genesis : 0 ∈ bNext := genesis_mem_of_quorum n f Byz hs hNext_quorum
+  have hMid_has_genesis : 0 ∈ bMid := hNextMid ▸ Blk.epoch.mem_tail_of_pos hNext_has_genesis bepNextPos
+  have hPrev_has_genesis : 0 ∈ bPrev := hMidPrev ▸ Blk.epoch.mem_tail_of_pos hMid_has_genesis bepMidPos
+  have hPrev_ne_nil : bPrev ≠ [] := by intro hc; rw [hc] at hPrev_has_genesis; simp at hPrev_has_genesis
+  have hPrev_suffix : bPrev <:+ bNext :=
     (hMidPrev ▸ List.tail_suffix bMid).trans (hNextMid ▸ List.tail_suffix bNext)
-  have nPrev : Notarized n f s bPrev := hChain bPrev nePrev hPrevSuf
+  have hPrev_notarized : Notarized n f s bPrev := hChain bPrev hPrev_ne_nil hPrev_suffix
   -- Length arithmetic.
-  have lenNext : 0 < bNext.length := List.length_pos_of_mem h0Next
-  have lenMid : 0 < bMid.length := List.length_pos_of_mem h0Mid
-  have lenNextEq : bNext.length = bMid.length + 1 := by
+  have hNext_len_pos : 0 < bNext.length := List.length_pos_of_mem hNext_has_genesis
+  have hMid_len_pos : 0 < bMid.length := List.length_pos_of_mem hMid_has_genesis
+  have hNext_len_eq : bNext.length = bMid.length + 1 := by
     have h := congrArg List.length hNextMid
     rw [List.length_tail] at h; omega
-  have lenMidEq : bMid.length = bPrev.length + 1 := by
+  have hMid_len_eq : bMid.length = bPrev.length + 1 := by
     have h := congrArg List.length hMidPrev
     rw [List.length_tail] at h; omega
-  have lenPrev : 0 < bPrev.length := List.length_pos_of_mem h0Prev
+  have hPrev_len_pos : 0 < bPrev.length := List.length_pos_of_mem hPrev_has_genesis
   -- X is long, hence not genesis, hence genuinely voted.
-  have Xne0 : X ≠ [0] := by
+  have hX_ne_genesis : X ≠ [0] := by
     intro hc; rw [hc] at hXlen; simp at hXlen; omega
-  have qX : quorum f ≤ (voters n s X).card := hnotX.resolve_left Xne0
+  have hX_quorum : quorum f ≤ (voters n s X).card := hnotX.resolve_left hX_ne_genesis
   -- Shared honest voter of two genuinely voted blocks
   -- (`exists_honest_voter_of_two_quorums`).
-  rcases lt_trichotomy (bep X) (bep bMid) with hlt | heq | hgt
-  · rcases lt_trichotomy (bep X) (bep bPrev) with hlt2 | heq2 | hgt2
+  rcases lt_trichotomy (X.epoch) (bMid.epoch) with hlt | heq | hgt
+  · rcases lt_trichotomy (X.epoch) (bPrev.epoch) with hlt2 | heq2 | hgt2
     · -- epoch X < epoch bPrev: honest i voted X (earlier) and bPrev
-      have PrevNe0 : bPrev ≠ [0] := by
-        intro hc; rw [hc] at hlt2; simp [bep] at hlt2
+      have hPrev_ne_genesis : bPrev ≠ [0] := by
+        intro hc; rw [hc] at hlt2; simp [Blk.epoch] at hlt2
       obtain ⟨i, hih, hiX, hiPrev⟩ :=
-        exists_honest_voter_of_two_quorums n f Byz hn hB qX (nPrev.resolve_left PrevNe0)
+        exists_honest_voter_of_two_quorums n f Byz hn hB hX_quorum (hPrev_notarized.resolve_left hPrev_ne_genesis)
       have hle := hlenMono i X bPrev hih hiX hiPrev hlt2
       rw [List.length_tail, List.length_tail] at hle
       omega
     · -- epoch X = epoch bPrev: Lemma 1 forces X = bPrev, too short
-      have hXPrev : X = bPrev := unique_notarized n f Byz hn hB hs hnotX nPrev heq2
+      have hXPrev : X = bPrev := unique_notarized n f Byz hn hB hs hnotX hPrev_notarized heq2
       rw [hXPrev] at hXlen
       omega
     · omega
   · -- epoch X = epoch bMid: Lemma 1 forces X = bMid
-    exact hXne (unique_notarized n f Byz hn hB hs hnotX nMid heq)
-  · rcases lt_trichotomy (bep X) (bep bNext) with hlt2 | heq2 | hgt2
+    exact hXne (unique_notarized n f Byz hn hB hs hnotX hMid_notarized heq)
+  · rcases lt_trichotomy (X.epoch) (bNext.epoch) with hlt2 | heq2 | hgt2
     · omega
     · -- epoch X = epoch bNext: Lemma 1 forces X = bNext, too long
-      have hXNext : X = bNext := unique_notarized n f Byz hn hB hs hnotX nNext heq2
-      rw [hXNext, lenNextEq] at hXlen
+      have hXNext : X = bNext := unique_notarized n f Byz hn hB hs hnotX hNext_notarized heq2
+      rw [hXNext, hNext_len_eq] at hXlen
       omega
     · -- epoch X > epoch bNext: honest i voted bNext (earlier) and X
-      obtain ⟨i, hih, hiX, hiNext⟩ := exists_honest_voter_of_two_quorums n f Byz hn hB qX qNext
+      obtain ⟨i, hih, hiX, hiNext⟩ := exists_honest_voter_of_two_quorums n f Byz hn hB hX_quorum hNext_quorum
       have hle := hlenMono i bNext X hih hiNext hiX hgt2
       rw [List.length_tail, List.length_tail] at hle
       omega

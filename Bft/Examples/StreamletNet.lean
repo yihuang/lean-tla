@@ -215,21 +215,21 @@ pending predicate folds in the deadline condition so `Deliver m` stays
 enabled exactly while the message is in flight. -/
 
 /-- `m` is in flight. -/
-def inflightOf (m : Msg n) : StatePred (St n) := { s | m ∈ s.inflight }
+def InflightOf (m : Msg n) : StatePred (St n) := { s | m ∈ s.inflight }
 
 /-- `m` has been seen. -/
-def seenOf (m : Msg n) : StatePred (St n) := { s | m ∈ s.seen }
+def SeenOf (m : Msg n) : StatePred (St n) := { s | m ∈ s.seen }
 
 /-- The `wf1` pending predicate: `m` in flight, and not past its deadline
 (so `Deliver m` is enabled). -/
-def pending (m : Msg n) : StatePred (St n) := { s |
+def Pending (m : Msg n) : StatePred (St n) := { s |
   m ∈ s.inflight ∧ (m.src ∉ Byz → s.now ≤ deadline n Δ GST m) }
 
-attribute [grind unfold] pending seenOf
+attribute [grind unfold] Pending SeenOf
 
 theorem pending_step (m : Msg n) : ∀ s s',
-    s ∈ pending n Byz Δ GST m → StutAction (Next n Byz Δ GST) (vars n) s s' →
-    s' ∈ pending n Byz Δ GST m ∨ s' ∈ seenOf n m := by
+    s ∈ Pending n Byz Δ GST m → StutAction (Next n Byz Δ GST) (vars n) s s' →
+    s' ∈ Pending n Byz Δ GST m ∨ s' ∈ SeenOf n m := by
   intro s s' hsp hstep
   rcases hstep with hnext | hstut
   swap
@@ -239,8 +239,8 @@ theorem pending_step (m : Msg n) : ∀ s s',
   rcases hnext with htick | ⟨m', hs⟩ | ⟨m', hd⟩ <;> grind
 
 theorem pending_aq (m : Msg n) : ∀ s s',
-    s ∈ pending n Byz Δ GST m → AngleAction (Deliver n Byz Δ GST m) (vars n) s s' →
-    s' ∈ seenOf n m := by
+    s ∈ Pending n Byz Δ GST m → AngleAction (Deliver n Byz Δ GST m) (vars n) s s' →
+    s' ∈ SeenOf n m := by
   intro s s' _hsp hang
   obtain ⟨hdel, _⟩ := hang
   have hseen : s'.seen = insert m s.seen := by grind
@@ -249,8 +249,8 @@ theorem pending_aq (m : Msg n) : ∀ s s',
   exact Finset.mem_insert_self m s.seen
 
 theorem pending_enable (m : Msg n) : ∀ s,
-    s ∈ pending n Byz Δ GST m →
-      s ∈ Enabled (AngleAction (Deliver n Byz Δ GST m) (vars n)) ∨ s ∈ seenOf n m := by
+    s ∈ Pending n Byz Δ GST m →
+      s ∈ Enabled (AngleAction (Deliver n Byz Δ GST m) (vars n)) ∨ s ∈ SeenOf n m := by
   intro s hsp
   left
   let s' : St n := {
@@ -275,20 +275,20 @@ theorem pending_enable (m : Msg n) : ∀ s,
 message is eventually delivered. -/
 theorem fact1_liveness (m : Msg n) :
     Entails (tlaAnd (Hspec n Byz Δ GST) (WF_v (Deliver n Byz Δ GST m) (vars n)))
-      (leadsTo (statePred (inflightOf n m)) (statePred (seenOf n m))) := by
+      (leadsTo (statePred (InflightOf n m)) (statePred (SeenOf n m))) := by
   intro e hE k hk
   have hspec : Hspec n Byz Δ GST e := hE.1
   have hwf : WF_v (Deliver n Byz Δ GST m) (vars n) e := hE.2
   have hnext : stutAlways (Next n Byz Δ GST) (vars n) e := hspec.2
   have hnoover : always (statePred (NoOverdue n Byz Δ GST)) e :=
     delivery_safety n Byz Δ GST e hspec
-  have hk' : m ∈ (e k).inflight := by simpa [inflightOf] using hk
-  have hpk : e k ∈ pending n Byz Δ GST m := by
+  have hk' : m ∈ (e k).inflight := by simpa [InflightOf] using hk
+  have hpk : e k ∈ Pending n Byz Δ GST m := by
     refine ⟨hk', ?_⟩
     intro hsrc
     exact (always_statePred_at hnoover) m hk' hsrc
-  have hleads : leadsTo (statePred (pending n Byz Δ GST m)) (statePred (seenOf n m)) e :=
-    wf1 (pending n Byz Δ GST m) (seenOf n m) (Next n Byz Δ GST) (Deliver n Byz Δ GST m)
+  have hleads : leadsTo (statePred (Pending n Byz Δ GST m)) (statePred (SeenOf n m)) e :=
+    wf1 (Pending n Byz Δ GST m) (SeenOf n m) (Next n Byz Δ GST) (Deliver n Byz Δ GST m)
       (vars n) (pending_step n Byz Δ GST m) (pending_aq n Byz Δ GST m)
       (pending_enable n Byz Δ GST m) e ⟨hnext, hwf⟩
   exact hleads k (by simpa using hpk)
