@@ -37,8 +37,17 @@ The transport model is the standard Global Stabilization Time (GST) regime
 
 The Streamlet *protocol* layer (proposals, votes, notarization, the
 leader schedule, and the paper's Fact 2 / Fact 3 / Lemma 5) is built on top
-of this transport layer in a follow-up file; here we only prove the delivery
-guarantee the protocol facts rest on.
+of this transport layer in a follow-up file.
+
+**Status of the two halves (explicit, not hidden).** The transport's Δ-bound
+is fully proved here: `NoOverdue` (no late honest delivery) is an invariant
+of `Hspec`, and `WF(Deliver m)` delivers any in-flight message. The liveness
+theorem of the protocol layer (`StreamletTemporal`) does **not** yet consume
+these: its per-epoch honest-timing assumptions (clock advances, honest
+leaders propose, honest votes chain-notarize in time) are a declared trust
+base, justified by — but not yet derived from — Fact 1 plus weak fairness of
+`Propose`/`VoteH`/`Tick`. Deriving them is the remaining refinement step;
+this file is the scaffolding for it.
 -/
 import Bft.Examples.Streamlet
 import Bft.Tactic
@@ -71,13 +80,16 @@ deriving DecidableEq, Repr
 delivered), the messages delivered to the honest broadcast group, and — as
 auxiliary *history variables* (Lamport) — the votes and proposals cast so far.
 `castVotes`/`castProps` are monotone accumulators of what was sent; they are
-what the safety invariant is stated over. -/
+what the safety invariant is stated over. The proposal history is stamped
+with the sender (`(src, e, b)`): message sources are authenticated, so the
+proposal of an epoch is the one cast by that epoch's leader — a Byzantine
+node broadcasting a stray `.prop` body does not speak for the leader. -/
 structure St (n : ℕ) where
   now : ℕ
   inflight : Finset (Msg n)
   seen : Finset (Msg n)
   castVotes : Finset (Fin n × Blk)
-  castProps : Finset (ℕ × Blk)
+  castProps : Finset (Fin n × ℕ × Blk)
 deriving DecidableEq
 
 /-- The delivery deadline of `m`: round `max GST (m.round + Δ)`. -/
@@ -98,7 +110,7 @@ def Send (m : Msg n) : Action (St n) := fun s s' =>
   m.round = s.now ∧ m ∉ s.inflight ∧ m ∉ s.seen ∧
   s'.now = s.now ∧ s'.inflight = insert m s.inflight ∧ s'.seen = s.seen ∧
   s'.castVotes = (match m.body with | Body.vote b => insert (m.src, b) s.castVotes | _ => s.castVotes) ∧
-  s'.castProps = (match m.body with | Body.prop e b => insert (e, b) s.castProps | _ => s.castProps)
+  s'.castProps = (match m.body with | Body.prop e b => insert (m.src, e, b) s.castProps | _ => s.castProps)
 
 /-- Delivery: an in-flight message becomes visible to all honest nodes.
 After GST, an honest-sent message is delivered within `Δ` of being sent —

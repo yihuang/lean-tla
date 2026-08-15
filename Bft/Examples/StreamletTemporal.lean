@@ -14,9 +14,12 @@ The honest-timing assumptions — the clock advances, the honest leader of
 each epoch proposes, and honest nodes vote + delivery chain-notarizes the
 proposal before the epoch passes — are stated explicitly as per-epoch
 leads-to predicates, bundled into the spec `H`. In the real system these
-follow from the transport's Δ-bounded delivery (Fact 1) plus weak fairness
-of `Propose`/`VoteH`/`Tick`; here they are the declared trust base, matching
-the library's "fairness is explicit" doctrine.
+follow from the transport's Δ-bounded delivery (Fact 1 in
+`StreamletNet`, where the honest quorum of `2f+1` out of `3f+1` nodes
+suffices for the honest-only notarization) plus weak fairness of
+`Propose`/`VoteH`/`Tick`; here they are the declared trust base, matching
+the library's "fairness is explicit" doctrine. Deriving them from the
+transport layer is the remaining refinement step.
 -/
 import Bft.Examples.StreamletLiveness
 
@@ -32,56 +35,51 @@ variable (n : ℕ) (Byz : Finset (Fin n)) (Δ GST f : ℕ) (L : ℕ → Fin n)
 
 /-! ## Monotonicity under protocol steps -/
 
-/-- The sent set and cast-vote history of `s'` contain those of `s`. -/
-def sentGrows (s s' : St n) : Prop :=
-  (∀ m, (m ∈ s.inflight ∨ m ∈ s.seen) → (m ∈ s'.inflight ∨ m ∈ s'.seen)) ∧
-    s.castVotes ⊆ s'.castVotes
+/-- The cast histories of `s'` contain those of `s`. -/
+def castGrows (s s' : St n) : Prop :=
+  s.castVotes ⊆ s'.castVotes ∧ s.castProps ⊆ s'.castProps
 
-/-- Every protocol step preserves (grows) the sent set. -/
-theorem pnext_sentGrows {s s' : St n} (hstep : PNext n Byz Δ GST f L s s') : sentGrows n s s' := by
-  rcases hstep with htick | ⟨e, b, hpr⟩ | ⟨i, b, hv⟩ | ⟨m0, hd⟩
-  · obtain ⟨_hnow, hinf, hseen, hcv, _hcp, _hguard⟩ := htick
+/-- Every protocol step preserves (grows) the cast histories. -/
+theorem pnext_castGrows {s s' : St n} (hstep : PNext n Byz Δ GST f L s s') : castGrows n s s' := by
+  rcases hstep with htick | ⟨e, b, hpr⟩ | ⟨i, b, hv⟩ | ⟨m, hbyzm, hval, hs⟩ | ⟨m, hd⟩
+  · obtain ⟨_hnow, hinf, _hseen, hcv, hcp, _hguard⟩ := htick
     constructor <;> grind
-  · obtain ⟨_hprior, _hL, _hval, _hbep, _hcur, _hparseen, _hparcast, _hlong, hsend⟩ := hpr
-    obtain ⟨_hr, _hninf, _hnseen, _hnow, hinf, hseen, hcv, _hcp⟩ := hsend
-    constructor <;> grind
-  · obtain ⟨_hi, _hval, _hbpos, _hbcur, _hfirst, _hprop, _hparseen, _hparcast, _hlong, hsend⟩ := hv
-    obtain ⟨_hr, _hninf, _hnseen, _hnow, hinf, hseen, hcv, _hcp⟩ := hsend
-    constructor <;> grind
-  · obtain ⟨hmem, _hguard, _hnow, hinf, hseen, hcv, _hcp⟩ := hd
-    have hsent := sent_eq_deliver n hmem hinf hseen
+  · obtain ⟨_hprior, _hL, _hval, _hbep, _hcur, _hlong, hsend⟩ := hpr
+    exact ⟨send_castVotes_mono n hsend, send_castProps_mono n hsend⟩
+  · obtain ⟨_hi, _hval, _hbpos, _hbcur, _hfirst, _hprop, _hlong, hsend⟩ := hv
+    exact ⟨send_castVotes_mono n hsend, send_castProps_mono n hsend⟩
+  · exact ⟨send_castVotes_mono n hs, send_castProps_mono n hs⟩
+  · obtain ⟨hmem, _hguard, _hnow, hinf, hseen, hcv, hcp⟩ := hd
     constructor <;> grind
 
-/-- `propCast` is monotone in the sent set. -/
-theorem propCast_mono {s s' : St n} (h : sentGrows n s s') {e : ℕ} {b : Blk} :
-    propCast n L s e b → propCast n L s' e b := by
-  rintro ⟨m, hm, hsrc, hb⟩
-  exact ⟨m, h.1 m hm, hsrc, hb⟩
+/-- `propCast` is monotone in the cast history. -/
+theorem propCast_mono {s s' : St n} (h : castGrows n s s') {e : ℕ} {b : Blk} :
+    propCast n L s e b → propCast n L s' e b := fun hp => h.2 hp
 
-/-- `votersCast` is monotone in the sent set. -/
-theorem votersCast_mono {s s' : St n} (h : sentGrows n s s') (b : Blk) :
-    votersCast n s b ⊆ votersCast n s' b := by
+/-- `votersCast` is monotone in the cast history. -/
+theorem votersCast_mono {s s' : St n} (h : castGrows n s s') (b : Blk) :
+    votersCast n Byz s b ⊆ votersCast n Byz s' b := by
   intro i hi
-  rw [mem_votersCast n] at hi ⊢
-  exact h.2 hi
+  rw [mem_votersCast n Byz] at hi ⊢
+  exact ⟨h.1 hi.1, hi.2⟩
 
-/-- `NotarizedCast` is monotone in the sent set. -/
-theorem notarizedCast_mono {s s' : St n} (h : sentGrows n s s') {b : Blk} :
-    NotarizedCast n f s b → NotarizedCast n f s' b := by
+/-- `NotarizedCast` is monotone in the cast history. -/
+theorem notarizedCast_mono {s s' : St n} (h : castGrows n s s') {b : Blk} :
+    NotarizedCast n Byz f s b → NotarizedCast n Byz f s' b := by
   intro hN
-  exact le_trans hN (Finset.card_le_card (votersCast_mono n h b))
+  exact le_trans hN (Finset.card_le_card (votersCast_mono n Byz h b))
 
-/-- `NotarizedBy` is monotone in the sent set. -/
-theorem notarizedBy_mono_send {s s' : St n} (h : sentGrows n s s') {b : Blk} {e : ℕ} :
-    NotarizedBy n f s b e → NotarizedBy n f s' b e := by
+/-- `NotarizedBy` is monotone in the cast history. -/
+theorem notarizedBy_mono_send {s s' : St n} (h : castGrows n s s') {b : Blk} {e : ℕ} :
+    NotarizedBy n Byz f s b e → NotarizedBy n Byz f s' b e := by
   rintro ⟨hN, hbep⟩
-  exact ⟨notarizedCast_mono n f h hN, hbep⟩
+  exact ⟨notarizedCast_mono n Byz f h hN, hbep⟩
 
-/-- `ChainNotarizedBy` is monotone in the sent set. -/
-theorem chainNotarizedBy_mono_send {s s' : St n} (h : sentGrows n s s') {b : Blk} {e : ℕ} :
-    ChainNotarizedBy n f s b e → ChainNotarizedBy n f s' b e := by
+/-- `ChainNotarizedBy` is monotone in the cast history. -/
+theorem chainNotarizedBy_mono_send {s s' : St n} (h : castGrows n s s') {b : Blk} {e : ℕ} :
+    ChainNotarizedBy n Byz f s b e → ChainNotarizedBy n Byz f s' b e := by
   intro hc d hd hs
-  exact notarizedBy_mono_send n f h (hc d hd hs)
+  exact notarizedBy_mono_send n Byz f h (hc d hd hs)
 
 /-! ## Persistence along behaviors -/
 
@@ -100,44 +98,48 @@ theorem propCast_persist_along {e : Behavior (St n)}
   induction j with
   | zero => simpa using hp
   | succ j ih =>
-      have hmono : propCast n L (e (k + j + 1)) e' b := by
-        have hstep : PNext n Byz Δ GST f L (e (k + j)) (e (k + j + 1)) ∨
-            (e (k + j + 1)) = e (k + j) := hS (k + j)
-        rcases hstep with hnext | hstut
-        · exact propCast_mono n L (pnext_sentGrows n Byz Δ GST f L hnext) ih
-        · have hstut' : e (k + j + 1) = e (k + j) := hstut
-          rw [hstut']; exact ih
-      simpa [Nat.add_assoc] using hmono
+      have hstep : PNext n Byz Δ GST f L (e (k + j)) (e (k + j + 1)) ∨
+          (e (k + j + 1)) = e (k + j) := hS (k + j)
+      rcases hstep with hnext | hstut
+      · have hmono : propCast n L (e (k + j + 1)) e' b :=
+          propCast_mono n L (pnext_castGrows n Byz Δ GST f L hnext) ih
+        simpa [Nat.add_assoc] using hmono
+      · have hstut' : e (k + j + 1) = e (k + j) := hstut
+        have hidx : k + (j + 1) = k + j + 1 := by omega
+        rw [hidx, hstut']
+        exact ih
 
 /-- `ChainNotarizedBy` persists along a behavior. -/
 theorem chainNotarizedBy_persist_along {e : Behavior (St n)}
     (hS : ∀ m, StutAction (PNext n Byz Δ GST f L) (vars n) (e m) (e (m + 1)))
-    {b : Blk} {e' : ℕ} {k j : ℕ} (hc : ChainNotarizedBy n f (e k) b e') :
-    ChainNotarizedBy n f (e (k + j)) b e' := by
+    {b : Blk} {e' : ℕ} {k j : ℕ} (hc : ChainNotarizedBy n Byz f (e k) b e') :
+    ChainNotarizedBy n Byz f (e (k + j)) b e' := by
   induction j with
   | zero => simpa using hc
   | succ j ih =>
-      have hmono : ChainNotarizedBy n f (e (k + j + 1)) b e' := by
-        have hstep := hS (k + j)
-        rcases hstep with hnext | hstut
-        · exact chainNotarizedBy_mono_send n f (pnext_sentGrows n Byz Δ GST f L hnext) ih
-        · have hstut' : e (k + j + 1) = e (k + j) := hstut
-          rw [hstut']; exact ih
-      simpa [Nat.add_assoc] using hmono
+      have hstep := hS (k + j)
+      rcases hstep with hnext | hstut
+      · have hmono : ChainNotarizedBy n Byz f (e (k + j + 1)) b e' :=
+          chainNotarizedBy_mono_send n Byz f (pnext_castGrows n Byz Δ GST f L hnext) ih
+        simpa [Nat.add_assoc] using hmono
+      · have hstut' : e (k + j + 1) = e (k + j) := hstut
+        have hidx : k + (j + 1) = k + j + 1 := by omega
+        rw [hidx, hstut']
+        exact ih
 
 /-! ## The completed-window predicate and the final step -/
 
 /-- Every completed epoch `e'` of the window has a chain-notarized proposal. -/
 def WindowDone (e0 : ℕ) (s : St n) : Prop :=
   ∀ e' : ℕ, e0 ≤ e' → e' < curEpoch Δ s.now →
-    ∃ b : Blk, propCast n L s e' b ∧ ChainNotarizedBy n f s b e'
+    ∃ b : Blk, propCast n L s e' b ∧ ChainNotarizedBy n Byz f s b e'
 
 /-- **The window delivers**: five completed honest-leader epochs finalize. -/
 theorem window_finality (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ f L s)
-    {e0 : ℕ} (_he0 : 0 < e0) (hW : WindowDone n Δ f L e0 s)
+    {e0 : ℕ} (_he0 : 0 < e0) (hW : WindowDone n Byz Δ f L e0 s)
     (hcur : curEpoch Δ s.now = e0 + 5)
     (hL : ∀ e', e0 ≤ e' → e' < e0 + 5 → L e' ∉ Byz) :
-    FinalSome n f s := by
+    FinalSome n Byz f s := by
   have hlt0 : e0 < curEpoch Δ s.now := by rw [hcur]; omega
   have hlt1 : e0 + 1 < curEpoch Δ s.now := by rw [hcur]; omega
   have hlt2 : e0 + 2 < curEpoch Δ s.now := by rw [hcur]; omega
@@ -153,30 +155,26 @@ theorem window_finality (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ f 
   have hL2 : L (e0 + 2) ∉ Byz := hL (e0 + 2) (by omega) (by omega)
   have hL3 : L (e0 + 3) ∉ Byz := hL (e0 + 3) (by omega) (by omega)
   have hL4 : L (e0 + 4) ∉ Byz := hL (e0 + 4) (by omega) (by omega)
-  have hb0ne : b0 ≠ [] := ne_nil_of_valid (hinv.propValid e0 b0 ((hinv.castProps_iff e0 b0).2 hp0) hL0)
-  have hb1ne : b1 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 1) b1 ((hinv.castProps_iff (e0 + 1) b1).2 hp1) hL1)
-  have hb2ne : b2 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 2) b2 ((hinv.castProps_iff (e0 + 2) b2).2 hp2) hL2)
-  have hb3ne : b3 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 3) b3 ((hinv.castProps_iff (e0 + 3) b3).2 hp3) hL3)
-  have hb4ne : b4 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 4) b4 ((hinv.castProps_iff (e0 + 4) b4).2 hp4) hL4)
+  have hb0ne : b0 ≠ [] := ne_nil_of_valid (hinv.propValid e0 b0 hp0 hL0)
+  have hb1ne : b1 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 1) b1 hp1 hL1)
+  have hb2ne : b2 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 2) b2 hp2 hL2)
+  have hb3ne : b3 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 3) b3 hp3 hL3)
+  have hb4ne : b4 ≠ [] := ne_nil_of_valid (hinv.propValid (e0 + 4) b4 hp4 hL4)
   have hG01 : b0.length < b1.length :=
     proposal_growth n Byz Δ f L hinv hp0 hp1 hL0 hL1
-      ⟨b0, chain_notarized_block n f hc0 hb0ne, le_rfl⟩
+      ⟨b0, chain_notarized_block n Byz f hc0 hb0ne, le_rfl⟩
   have hG12 : b1.length < b2.length :=
     proposal_growth n Byz Δ f L hinv hp1 hp2 hL1 hL2
-      ⟨b1, chain_notarized_block n f hc1 hb1ne, le_rfl⟩
+      ⟨b1, chain_notarized_block n Byz f hc1 hb1ne, le_rfl⟩
   have hG23 : b2.length < b3.length :=
     proposal_growth n Byz Δ f L hinv hp2 hp3 hL2 hL3
-      ⟨b2, chain_notarized_block n f hc2 hb2ne, le_rfl⟩
+      ⟨b2, chain_notarized_block n Byz f hc2 hb2ne, le_rfl⟩
   have hG34 : b3.length < b4.length :=
     proposal_growth n Byz Δ f L hinv hp3 hp4 hL3 hL4
-      ⟨b3, chain_notarized_block n f hc3 hb3ne, le_rfl⟩
+      ⟨b3, chain_notarized_block n Byz f hc3 hb3ne, le_rfl⟩
   exact ⟨e0 + 2, b2, b3, b4,
     liveness_finality n Byz Δ f L hB hinv
-      ⟨(hinv.castProps_iff e0 b0).2 hp0, hL0⟩
-      ⟨(hinv.castProps_iff (e0 + 1) b1).2 hp1, hL1⟩
-      ⟨(hinv.castProps_iff (e0 + 2) b2).2 hp2, hL2⟩
-      ⟨(hinv.castProps_iff (e0 + 3) b3).2 hp3, hL3⟩
-      ⟨(hinv.castProps_iff (e0 + 4) b4).2 hp4, hL4⟩
+      ⟨hp0, hL0⟩ ⟨hp1, hL1⟩ ⟨hp2, hL2⟩ ⟨hp3, hL3⟩ ⟨hp4, hL4⟩
       hG01 hG12 hG23 hG34 hc2 hc3 hc4⟩
 
 /-! ## The honest-timing assumptions -/
@@ -195,7 +193,7 @@ def ProposeAssumption (e : ℕ) : Pred (St n) :=
 def VoteAssumption (e : ℕ) : Pred (St n) :=
   leadsTo (statePred {s | curEpoch Δ s.now = e ∧ ∃ b : Blk, propCast n L s e b})
     (statePred {s | curEpoch Δ s.now = e ∧
-      ∃ b : Blk, propCast n L s e b ∧ ChainNotarizedBy n f s b e})
+      ∃ b : Blk, propCast n L s e b ∧ ChainNotarizedBy n Byz f s b e})
 
 /-- The honest-timing spec: the protocol plus per-epoch clock/propose/vote
 assumptions. -/
@@ -203,86 +201,64 @@ def H : Pred (St n) :=
   tlaAnd (PSpec n Byz Δ GST f L)
     (tlaAnd (fun e => ∀ e' : ℕ, ClockAssumption n Δ e' e)
       (tlaAnd (fun e => ∀ e' : ℕ, ProposeAssumption n Δ L e' e)
-        (fun e => ∀ e' : ℕ, VoteAssumption n Δ f L e' e)))
+        (fun e => ∀ e' : ℕ, VoteAssumption n Byz Δ f L e' e)))
 
 /-! ## The per-epoch step -/
 
 /-- **One epoch completes**: from `curEpoch = e'` (with `Inv`), the
 propose/vote/clock assumptions deliver `curEpoch = e'+1` with the epoch's
-proposal chain-notarized. -/
+proposal chain-notarized. Three phases: a proposal of `e'` exists (either
+already cast, or the propose assumption fires); the vote assumption
+chain-notarizes it; the clock passes to the next epoch. -/
 theorem epoch_step {e' : ℕ} {e : Behavior (St n)} (hH : H n Byz Δ GST f L e) :
     leadsTo (statePred {s | Inv n Byz Δ f L s ∧ curEpoch Δ s.now = e'})
       (statePred {s | Inv n Byz Δ f L s ∧ curEpoch Δ s.now = e' + 1 ∧
-        ∃ b : Blk, propCast n L s e' b ∧ ChainNotarizedBy n f s b e'}) e := by
+        ∃ b : Blk, propCast n L s e' b ∧ ChainNotarizedBy n Byz f s b e'}) e := by
   have hspec : PSpec n Byz Δ GST f L e := hH.1
   have hClock : ∀ e'', ClockAssumption n Δ e'' e := hH.2.1
   have hPropose : ∀ e'', ProposeAssumption n Δ L e'' e := hH.2.2.1
-  have hVote : ∀ e'', VoteAssumption n Δ f L e'' e := hH.2.2.2
+  have hVote : ∀ e'', VoteAssumption n Byz Δ f L e'' e := hH.2.2.2
   have hS : ∀ m, StutAction (PNext n Byz Δ GST f L) (vars n) (e m) (e (m + 1)) :=
     fun m => stutAlways_step hspec.2
   have hInvAll : ∀ m, Inv n Byz Δ f L (e m) := inv_all_of_pspec n Byz Δ GST f L hspec
   intro k hp
   rcases hp with ⟨_hInv0, hcur⟩
   have hcur' : curEpoch Δ (e k).now = e' := by simpa using hcur
-  by_cases hnone : ∀ b : Blk, ¬ propCast n L (e k) e' b
-  · -- absent: the propose assumption fires
-    have hP : curEpoch Δ (e k).now = e' ∧ ∀ b : Blk, ¬ propCast n L (e k) e' b :=
-      ⟨hcur', hnone⟩
-    rcases (hPropose e' k (by simpa using hP)) with ⟨j1, hj1⟩
-    have hj1' : curEpoch Δ (e (k + j1)).now = e' ∧
-        ∃ b : Blk, propCast n L (e (k + j1)) e' b := by simpa using hj1
-    rcases hj1' with ⟨hj1cur, hj1prop⟩
-    rcases hj1prop with ⟨b, hpb⟩
-    have hVoteP : curEpoch Δ (e (k + j1)).now = e' ∧
-        ∃ b : Blk, propCast n L (e (k + j1)) e' b := ⟨hj1cur, ⟨b, hpb⟩⟩
-    rcases (hVote e' (k + j1) (by simpa using hVoteP)) with ⟨j2, hj2⟩
-    have hj2' : curEpoch Δ (e (k + j1 + j2)).now = e' ∧
-        ∃ b : Blk, propCast n L (e (k + j1 + j2)) e' b ∧
-          ChainNotarizedBy n f (e (k + j1 + j2)) b e' := by simpa using hj2
-    rcases hj2' with ⟨hj2cur, hj2fact⟩
-    rcases hj2fact with ⟨b', hpb', hcb'⟩
-    rcases (hClock e' (k + j1 + j2) (by simpa using hj2cur)) with ⟨j3, hj3⟩
-    have hj3cur : curEpoch Δ (e (k + j1 + j2 + j3)).now = e' + 1 := by simpa using hj3
-    refine ⟨j1 + j2 + j3, ?_⟩
-    have hpbpers : propCast n L (e (k + j1 + j2 + j3)) e' b' :=
-      propCast_persist_along n Byz Δ GST f L hS (k := k + j1 + j2) (j := j3) (by simpa using hpb')
-    have hcbpers : ChainNotarizedBy n f (e (k + j1 + j2 + j3)) b' e' :=
-      chainNotarizedBy_persist_along n Byz Δ GST f L hS (k := k + j1 + j2) (j := j3) (by simpa using hcb')
-    refine ⟨?_, ?_, ?_⟩
-    · simpa [Nat.add_assoc] using (hInvAll (k + (j1 + j2 + j3)))
-    · simpa [Nat.add_assoc] using hj3cur
-    · refine ⟨b', ?_, ?_⟩
-      · have hidx : k + (j1 + j2 + j3) = k + j1 + j2 + j3 := by omega
-        simpa [hidx] using hpbpers
-      · have hidx : k + (j1 + j2 + j3) = k + j1 + j2 + j3 := by omega
-        simpa [hidx] using hcbpers
-  · -- already present
-    have hnone' : ∃ b : Blk, propCast n L (e k) e' b := by
-      simpa [not_forall, not_not] using hnone
-    rcases hnone' with ⟨b, hpb⟩
-    have hVoteP : curEpoch Δ (e k).now = e' ∧ ∃ b : Blk, propCast n L (e k) e' b :=
-      ⟨hcur', ⟨b, hpb⟩⟩
-    rcases (hVote e' k (by simpa using hVoteP)) with ⟨j2, hj2⟩
-    have hj2' : curEpoch Δ (e (k + j2)).now = e' ∧
-        ∃ b : Blk, propCast n L (e (k + j2)) e' b ∧
-          ChainNotarizedBy n f (e (k + j2)) b e' := by simpa using hj2
-    rcases hj2' with ⟨hj2cur, hj2fact⟩
-    rcases hj2fact with ⟨b', hpb', hcb'⟩
-    rcases (hClock e' (k + j2) (by simpa using hj2cur)) with ⟨j3, hj3⟩
-    have hj3cur : curEpoch Δ (e (k + j2 + j3)).now = e' + 1 := by simpa using hj3
-    refine ⟨j2 + j3, ?_⟩
-    have hpbpers : propCast n L (e (k + j2 + j3)) e' b' :=
-      propCast_persist_along n Byz Δ GST f L hS (k := k + j2) (j := j3) (by simpa using hpb')
-    have hcbpers : ChainNotarizedBy n f (e (k + j2 + j3)) b' e' :=
-      chainNotarizedBy_persist_along n Byz Δ GST f L hS (k := k + j2) (j := j3) (by simpa using hcb')
-    refine ⟨?_, ?_, ?_⟩
-    · simpa [Nat.add_assoc] using (hInvAll (k + (j2 + j3)))
-    · simpa [Nat.add_assoc] using hj3cur
-    · refine ⟨b', ?_, ?_⟩
-      · have hidx : k + (j2 + j3) = k + j2 + j3 := by omega
-        simpa [hidx] using hpbpers
-      · have hidx : k + (j2 + j3) = k + j2 + j3 := by omega
-        simpa [hidx] using hcbpers
+  -- Phase 1: some proposal of `e'` exists, still within epoch `e'`
+  obtain ⟨j1, b1, hj1cur, hj1prop⟩ : ∃ (j1 : ℕ) (b : Blk), curEpoch Δ (e (k + j1)).now = e' ∧
+      propCast n L (e (k + j1)) e' b := by
+    by_cases hnone : ∀ b : Blk, ¬ propCast n L (e k) e' b
+    · rcases (hPropose e' k (by simpa using ⟨hcur', hnone⟩)) with ⟨j1, hj1⟩
+      have hj1' : curEpoch Δ (e (k + j1)).now = e' ∧
+          ∃ b : Blk, propCast n L (e (k + j1)) e' b := by simpa using hj1
+      rcases hj1' with ⟨hj1cur, b, hpb⟩
+      exact ⟨j1, b, hj1cur, hpb⟩
+    · have hsome : ∃ b : Blk, propCast n L (e k) e' b := by
+        simpa [not_forall, not_not] using hnone
+      rcases hsome with ⟨b, hpb⟩
+      exact ⟨0, b, hcur', hpb⟩
+  -- Phase 2: honest votes chain-notarize it, still within epoch `e'`
+  rcases (hVote e' (k + j1) (by simpa using ⟨hj1cur, ⟨b1, hj1prop⟩⟩)) with ⟨j2, hj2⟩
+  have hj2' : curEpoch Δ (e (k + j1 + j2)).now = e' ∧
+      ∃ b : Blk, propCast n L (e (k + j1 + j2)) e' b ∧
+      ChainNotarizedBy n Byz f (e (k + j1 + j2)) b e' := by simpa using hj2
+  rcases hj2' with ⟨hj2cur, b2, hj2prop, hj2chain⟩
+  -- Phase 3: the epoch clock passes
+  rcases (hClock e' (k + j1 + j2) (by simpa using hj2cur)) with ⟨j3, hj3⟩
+  have hj3cur : curEpoch Δ (e (k + j1 + j2 + j3)).now = e' + 1 := by simpa using hj3
+  refine ⟨j1 + j2 + j3, ?_⟩
+  have hpbpers : propCast n L (e (k + j1 + j2 + j3)) e' b2 :=
+    propCast_persist_along n Byz Δ GST f L hS (k := k + j1 + j2) (j := j3) (by simpa using hj2prop)
+  have hcbpers : ChainNotarizedBy n Byz f (e (k + j1 + j2 + j3)) b2 e' :=
+    chainNotarizedBy_persist_along n Byz Δ GST f L hS (k := k + j1 + j2) (j := j3) (by simpa using hj2chain)
+  refine ⟨?_, ?_, ?_⟩
+  · simpa [Nat.add_assoc] using (hInvAll (k + (j1 + j2 + j3)))
+  · simpa [Nat.add_assoc] using hj3cur
+  · refine ⟨b2, ?_, ?_⟩
+    · have hidx : k + (j1 + j2 + j3) = k + j1 + j2 + j3 := by omega
+      simpa [hidx] using hpbpers
+    · have hidx : k + (j1 + j2 + j3) = k + j1 + j2 + j3 := by omega
+      simpa [hidx] using hcbpers
 
 /-! ## The window countdown -/
 
@@ -294,8 +270,8 @@ theorem window_rank_sub (e0 k : ℕ) (hk : k ≤ 5) (hkpos : 0 < k) :
 /-- From `k` epochs remaining in the window, the window completes. -/
 theorem window_progress (e0 : ℕ) (k : ℕ) (hk : k ≤ 5) {e : Behavior (St n)}
     (hH : H n Byz Δ GST f L e) :
-    leadsTo (statePred {s | WindowDone n Δ f L e0 s ∧ curEpoch Δ s.now = e0 + 5 - k})
-      (statePred {s | WindowDone n Δ f L e0 s ∧ curEpoch Δ s.now = e0 + 5}) e := by
+    leadsTo (statePred {s | WindowDone n Byz Δ f L e0 s ∧ curEpoch Δ s.now = e0 + 5 - k})
+      (statePred {s | WindowDone n Byz Δ f L e0 s ∧ curEpoch Δ s.now = e0 + 5}) e := by
   have hspec : PSpec n Byz Δ GST f L e := hH.1
   have hS : ∀ m, StutAction (PNext n Byz Δ GST f L) (vars n) (e m) (e (m + 1)) :=
     fun m => stutAlways_step hspec.2
@@ -306,7 +282,7 @@ theorem window_progress (e0 : ℕ) (k : ℕ) (hk : k ≤ 5) {e : Behavior (St n)
       by_cases hk0 : k = 0
       · subst k
         refine ⟨0, ?_⟩
-        have hW' : WindowDone n Δ f L e0 (e n') := by simpa using hW
+        have hW' : WindowDone n Byz Δ f L e0 (e n') := by simpa using hW
         have hcur' : curEpoch Δ (e n').now = e0 + 5 := by simpa using hcur
         simpa using ⟨hW', hcur'⟩
       · have hkpos : 0 < k := Nat.pos_of_ne_zero hk0
@@ -318,8 +294,8 @@ theorem window_progress (e0 : ℕ) (k : ℕ) (hk : k ≤ 5) {e : Behavior (St n)
         rcases hj with ⟨_hInvj, hcurj, hfact⟩
         have hcurj' : curEpoch Δ (e (n' + j)).now = e' + 1 := by simpa using hcurj
         have hfact' : ∃ b : Blk, propCast n L (e (n' + j)) e' b ∧
-            ChainNotarizedBy n f (e (n' + j)) b e' := by simpa using hfact
-        have hW' : WindowDone n Δ f L e0 (e (n' + j)) := by
+            ChainNotarizedBy n Byz f (e (n' + j)) b e' := by simpa using hfact
+        have hW' : WindowDone n Byz Δ f L e0 (e (n' + j)) := by
           intro e'' he0'' hlt''
           have hltj : e'' < e' + 1 := by
             rw [hcurj'] at hlt''
@@ -356,12 +332,12 @@ theorem liveness_spec (hB : Byz.card ≤ f) (e0 : ℕ) (he0 : 0 < e0)
     (hL : ∀ e', e0 ≤ e' → e' < e0 + 5 → L e' ∉ Byz) :
     Entails (H n Byz Δ GST f L)
       (leadsTo (statePred {s | curEpoch Δ s.now = e0})
-        (statePred {s | FinalSome n f s})) := by
+        (statePred {s | FinalSome n Byz f s})) := by
   intro e hH n' hp
   have hspec : PSpec n Byz Δ GST f L e := hH.1
   have hInvAll : ∀ m, Inv n Byz Δ f L (e m) := inv_all_of_pspec n Byz Δ GST f L hspec
   have hcur0 : curEpoch Δ (e n').now = e0 := by simpa using hp
-  have hW : WindowDone n Δ f L e0 (e n') := by
+  have hW : WindowDone n Byz Δ f L e0 (e n') := by
     intro e'' he0'' hlt''
     have hlt0 : e'' < e0 := by rw [hcur0] at hlt''; exact hlt''
     exact (not_lt_of_ge he0'' hlt0).elim
@@ -371,10 +347,10 @@ theorem liveness_spec (hB : Byz.card ≤ f) (e0 : ℕ) (he0 : 0 < e0)
   have h5 := window_progress n Byz Δ GST f L e0 5 (by omega) hH
   rcases (h5 n' (by simpa using ⟨hW, hrank⟩)) with ⟨j, hj⟩
   rcases hj with ⟨hW', hcur'⟩
-  have hW'' : WindowDone n Δ f L e0 (e (n' + j)) := by simpa using hW'
+  have hW'' : WindowDone n Byz Δ f L e0 (e (n' + j)) := by simpa using hW'
   have hcur'' : curEpoch Δ (e (n' + j)).now = e0 + 5 := by simpa using hcur'
   refine ⟨j, ?_⟩
-  have hfin : FinalSome n f (e (n' + j)) :=
+  have hfin : FinalSome n Byz f (e (n' + j)) :=
     window_finality n Byz Δ f L hB (hInvAll (n' + j)) he0 hW'' hcur'' hL
   simpa using hfin
 end Bft.Examples.StreamletTemporal

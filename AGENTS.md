@@ -27,17 +27,24 @@ Mathlib, `cslib`, and `aesop` are in `.lake/packages/`.
 - **Section variables bind EXPLICITLY here.** `variable (n : ℕ) (Byz : …) (Δ GST f : ℕ) (L : …)`
   (parenthesized) auto-binds only the variables each declaration actually uses,
   as *explicit* parameters, in declaration order — not implicit. Call sites pass
-  them positionally: `chainNotarizedSeen_mono n f hseenmono …`,
-  `voteCast_send n hinf hseen i b`, `propCast_send n L hinf hseen e b`.
+  them positionally: `send_castVotes_mono n hsend`, `propCast_mono n L hsg hp`,
+  `notarizedBy_stable_cast_vote n Byz f hcv hgt`.
   When unsure of the true parameter order, use `#check @lemma_name`.
 - **`grind` closes the *monotone safety fields* of a structure invariant, but not the
-  `∃`/`↔`-transport fields.** For `StreamletProto.Inv` (14 fields), after building the
+  `∃`/transport fields.** For `StreamletProto.Inv` (13 fields), after building the
   `hseenmono` / `hcvmono` / `hcpmono` / `hclockmono` helpers, `constructor <;> first
   | grind | <hard> | <bridge>` closes the 12 safety fields with `grind` (with the
   `[grind =>]`-tagged `_mono` lemmas). Hand-write only `propLongest`/`votedLongest`
-  under `VoteH` (they need `notarizedBy_stable_cast_vote`) and the two bridge fields
-  (`castVotes_iff`/`castProps_iff`). Without the helpers, `grind` just hits its
-  term-generation limit (`gen := 8`), not the heartbeat.
+  under `VoteH` (they need `notarizedBy_stable_cast_vote`) and the one-directional
+  bridge field `sentMem` (via `sentMem_send`/`sentMem_deliver`/`sentMem_tick`).
+  Without the helpers, `grind` just hits its term-generation limit (`gen := 8`),
+  not the heartbeat.
+- **`rcases`/`cases` choke on `Send`'s `match m.body`.** Destructuring a `Send`
+  hypothesis with `-` patterns, or case-splitting `m.body` while the
+  `match m.body …` update equations are in context, both fail with
+  "Dependent elimination failed". Do the body case analysis once in a *clean*
+  context (`send_hist` takes `bd` as a plain variable) and consume the equations
+  via `rw` + the `send_hist` components.
 - **`first | t₁ | t₂` backtracks only on *failure*, not on "progress without closing".**
   A `simp`/`rw` alternative that rewrites the goal but leaves it open is treated as
   success and blocks later alternatives. So put `grind` first, and make every
@@ -52,15 +59,29 @@ Mathlib, `cslib`, and `aesop` are in `.lake/packages/`.
 
 ## Design notes
 
-- **Auxiliary/history variables (Lamport).** For Streamlet, the cast history is
-  accumulated in monotone `castVotes : Finset (Fin n × Blk)` / `castProps : Finset (ℕ × Blk)`
-  fields updated only in `Send`. The safety invariant is restated over *direct
-  membership* `(i,b) ∈ s.castVotes`, and two bridge fields connect it to the
-  message-derived predicates: `castVotes_iff : (i,b) ∈ s.castVotes ↔ voteCast n s i b`,
-  `castProps_iff : (e,b) ∈ s.castProps ↔ propCast n L s e b`. Proving the bridge
-  through the actions is the hard part — factor it into small transport lemmas
-  (`voteCast_send`, `propCast_send`, `sent_eq_deliver`, `notarizedBy_stable_cast_vote`)
-  rather than a mega-`simp`.
+- **Auxiliary/history variables (Lamport), one-directional.** For Streamlet, the cast
+  history is accumulated in monotone `castVotes : Finset (Fin n × Blk)` /
+  `castProps : Finset (Fin n × ℕ × Blk)` fields updated only in `Send`.
+  `voteCast`/`propCast` are *defined as* membership in these histories
+  (`propCast` reads the sender-stamped row `(L e, e, b)` — message sources are
+  authenticated, so a Byzantine node's stray `.prop` body never speaks for the
+  leader), and the only message-level invariant is the one direction the facts
+  need: `Inv.sentMem : SentMem n s`, "every in-flight/delivered message is
+  recorded in the histories". Proving it through the actions is factored into
+  `send_hist` (the one body case analysis), `send_castVotes_mono`,
+  `sentMem_send`, `sentMem_deliver`, `sentMem_tick` — no `↔` bridges.
+- **Byzantine modeling: honest-notarization + guarded honest fields.** Faulty nodes
+  run `SendB` (any well-formed message, any time — equivocation included). Every
+  `Inv` field about a node's cast is guarded by `i ∉ Byz` / `L e ∉ Byz`, which
+  Byzantine sends cannot disturb — *except* the length bounds (`propLongest` /
+  `votedLongest`), which quantify over `NotarizedBy`: a late Byzantine vote for an
+  old-epoch block could newly put it over the quorum at that epoch. Hence
+  `NotarizedCast` counts **honest** cast votes only (`votersCast` filters by
+  `∉ Byz`): Byzantine sends then leave every cast-side predicate unchanged
+  (`hcvback`), while the delivery side (`votersSeen`/`NotarizedSeen`, Fact 2)
+  still counts all delivered votes, connected by `honest_in_quorum`. Honest
+  quorum is reachable: with `n = 3f+1` and `Byz.card ≤ f` there are `≥ 2f+1`
+  honest voters.
 - **Do not write spec-coupled custom tactics/elaborators.** A `tla_field` elab was
   tried and rejected: it was line-neutral, coupled to the spec, and harder to read.
   Prefer explicit hand-written branches plus small generic lemmas.

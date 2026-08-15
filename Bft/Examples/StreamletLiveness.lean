@@ -58,13 +58,13 @@ theorem length_ge_two_of_bep_pos {b : Blk} (hv : ValidChain b) (hpos : 0 < bep b
 
 /-- `NotarizedBy` is monotone in the epoch bound. -/
 theorem notarizedBy_mono {s : St n} {b : Blk} {e e' : ℕ} (h : e ≤ e') :
-    NotarizedBy n f s b e → NotarizedBy n f s b e' := by
+    NotarizedBy n Byz f s b e → NotarizedBy n Byz f s b e' := by
   rintro ⟨hN, hbep⟩
   exact ⟨hN, le_trans hbep h⟩
 
 /-- A chain-notarized nonempty block is itself notarized. -/
 theorem chain_notarized_block {s : St n} {b : Blk} {e : ℕ}
-    (hc : ChainNotarizedBy n f s b e) (hne : b ≠ []) : NotarizedBy n f s b e :=
+    (hc : ChainNotarizedBy n Byz f s b e) (hne : b ≠ []) : NotarizedBy n Byz f s b e :=
   hc b hne (List.suffix_refl b)
 
 /-! ## The honest-proposal bundle -/
@@ -76,7 +76,7 @@ honest proposals (`propValid`, `propLongest`, `proposedEpoch`, `propUniq`,
 below carry them as one bundled hypothesis per epoch instead of a
 `propCast`-plus-honestness pair. -/
 structure HonestProposal (s : St n) (e : ℕ) (b : Blk) : Prop where
-  mem : (e, b) ∈ s.castProps
+  mem : (L e, e, b) ∈ s.castProps
   honest : L e ∉ Byz
 
 /-! ## Lemma 5: the longest-chain bound and the main liveness lemma -/
@@ -88,8 +88,8 @@ theorem voted_eq_proposal_of_epoch {s : St n} (hinv : Inv n Byz Δ f L s)
     (hp : HonestProposal n Byz L s e₀ b)
     (hih : i ∉ Byz) (hv : (i, C) ∈ s.castVotes) (hbe : bep C = e₀) :
     C = b := by
-  have hCP : (bep C, C) ∈ s.castProps := hinv.votedProposed i C hih hv
-  have hCb : (e₀, C) ∈ s.castProps := by simpa [hbe] using hCP
+  have hCP : (L (bep C), bep C, C) ∈ s.castProps := hinv.votedProposed i C hih hv
+  have hCb : (L e₀, e₀, C) ∈ s.castProps := by simpa [hbe] using hCP
   exact hinv.propUniq e₀ C b hCb hp.mem hp.honest
 
 /-- A non-genesis honest vote for `C` with `bep C < e` is no longer than the
@@ -107,12 +107,12 @@ theorem voted_le_proposal_of_earlier_epoch {s : St n} (hinv : Inv n Byz Δ f L s
     have h0 : bep C = 0 := Nat.eq_zero_of_not_pos hnot
     exact hCn0 (ValidChain.eq_genesis hCval h0)
   have hCn' : C.tail ≠ [] := ne_nil_tail_of_bep_pos hCval hCpos
-  have hCp : ChainNotarizedBy n f s C.tail (bep C - 1) :=
+  have hCp : ChainNotarizedBy n Byz f s C.tail (bep C - 1) :=
     hinv.votedSeenParent i C hih hv
-  have hN : NotarizedBy n f s C.tail (bep C - 1) :=
-    chain_notarized_block n f hCp hCn'
-  have hN' : NotarizedBy n f s C.tail e :=
-    notarizedBy_mono n f (Nat.le_trans (Nat.sub_le (bep C) 1) (le_of_lt hlt)) hN
+  have hN : NotarizedBy n Byz f s C.tail (bep C - 1) :=
+    chain_notarized_block n Byz f hCp hCn'
+  have hN' : NotarizedBy n Byz f s C.tail e :=
+    notarizedBy_mono n Byz f (Nat.le_trans (Nat.sub_le (bep C) 1) (le_of_lt hlt)) hN
   have hlenP : C.tail.length ≤ b1.tail.length :=
     hinv.propLongest (e + 1) b1 hp1.mem hp1.honest C.tail hN'
   have hClen' : C.length = C.tail.length + 1 := length_tail_succ hCn
@@ -126,16 +126,16 @@ as `b₂` (`votedLongest`). -/
 theorem proposal_le_voted_of_later_epoch {s : St n} (hinv : Inv n Byz Δ f L s)
     {e : ℕ} {b2 C : Blk} {i : Fin n}
     (hp2 : HonestProposal n Byz L s (e + 2) b2)
-    (hC2 : ChainNotarizedBy n f s b2 (e + 2))
+    (hC2 : ChainNotarizedBy n Byz f s b2 (e + 2))
     (hih : i ∉ Byz) (hv : (i, C) ∈ s.castVotes)
     (hgt : e + 2 < bep C) :
     b2.length ≤ C.tail.length := by
-  have hlong : ∀ C' : Blk, NotarizedBy n f s C' (bep C - 1) → C'.length ≤ C.tail.length :=
+  have hlong : ∀ C' : Blk, NotarizedBy n Byz f s C' (bep C - 1) → C'.length ≤ C.tail.length :=
     hinv.votedLongest i C hih hv
   have hb2n : b2 ≠ [] := ne_nil_of_valid (hinv.propValid (e + 2) b2 hp2.mem hp2.honest)
-  have hb2N : NotarizedBy n f s b2 (e + 2) := chain_notarized_block n f hC2 hb2n
+  have hb2N : NotarizedBy n Byz f s b2 (e + 2) := chain_notarized_block n Byz f hC2 hb2n
   have hle' : e + 2 ≤ bep C - 1 := by omega
-  have hb2N' : NotarizedBy n f s b2 (bep C - 1) := notarizedBy_mono n f hle' hb2N
+  have hb2N' : NotarizedBy n Byz f s b2 (bep C - 1) := notarizedBy_mono n Byz f hle' hb2N
   exact hlong b2 hb2N'
 
 /-- **The longest-chain bound**: a block notarized by `e+2` is no longer
@@ -146,11 +146,11 @@ theorem longest_chain_by (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ f
     (hp1 : HonestProposal n Byz L s (e + 1) b1)
     (hp2 : HonestProposal n Byz L s (e + 2) b2)
     (hG01 : b0.length < b1.length) (hG12 : b1.length < b2.length) :
-    ∀ C : Blk, NotarizedBy n f s C (e + 2) → C.length ≤ b2.length := by
+    ∀ C : Blk, NotarizedBy n Byz f s C (e + 2) → C.length ≤ b2.length := by
   intro C hC
   rcases hC with ⟨hN, hbepC⟩
   rcases honest_in_quorum n Byz f hB hN with ⟨i0, hi0, hih⟩
-  have hv0 : (i0, C) ∈ s.castVotes := (mem_votersCast n).mp hi0
+  have hv0 : (i0, C) ∈ s.castVotes := ((mem_votersCast n Byz).mp hi0).1
   have hCval : ValidChain C := hinv.voteValid i0 C hih hv0
   by_cases h1 : bep C = e
   · have hC0 : C = b0 := voted_eq_proposal_of_epoch n Byz Δ f L hinv hp0 hih hv0 h1
@@ -181,11 +181,11 @@ theorem main_liveness_lemma (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz �
     (hp1 : HonestProposal n Byz L s (e + 1) b1)
     (hp2 : HonestProposal n Byz L s (e + 2) b2)
     (hG01 : b0.length < b1.length) (hG12 : b1.length < b2.length)
-    (hC2 : ChainNotarizedBy n f s b2 (e + 2)) :
-    ∀ C : Blk, C ≠ b2 → C.length = b2.length → ¬ NotarizedCast n f s C := by
+    (hC2 : ChainNotarizedBy n Byz f s b2 (e + 2)) :
+    ∀ C : Blk, C ≠ b2 → C.length = b2.length → ¬ NotarizedCast n Byz f s C := by
   intro C hCne hClen hNC
   rcases honest_in_quorum n Byz f hB hNC with ⟨i0, hi0, hih⟩
-  have hv0 : (i0, C) ∈ s.castVotes := (mem_votersCast n).mp hi0
+  have hv0 : (i0, C) ∈ s.castVotes := ((mem_votersCast n Byz).mp hi0).1
   have hCval : ValidChain C := hinv.voteValid i0 C hih hv0
   by_cases h1 : bep C = e
   · have hC0 : C = b0 := voted_eq_proposal_of_epoch n Byz Δ f L hinv hp0 hih hv0 h1
@@ -224,18 +224,18 @@ theorem main_liveness_lemma (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz �
 /-- A block is final when it is the middle of three adjacent notarized
 blocks with consecutive epochs on a fully notarized chain. -/
 def ChainNotarizedCast (s : St n) (c : Blk) : Prop :=
-  ∀ d : Blk, d ≠ [] → d <:+ c → NotarizedCast n f s d
+  ∀ d : Blk, d ≠ [] → d <:+ c → NotarizedCast n Byz f s d
 
 /-- A block is final: three adjacent notarized blocks with consecutive
 positive epochs on a notarized chain. -/
 def Finalized (s : St n) (e : ℕ) (b0 b b2 : Blk) : Prop :=
   0 < e ∧ bep b0 = e ∧ bep b = e + 1 ∧ bep b2 = e + 2 ∧
   b = (e + 1) :: b0 ∧ b2 = (e + 2) :: b ∧
-  ChainNotarizedCast n f s b2
+  ChainNotarizedCast n Byz f s b2
 
 /-- Some block is final. -/
 def FinalSome (s : St n) : Prop :=
-  ∃ e b0 b b2, Finalized n f s e b0 b b2
+  ∃ e b0 b b2, Finalized n Byz f s e b0 b b2
 
 /-- **Adjacency**: four honest proposals at `e…e+3` with strictly growing
 lengths and the last two chain-notarized — the `e+3` proposal extends the
@@ -250,7 +250,7 @@ theorem next_proposal_extends (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz
     (hp3 : HonestProposal n Byz L s (e + 3) b3)
     (hG01 : b0.length < b1.length) (hG12 : b1.length < b2.length)
     (hG23 : b2.length < b3.length)
-    (hC2 : ChainNotarizedBy n f s b2 (e + 2)) (hC3 : ChainNotarizedBy n f s b3 (e + 3)) :
+    (hC2 : ChainNotarizedBy n Byz f s b2 (e + 2)) (hC3 : ChainNotarizedBy n Byz f s b3 (e + 3)) :
     b3 = (e + 3) :: b2 := by
   have hb2n : b2 ≠ [] := ne_nil_of_valid (hinv.propValid (e + 2) b2 hp2.mem hp2.honest)
   have hb3n : b3 ≠ [] := ne_nil_of_valid (hinv.propValid (e + 3) b3 hp3.mem hp3.honest)
@@ -270,24 +270,24 @@ theorem next_proposal_extends (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz
         · rw [hg]
           change 1 ≤ b2.length
           exact le_trans (by omega : 1 ≤ 2) hb2ge2
-        · have hN3 : NotarizedBy n f s b3.tail (e + 2) := by
-            have hc : ChainNotarizedBy n f s b3.tail (e + 2) :=
+        · have hN3 : NotarizedBy n Byz f s b3.tail (e + 2) := by
+            have hc : ChainNotarizedBy n Byz f s b3.tail (e + 2) :=
               hinv.proposedSeenParent (e + 3) b3 hp3.mem hp3.honest
-            exact chain_notarized_block n f hc
+            exact chain_notarized_block n Byz f hc
               (ne_nil_tail_of_bep_pos (hinv.propValid (e + 3) b3 hp3.mem hp3.honest) hb3pos)
           exact longest_chain_by n Byz Δ f L hB hinv hp0 hp1 hp2 hG01 hG12 b3.tail hN3
-      · have hN : NotarizedBy n f s b2 (e + 2) := chain_notarized_block n f hC2 hb2n
+      · have hN : NotarizedBy n Byz f s b2 (e + 2) := chain_notarized_block n Byz f hC2 hb2n
         exact hinv.propLongest (e + 3) b3 hp3.mem hp3.honest b2 hN
     by_contra hne
     by_cases hg : b3.tail = [0]
     · have hb3taillen : b3.tail.length = 1 := by rw [hg]; rfl
       omega
-    · have hN3 : NotarizedBy n f s b3.tail (e + 2) := by
-        have hc : ChainNotarizedBy n f s b3.tail (e + 2) :=
+    · have hN3 : NotarizedBy n Byz f s b3.tail (e + 2) := by
+        have hc : ChainNotarizedBy n Byz f s b3.tail (e + 2) :=
           hinv.proposedSeenParent (e + 3) b3 hp3.mem hp3.honest
-        exact chain_notarized_block n f hc
+        exact chain_notarized_block n Byz f hc
           (ne_nil_tail_of_bep_pos (hinv.propValid (e + 3) b3 hp3.mem hp3.honest) hb3pos)
-      have hN3' : NotarizedCast n f s b3.tail := hN3.1
+      have hN3' : NotarizedCast n Byz f s b3.tail := hN3.1
       exact (main_liveness_lemma n Byz Δ f L hB hinv hp0 hp1 hp2 hG01 hG12 hC2
         b3.tail hne hlen hN3')
   have hb3eq : b3 = bep b3 :: b3.tail := by
@@ -310,9 +310,9 @@ theorem liveness_finality (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ 
     (hp4 : HonestProposal n Byz L s (e + 4) b4)
     (hG01 : b0.length < b1.length) (hG12 : b1.length < b2.length)
     (hG23 : b2.length < b3.length) (hG34 : b3.length < b4.length)
-    (hC2 : ChainNotarizedBy n f s b2 (e + 2)) (hC3 : ChainNotarizedBy n f s b3 (e + 3))
-    (hC4 : ChainNotarizedBy n f s b4 (e + 4)) :
-    Finalized n f s (e + 2) b2 b3 b4 := by
+    (hC2 : ChainNotarizedBy n Byz f s b2 (e + 2)) (hC3 : ChainNotarizedBy n Byz f s b3 (e + 3))
+    (hC4 : ChainNotarizedBy n Byz f s b4 (e + 4)) :
+    Finalized n Byz f s (e + 2) b2 b3 b4 := by
   have hAdj23 : b3 = (e + 3) :: b2 :=
     next_proposal_extends n Byz Δ f L hB hinv hp0 hp1 hp2 hp3 hG01 hG12 hG23 hC2 hC3
   have hAdj34 : b4 = (e + 4) :: b3 :=
