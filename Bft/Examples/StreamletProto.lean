@@ -285,8 +285,12 @@ def PNext : Action (St n) := fun s s' =>
 /-- Initially: round 0, nothing in flight, nothing seen. -/
 def PInit : StatePred (St n) := { s | s.now = 0 ∧ s.inflight = ∅ ∧ s.seen = ∅ ∧ s.castVotes = ∅ ∧ s.castProps = ∅ }
 
+/-- The protocol specification, bundled (for `Spec.init_invariant`). -/
+def ProtoSpec (n : ℕ) (Byz : Finset (Fin n)) (Δ GST f : ℕ) (L : ℕ → Fin n) : Spec (St n) (St n) :=
+  ⟨PInit n, PNext n Byz Δ GST f L, vars n⟩
+
 /-- The protocol specification. -/
-def PSpec : Pred (St n) := tlaAnd (statePred (PInit n)) (stutAlways (PNext n Byz Δ GST f L) (vars n))
+def PSpec : Pred (St n) := (ProtoSpec n Byz Δ GST f L).pred
 
 /-! ## Monotonicity and stability lemmas -/
 
@@ -469,6 +473,27 @@ theorem notarizedBy_stable_cast_vote {s s' : St n} {i : Fin n} {b : Blk}
       simp [Finset.filter_insert, hbC]
     simpa [hv] using hq
 
+/-- The cast histories of `s'` contain those of `s`. -/
+def castGrows (s s' : St n) : Prop :=
+  s.castVotes ⊆ s'.castVotes ∧ s.castProps ⊆ s'.castProps
+
+/-- Every protocol step preserves (grows) the cast histories. -/
+theorem pnext_castGrows {s s' : St n} (hstep : PNext n Byz Δ GST f L s s') : castGrows n s s' := by
+  rcases hstep with htick | ⟨e, b, hpr⟩ | ⟨i, b, hv⟩ | ⟨m, hbyzm, hval, hs⟩ | ⟨m, hd⟩
+  · obtain ⟨_hnow, hinf, _hseen, hcv, hcp, _hguard⟩ := htick
+    constructor <;> grind
+  · obtain ⟨_hprior, _hL, _hval, _hbep, _hcur, _hlong, hsend⟩ := hpr
+    exact ⟨send_castVotes_mono n hsend, send_castProps_mono n hsend⟩
+  · obtain ⟨_hi, _hval, _hbpos, _hbcur, _hfirst, _hprop, _hlong, hsend⟩ := hv
+    exact ⟨send_castVotes_mono n hsend, send_castProps_mono n hsend⟩
+  · exact ⟨send_castVotes_mono n hs, send_castProps_mono n hs⟩
+  · obtain ⟨hmem, _hguard, _hnow, hinf, hseen, hcv, hcp⟩ := hd
+    constructor <;> grind
+
+/-- `propCast` is monotone in the cast history. -/
+theorem propCast_mono {s s' : St n} (h : castGrows n s s') {e : ℕ} {b : Blk} :
+    propCast n L s e b → propCast n L s' e b := fun hp => h.2 hp
+
 theorem init_inv : ∀ s, s ∈ PInit n → s ∈ InvState n Byz Δ f L := by
   intro s hs
   obtain ⟨_hnow, hinf, hseen, hcv, hcp⟩ := hs
@@ -588,7 +613,7 @@ theorem step_inv : ∀ s s', StutAction (PNext n Byz Δ GST f L) (vars n) s s' �
 
 theorem spec_entails_inv :
     Entails (PSpec n Byz Δ GST f L) (always (statePred (InvState n Byz Δ f L))) :=
-  init_invariant_stut (PInit n) (PNext n Byz Δ GST f L) (vars n) (InvState n Byz Δ f L)
+  (ProtoSpec n Byz Δ GST f L).init_invariant (InvState n Byz Δ f L)
     (init_inv n Byz Δ f L) (step_inv n Byz Δ GST f L)
 
 end Bft.Examples.StreamletProto

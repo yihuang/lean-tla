@@ -94,6 +94,19 @@ def SF_v {σ : Type u} {α : Type v} (A : Action σ) (v : σ → α) : Pred σ :
 def globalJustice {σ : Type u} (r : Action σ) : Pred σ :=
   always (eventually (actionPred r))
 
+/-! ## Spec bundles -/
+
+/-- A specification bundle: the initial condition, the next-state relation,
+and the state frame (`v` in `[A]_v`). -/
+structure Spec (σ : Type u) (α : Type v) where
+  Init : StatePred σ
+  Next : Action σ
+  vars : σ → α
+
+/-- The temporal formula of a `Spec`: `Init ∧ □[Next]_vars`. -/
+def Spec.pred (S : Spec σ α) : Pred σ :=
+  tlaAnd (statePred S.Init) (stutAlways S.Next S.vars)
+
 /-! ## Pointwise normal forms
 
 The value of a temporal formula at a suffix reduces to its value at a

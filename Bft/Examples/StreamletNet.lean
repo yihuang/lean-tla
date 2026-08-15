@@ -131,8 +131,12 @@ def vars (n : ℕ) : St n → St n := id
 /-- Initially: round 0, nothing in flight, nothing seen. -/
 def Init : StatePred (St n) := { s | s.now = 0 ∧ s.inflight = ∅ ∧ s.seen = ∅ ∧ s.castVotes = ∅ ∧ s.castProps = ∅ }
 
+/-- The specification, bundled (for `Spec.init_invariant`). -/
+def NetSpec (n : ℕ) (Byz : Finset (Fin n)) (Δ GST : ℕ) : Spec (St n) (St n) :=
+  ⟨Init n, Next n Byz Δ GST, vars n⟩
+
 /-- The specification. -/
-def Hspec : Pred (St n) := tlaAnd (statePred (Init n)) (stutAlways (Next n Byz Δ GST) (vars n))
+def Hspec : Pred (St n) := (NetSpec n Byz Δ GST).pred
 
 /-! ## Fact 1, safety half: no late delivery
 
@@ -170,7 +174,7 @@ theorem step_inv : ∀ s s', StutAction (Next n Byz Δ GST) (vars n) s s' →
 /-- The safety half of the delivery guarantee is an invariant of the spec. -/
 theorem delivery_safety :
     Entails (Hspec n Byz Δ GST) (always (statePred (NoOverdue n Byz Δ GST))) :=
-  init_invariant_stut (Init n) (Next n Byz Δ GST) (vars n) (NoOverdue n Byz Δ GST)
+  (NetSpec n Byz Δ GST).init_invariant (NoOverdue n Byz Δ GST)
     (init_inv n Byz Δ GST) (step_inv n Byz Δ GST)
 
 /-- Once past a message's deadline, an honest-sent message is no longer in

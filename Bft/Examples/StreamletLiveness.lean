@@ -26,7 +26,7 @@ namespace Bft.Examples.StreamletLiveness
 
 open Bft
 open Bft.Examples.StreamletNet (Body Msg St)
-open Bft.Examples.Streamlet (Blk ValidChain bep quorum mem_tail_of_bep_pos)
+open Bft.Examples.Streamlet (Blk ValidChain bep quorum mem_tail_of_bep_pos Consecutive)
 open Bft.Examples.StreamletProto
 
 variable (n : ℕ) (Byz : Finset (Fin n)) (Δ GST f : ℕ) (L : ℕ → Fin n)
@@ -226,12 +226,10 @@ blocks with consecutive epochs on a fully notarized chain. -/
 def ChainNotarizedCast (s : St n) (c : Blk) : Prop :=
   ∀ d : Blk, d ≠ [] → d <:+ c → NotarizedCast n Byz f s d
 
-/-- A block is final: three adjacent notarized blocks with consecutive
-positive epochs on a notarized chain. -/
+/-- A block is final: the middle `b` of a `Consecutive` triple of
+notarized blocks with positive starting epoch on a notarized chain. -/
 def Finalized (s : St n) (e : ℕ) (b0 b b2 : Blk) : Prop :=
-  0 < e ∧ bep b0 = e ∧ bep b = e + 1 ∧ bep b2 = e + 2 ∧
-  b = (e + 1) :: b0 ∧ b2 = (e + 2) :: b ∧
-  ChainNotarizedCast n Byz f s b2
+  0 < e ∧ bep b0 = e ∧ Consecutive b0 b b2 ∧ ChainNotarizedCast n Byz f s b2
 
 /-- Some block is final. -/
 def FinalSome (s : St n) : Prop :=
@@ -319,10 +317,21 @@ theorem liveness_finality (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ 
     next_proposal_extends n Byz Δ f L hB hinv hp1 hp2 hp3 hp4 hG12 hG23 hG34 hC3 hC4
   refine ⟨Nat.succ_pos (e + 1),
     hinv.proposedEpoch (e + 2) b2 hp2.mem hp2.honest,
-    hinv.proposedEpoch (e + 3) b3 hp3.mem hp3.honest,
-    hinv.proposedEpoch (e + 4) b4 hp4.mem hp4.honest,
-    hAdj23, hAdj34, ?_⟩
-  intro d hd hdsuf
-  exact (hC4 d hd hdsuf).1
+    ?_, ?_⟩
+  · -- `Consecutive b2 b3 b4`: tail equalities from the two adjacency
+    -- lemmas, epoch equalities from `proposedEpoch`
+    constructor
+    · rw [hAdj34]; rfl
+    · constructor
+      · rw [hAdj23]; rfl
+      · constructor
+        · have hbep2 : bep b2 = e + 2 := hinv.proposedEpoch (e + 2) b2 hp2.mem hp2.honest
+          have hbep3 : bep b3 = e + 3 := hinv.proposedEpoch (e + 3) b3 hp3.mem hp3.honest
+          omega
+        · have hbep3 : bep b3 = e + 3 := hinv.proposedEpoch (e + 3) b3 hp3.mem hp3.honest
+          have hbep4 : bep b4 = e + 4 := hinv.proposedEpoch (e + 4) b4 hp4.mem hp4.honest
+          omega
+  · intro d hd hdsuf
+    exact (hC4 d hd hdsuf).1
 
 end Bft.Examples.StreamletLiveness

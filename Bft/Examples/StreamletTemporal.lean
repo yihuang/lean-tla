@@ -33,54 +33,6 @@ open Bft.Examples.StreamletLiveness
 
 variable (n : ℕ) (Byz : Finset (Fin n)) (Δ GST f : ℕ) (L : ℕ → Fin n)
 
-/-! ## Monotonicity under protocol steps -/
-
-/-- The cast histories of `s'` contain those of `s`. -/
-def castGrows (s s' : St n) : Prop :=
-  s.castVotes ⊆ s'.castVotes ∧ s.castProps ⊆ s'.castProps
-
-/-- Every protocol step preserves (grows) the cast histories. -/
-theorem pnext_castGrows {s s' : St n} (hstep : PNext n Byz Δ GST f L s s') : castGrows n s s' := by
-  rcases hstep with htick | ⟨e, b, hpr⟩ | ⟨i, b, hv⟩ | ⟨m, hbyzm, hval, hs⟩ | ⟨m, hd⟩
-  · obtain ⟨_hnow, hinf, _hseen, hcv, hcp, _hguard⟩ := htick
-    constructor <;> grind
-  · obtain ⟨_hprior, _hL, _hval, _hbep, _hcur, _hlong, hsend⟩ := hpr
-    exact ⟨send_castVotes_mono n hsend, send_castProps_mono n hsend⟩
-  · obtain ⟨_hi, _hval, _hbpos, _hbcur, _hfirst, _hprop, _hlong, hsend⟩ := hv
-    exact ⟨send_castVotes_mono n hsend, send_castProps_mono n hsend⟩
-  · exact ⟨send_castVotes_mono n hs, send_castProps_mono n hs⟩
-  · obtain ⟨hmem, _hguard, _hnow, hinf, hseen, hcv, hcp⟩ := hd
-    constructor <;> grind
-
-/-- `propCast` is monotone in the cast history. -/
-theorem propCast_mono {s s' : St n} (h : castGrows n s s') {e : ℕ} {b : Blk} :
-    propCast n L s e b → propCast n L s' e b := fun hp => h.2 hp
-
-/-- `votersCast` is monotone in the cast history. -/
-theorem votersCast_mono {s s' : St n} (h : castGrows n s s') (b : Blk) :
-    votersCast n Byz s b ⊆ votersCast n Byz s' b := by
-  intro i hi
-  rw [mem_votersCast n Byz] at hi ⊢
-  exact ⟨h.1 hi.1, hi.2⟩
-
-/-- `NotarizedCast` is monotone in the cast history. -/
-theorem notarizedCast_mono {s s' : St n} (h : castGrows n s s') {b : Blk} :
-    NotarizedCast n Byz f s b → NotarizedCast n Byz f s' b := by
-  intro hN
-  exact le_trans hN (Finset.card_le_card (votersCast_mono n Byz h b))
-
-/-- `NotarizedBy` is monotone in the cast history. -/
-theorem notarizedBy_mono_send {s s' : St n} (h : castGrows n s s') {b : Blk} {e : ℕ} :
-    NotarizedBy n Byz f s b e → NotarizedBy n Byz f s' b e := by
-  rintro ⟨hN, hbep⟩
-  exact ⟨notarizedCast_mono n Byz f h hN, hbep⟩
-
-/-- `ChainNotarizedBy` is monotone in the cast history. -/
-theorem chainNotarizedBy_mono_send {s s' : St n} (h : castGrows n s s') {b : Blk} {e : ℕ} :
-    ChainNotarizedBy n Byz f s b e → ChainNotarizedBy n Byz f s' b e := by
-  intro hc d hd hs
-  exact notarizedBy_mono_send n Byz f h (hc d hd hs)
-
 /-! ## Persistence along behaviors -/
 
 /-- `Inv` holds at every point of a `PSpec` behavior. -/
@@ -120,7 +72,7 @@ theorem chainNotarizedBy_persist_along {e : Behavior (St n)}
       have hstep := hS (k + j)
       rcases hstep with hnext | hstut
       · have hmono : ChainNotarizedBy n Byz f (e (k + j + 1)) b e' :=
-          chainNotarizedBy_mono_send n Byz f (pnext_castGrows n Byz Δ GST f L hnext) ih
+          chainNotarizedBy_mono_cast n Byz f (pnext_castGrows n Byz Δ GST f L hnext).1 ih
         simpa [Nat.add_assoc] using hmono
       · have hstut' : e (k + j + 1) = e (k + j) := hstut
         have hidx : k + (j + 1) = k + j + 1 := by omega
