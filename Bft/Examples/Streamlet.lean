@@ -181,7 +181,8 @@ theorem init_inv : ∀ s, s ∈ Init n → s ∈ InvState n f Byz := by
   obtain ⟨h0, h1⟩ := hs
   constructor <;> simp [h1]
 
-theorem step_inv : ∀ s s', StutAction (Next n f Byz) (vars n) s s' → s ∈ InvState n f Byz → s' ∈ InvState n f Byz := by
+theorem step_inv : ∀ s s', StutAction (Next n f Byz) (vars n) s s' →
+    s ∈ InvState n f Byz → s' ∈ InvState n f Byz := by
   intro s s' hstep hinv
   rcases hstep with hnext | hstut
   swap
@@ -200,6 +201,23 @@ theorem safety : Entails (Hspec n f Byz) (always (statePred (InvState n f Byz)))
 @[tla_msgs] theorem mem_voters {s : St n} {i : Fin n} {b : Blk} :
     i ∈ voters n s b ↔ (i, b) ∈ s.msgs := by
   simp [voters]
+
+/-- A quorum of votes on a block makes it valid: some voter exists, and
+every vote cast at an invariant state is on a well-formed chain. -/
+theorem valid_of_quorum {s : St n} (hs : Inv n f Byz s) {b : Blk}
+    (hq : quorum f ≤ (voters n s b).card) : ValidChain b := by
+  have hpos : 0 < (voters n s b).card := by
+    rw [quorum] at hq
+    omega
+  obtain ⟨i, hi⟩ := Finset.card_pos.mp hpos
+  rw [mem_voters] at hi
+  exact hs.valid i b hi
+
+/-- A quorum of votes on a block proves it contains genesis (as its last
+element). -/
+theorem genesis_mem_of_quorum {s : St n} (hs : Inv n f Byz s) {b : Blk}
+    (hq : quorum f ≤ (voters n s b).card) : 0 ∈ b :=
+  (valid_of_quorum n f Byz hs hq).1
 
 /-- A valid chain whose epoch is 0 can only be genesis. -/
 theorem ValidChain.eq_genesis {c : Blk} (hv : ValidChain c) (he : bep c = 0) : c = [0] := by
@@ -249,22 +267,15 @@ theorem unique_notarized (hn : n = 3 * f + 1) (hB : Byz.card ≤ f)
     {s : St n} (hs : Inv n f Byz s) {b₁ b₂ : Blk}
     (hn1 : Notarized n f s b₁) (hn2 : Notarized n f s b₂) (he : bep b₁ = bep b₂) :
     b₁ = b₂ := by
-  have hv := hs.valid
   have h1 := hs.honestUniq
-  have valid_of_quorum : ∀ {b : Blk}, quorum f ≤ (voters n s b).card → ValidChain b := by
-    intro b hq
-    rw [quorum] at hq
-    obtain ⟨i, hi⟩ := Finset.card_pos.mp (by omega : 0 < (voters n s b).card)
-    rw [mem_voters] at hi
-    exact hv i b hi
   rcases hn1 with hg1 | hq1
   · subst hg1
     rcases hn2 with hg2 | hq2
     · exact hg2.symm
-    · exact (ValidChain.eq_genesis (valid_of_quorum hq2) he.symm).symm
+    · exact (ValidChain.eq_genesis (valid_of_quorum n f Byz hs hq2) he.symm).symm
   · rcases hn2 with hg2 | hq2
     · subst hg2
-      exact ValidChain.eq_genesis (valid_of_quorum hq1) he
+      exact ValidChain.eq_genesis (valid_of_quorum n f Byz hs hq1) he
     · obtain ⟨i, hih, hi1, hi2⟩ := exists_honest_voter_of_two_quorums n f Byz hn hB hq1 hq2
       exact h1 i b₁ b₂ hih hi1 hi2 he
 
@@ -297,8 +308,7 @@ theorem consistency_of_inv (hn : n = 3 * f + 1) (hB : Byz.card ≤ f)
     ¬ Notarized n f s X := by
   rcases hConsec with ⟨hNextMid, hMidPrev, heMid, heNext⟩
   rcases hConf with ⟨hXne, hXlen⟩
-  have hv := hs.valid
-  have h5 := hs.lengthMono
+  have hlenMono := hs.lengthMono
   intro hnotX
   -- The three blocks are nonempty, notarized (suffixes of bNext), and
   -- bNext is genuinely voted, hence valid; so genesis lies in all of them.
@@ -311,12 +321,7 @@ theorem consistency_of_inv (hn : n = 3 * f + 1) (hB : Byz.card ≤ f)
   have NextNe0 : bNext ≠ [0] := by
     intro hc; rw [hc] at heNext; simp [bep] at heNext
   have qNext : quorum f ≤ (voters n s bNext).card := nNext.resolve_left NextNe0
-  have h0Next : 0 ∈ bNext := by
-    have hq := qNext
-    rw [quorum] at hq
-    obtain ⟨i, hi⟩ := Finset.card_pos.mp (by omega : 0 < (voters n s bNext).card)
-    rw [mem_voters] at hi
-    exact (hv i bNext hi).1
+  have h0Next : 0 ∈ bNext := genesis_mem_of_quorum n f Byz hs qNext
   have h0Mid : 0 ∈ bMid := hNextMid ▸ mem_tail_of_bep_pos h0Next bepNextPos
   have h0Prev : 0 ∈ bPrev := hMidPrev ▸ mem_tail_of_bep_pos h0Mid bepMidPos
   have nePrev : bPrev ≠ [] := by intro hc; rw [hc] at h0Prev; simp at h0Prev
@@ -344,8 +349,9 @@ theorem consistency_of_inv (hn : n = 3 * f + 1) (hB : Byz.card ≤ f)
     · -- epoch X < epoch bPrev: honest i voted X (earlier) and bPrev
       have PrevNe0 : bPrev ≠ [0] := by
         intro hc; rw [hc] at hlt2; simp [bep] at hlt2
-      obtain ⟨i, hih, hiX, hiPrev⟩ := exists_honest_voter_of_two_quorums n f Byz hn hB qX (nPrev.resolve_left PrevNe0)
-      have hle := h5 i X bPrev hih hiX hiPrev hlt2
+      obtain ⟨i, hih, hiX, hiPrev⟩ :=
+        exists_honest_voter_of_two_quorums n f Byz hn hB qX (nPrev.resolve_left PrevNe0)
+      have hle := hlenMono i X bPrev hih hiX hiPrev hlt2
       rw [List.length_tail, List.length_tail] at hle
       omega
     · -- epoch X = epoch bPrev: Lemma 1 forces X = bPrev, too short
@@ -363,7 +369,7 @@ theorem consistency_of_inv (hn : n = 3 * f + 1) (hB : Byz.card ≤ f)
       omega
     · -- epoch X > epoch bNext: honest i voted bNext (earlier) and X
       obtain ⟨i, hih, hiX, hiNext⟩ := exists_honest_voter_of_two_quorums n f Byz hn hB qX qNext
-      have hle := h5 i bNext X hih hiNext hiX hgt2
+      have hle := hlenMono i bNext X hih hiNext hiX hgt2
       rw [List.length_tail, List.length_tail] at hle
       omega
 

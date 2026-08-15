@@ -26,8 +26,8 @@ import Bft.Examples.StreamletLiveness
 namespace Bft.Examples.StreamletTemporal
 
 open Bft
-open Bft.Examples.StreamletNet (Body Msg St vars)
-open Bft.Examples.Streamlet (Blk ValidChain bep quorum)
+open Bft.Examples.StreamletNet (St vars)
+open Bft.Examples.Streamlet (Blk)
 open Bft.Examples.StreamletProto
 open Bft.Examples.StreamletLiveness
 
@@ -143,13 +143,21 @@ def VoteAssumption (e : ℕ) : Pred (St n) :=
     (statePred {s | curEpoch Δ s.now = e ∧
       ∃ b : Blk, propCast n L s e b ∧ ChainNotarizedBy n Byz f s b e})
 
+/-- The clock advances through every epoch. -/
+def ClockAssumptions : Pred (St n) := fun e => ∀ e' : ℕ, ClockAssumption n Δ e' e
+
+/-- Every epoch's honest leader eventually proposes. -/
+def ProposeAssumptions : Pred (St n) := fun e => ∀ e' : ℕ, ProposeAssumption n Δ L e' e
+
+/-- Every epoch's proposal is eventually chain-notarized. -/
+def VoteAssumptions : Pred (St n) := fun e => ∀ e' : ℕ, VoteAssumption n Byz Δ f L e' e
+
 /-- The honest-timing spec: the protocol plus per-epoch clock/propose/vote
 assumptions. -/
 def H : Pred (St n) :=
   tlaAnd (PSpec n Byz Δ GST f L)
-    (tlaAnd (fun e => ∀ e' : ℕ, ClockAssumption n Δ e' e)
-      (tlaAnd (fun e => ∀ e' : ℕ, ProposeAssumption n Δ L e' e)
-        (fun e => ∀ e' : ℕ, VoteAssumption n Byz Δ f L e' e)))
+    (tlaAnd (ClockAssumptions n Δ)
+      (tlaAnd (ProposeAssumptions n Δ L) (VoteAssumptions n Byz Δ f L)))
 
 /-! ## The per-epoch step -/
 
@@ -271,6 +279,7 @@ theorem window_progress (e0 : ℕ) (k : ℕ) (hk : k ≤ 5) {e : Behavior (St n)
             ChainNotarizedBy n Byz f (e (n' + j)) b e' := by simpa using hfact
         have hW' : WindowDone n Byz Δ f L e0 (e (n' + j)) :=
           windowDone_advance n Byz Δ GST f L hS
+            -- `e n'` unfolds to `(ωSequence.drop n' e).head`
             (by simpa [Cslib.ωSequence.drop, Cslib.ωSequence.head] using hW) hcur' hcurj' hfact'
         have hrank : curEpoch Δ (e (n' + j)).now = e0 + 5 - (k - 1) := by
           have hsub : e' + 1 = e0 + 5 - (k - 1) := by
@@ -302,9 +311,7 @@ theorem liveness_spec (hB : Byz.card ≤ f) (e0 : ℕ) (he0 : 0 < e0)
     intro e'' he0'' hlt''
     have hlt0 : e'' < e0 := by rw [hcur0] at hlt''; exact hlt''
     exact (not_lt_of_ge he0'' hlt0).elim
-  have hrank : curEpoch Δ (e n').now = e0 + 5 - 5 := by
-    rw [hcur0]
-    exact (Nat.add_sub_cancel e0 5).symm
+  have hrank : curEpoch Δ (e n').now = e0 + 5 - 5 := by omega
   have h5 := window_progress n Byz Δ GST f L e0 5 (by omega) hH
   rcases (h5 n' (by simpa using ⟨hW, hrank⟩)) with ⟨j, hj⟩
   rcases hj with ⟨hW', hcur'⟩

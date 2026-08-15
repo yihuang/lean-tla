@@ -25,11 +25,11 @@ import Bft.Examples.StreamletProto
 namespace Bft.Examples.StreamletLiveness
 
 open Bft
-open Bft.Examples.StreamletNet (Body Msg St)
-open Bft.Examples.Streamlet (Blk ValidChain bep quorum mem_tail_of_bep_pos Consecutive)
+open Bft.Examples.StreamletNet (St)
+open Bft.Examples.Streamlet (Blk ValidChain bep mem_tail_of_bep_pos Consecutive)
 open Bft.Examples.StreamletProto
 
-variable (n : ℕ) (Byz : Finset (Fin n)) (Δ GST f : ℕ) (L : ℕ → Fin n)
+variable (n : ℕ) (Byz : Finset (Fin n)) (Δ f : ℕ) (L : ℕ → Fin n)
 
 /-! ## Block and notarization helper lemmas -/
 
@@ -155,7 +155,8 @@ theorem vote_case_of_proposals {s : St n} (hinv : Inv n Byz Δ f L s)
     · exact Or.inr (Or.inl (voted_eq_proposal_of_epoch n Byz Δ f L hinv hp1 hih hv h2))
     · by_cases h3 : bep C = e + 2
       · exact Or.inr (Or.inr (Or.inl (voted_eq_proposal_of_epoch n Byz Δ f L hinv hp2 hih hv h3)))
-      · exact Or.inr (Or.inr (Or.inr (by omega)))
+      · have hsplit : bep C < e ∨ e + 2 < bep C := by omega
+        exact Or.inr (Or.inr (Or.inr hsplit))
 
 /-- **The longest-chain bound**: a block notarized by `e+2` is no longer
 than the honest `b₂`. -/
@@ -325,9 +326,10 @@ theorem liveness_finality (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ 
     next_proposal_extends n Byz Δ f L hB hinv hp0 hp1 hp2 hp3 hG01 hG12 hG23 hC2 hC3
   have hAdj34 : b4 = (e + 4) :: b3 :=
     next_proposal_extends n Byz Δ f L hB hinv hp1 hp2 hp3 hp4 hG12 hG23 hG34 hC3 hC4
-  refine ⟨Nat.succ_pos (e + 1),
-    hinv.proposedEpoch (e + 2) b2 hp2.mem hp2.honest,
-    ?_, ?_⟩
+  have hbep2 : bep b2 = e + 2 := hinv.proposedEpoch (e + 2) b2 hp2.mem hp2.honest
+  have hbep3 : bep b3 = e + 3 := hinv.proposedEpoch (e + 3) b3 hp3.mem hp3.honest
+  have hbep4 : bep b4 = e + 4 := hinv.proposedEpoch (e + 4) b4 hp4.mem hp4.honest
+  refine ⟨Nat.succ_pos (e + 1), hbep2, ?_, ?_⟩
   · -- `Consecutive b2 b3 b4`: tail equalities from the two adjacency
     -- lemmas, epoch equalities from `proposedEpoch`
     constructor
@@ -335,12 +337,8 @@ theorem liveness_finality (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ 
     · constructor
       · rw [hAdj23]; rfl
       · constructor
-        · have hbep2 : bep b2 = e + 2 := hinv.proposedEpoch (e + 2) b2 hp2.mem hp2.honest
-          have hbep3 : bep b3 = e + 3 := hinv.proposedEpoch (e + 3) b3 hp3.mem hp3.honest
-          omega
-        · have hbep3 : bep b3 = e + 3 := hinv.proposedEpoch (e + 3) b3 hp3.mem hp3.honest
-          have hbep4 : bep b4 = e + 4 := hinv.proposedEpoch (e + 4) b4 hp4.mem hp4.honest
-          omega
+        · omega
+        · omega
   · intro d hd hdsuf
     exact (hC4 d hd hdsuf).1
 

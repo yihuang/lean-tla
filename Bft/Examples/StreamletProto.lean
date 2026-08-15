@@ -60,7 +60,7 @@ import Bft.Examples.StreamletNet
 namespace Bft.Examples.StreamletProto
 
 open Bft
-open Bft.Examples.StreamletNet (Body Msg St Send Deliver Tick Next Hspec NoOverdue vars castVotesAdd castPropsAdd)
+open Bft.Examples.StreamletNet (Body Msg St Send Deliver Tick Next Init vars castVotesAdd castPropsAdd)
 open Bft.Examples.Streamlet (Blk ValidChain bep quorum)
 
 variable (n : ℕ) (Byz : Finset (Fin n)) (Δ GST f : ℕ) (L : ℕ → Fin n)
@@ -156,7 +156,8 @@ structure Inv (s : St n) : Prop where
   propCur : ∀ e b, (L e, e, b) ∈ s.castProps → L e ∉ Byz → e ≤ curEpoch Δ s.now
   voteCur : ∀ i b, i ∉ Byz → (i, b) ∈ s.castVotes → bep b ≤ curEpoch Δ s.now
   votedProposed : ∀ i b, i ∉ Byz → (i, b) ∈ s.castVotes → (L (bep b), bep b, b) ∈ s.castProps
-  votedSeenParent : ∀ i b, i ∉ Byz → (i, b) ∈ s.castVotes → ChainNotarizedBy n Byz f s b.tail (bep b - 1)
+  votedSeenParent : ∀ i b, i ∉ Byz → (i, b) ∈ s.castVotes →
+    ChainNotarizedBy n Byz f s b.tail (bep b - 1)
   votedLongest : ∀ i b, i ∉ Byz → (i, b) ∈ s.castVotes → ∀ C : Blk,
     NotarizedBy n Byz f s C (bep b - 1) → C.length ≤ b.tail.length
   proposedSeenParent : ∀ e b, (L e, e, b) ∈ s.castProps → L e ∉ Byz →
@@ -293,12 +294,11 @@ def PNext : Action (St n) := fun s s' =>
     (∃ i b, VoteH n Byz Δ f L i b s s') ∨ (∃ m, SendB n Byz m s s') ∨
     (∃ m, Deliver n Byz Δ GST m s s')
 
-/-- Initially: round 0, nothing in flight, nothing seen. -/
-def PInit : StatePred (St n) := { s | s.now = 0 ∧ s.inflight = ∅ ∧ s.seen = ∅ ∧ s.castVotes = ∅ ∧ s.castProps = ∅ }
-
-/-- The protocol specification, bundled (for `Spec.init_invariant`). -/
+/-- The protocol specification, bundled (for `Spec.init_invariant`). The
+initial state is the transport's `Init`: the protocol adds no extra
+history variables beyond the empty ones already there. -/
 def ProtoSpec (n : ℕ) (Byz : Finset (Fin n)) (Δ GST f : ℕ) (L : ℕ → Fin n) : Spec (St n) (St n) :=
-  ⟨PInit n, PNext n Byz Δ GST f L, vars n⟩
+  ⟨Init n, PNext n Byz Δ GST f L, vars n⟩
 
 /-- The protocol specification. -/
 def PSpec : Pred (St n) := (ProtoSpec n Byz Δ GST f L).pred
@@ -335,7 +335,12 @@ theorem notarizedCast_mono {s s' : St n} (h : s.castVotes ⊆ s'.castVotes) {b :
     NotarizedCast n Byz f s b → NotarizedCast n Byz f s' b := by
   intro hN
   unfold NotarizedCast at hN ⊢
-  exact le_trans hN (Finset.card_le_card (Finset.image_subset_image (Finset.filter_subset_filter (p := fun p => p.2 = b ∧ p.1 ∉ Byz) h)))
+  have hfilter : s.castVotes.filter (fun p => p.2 = b ∧ p.1 ∉ Byz) ⊆
+      s'.castVotes.filter (fun p => p.2 = b ∧ p.1 ∉ Byz) :=
+    Finset.filter_subset_filter (p := fun p => p.2 = b ∧ p.1 ∉ Byz) h
+  have himage : votersCast n Byz s b ⊆ votersCast n Byz s' b := by
+    exact Finset.image_subset_image hfilter
+  exact le_trans hN (Finset.card_le_card himage)
 
 /-- NotarizedBy is monotone in the cast-vote history. -/
 theorem notarizedBy_mono_cast {s s' : St n} (h : s.castVotes ⊆ s'.castVotes) {b : Blk} {e : ℕ} :
@@ -504,12 +509,12 @@ theorem pnext_castGrows {s s' : St n} (hstep : PNext n Byz Δ GST f L s s') : ca
 theorem propCast_mono {s s' : St n} (h : castGrows n s s') {e : ℕ} {b : Blk} :
     propCast n L s e b → propCast n L s' e b := fun hp => h.2 hp
 
-theorem init_inv : ∀ s, s ∈ PInit n → s ∈ InvState n Byz Δ f L := by
+theorem init_inv : ∀ s, s ∈ Init n → s ∈ InvState n Byz Δ f L := by
   intro s hs
   obtain ⟨_hnow, hinf, hseen, hcv, hcp⟩ := hs
   constructor <;> simp [hinf, hseen, hcv, hcp, SentMem]
 
-/-- The invariant is preserved by every protocol step — including Byzantine
+/- The invariant is preserved by every protocol step — including Byzantine
 sends. The 12 honest-node fields — stated over the monotone cast histories
 and guarded by the caster's honesty — are closed by `grind` with the
 `[grind =>]`-tagged monotonicity lemmas: a `SendB` adds only Byzantine
@@ -517,6 +522,137 @@ casts, which every honest premise `i ∉ Byz` / `L e ∉ Byz` filters out.
 Only the vote-stability transports (`propLongest` / `votedLongest` under
 `VoteH`) and the message-to-history bridge (`sentMem`) need the
 hand-written `∃`/`↔` reasoning. -/
+
+/-- `Tick` preserves `Inv`: the clock advances, nothing else changes. -/
+theorem step_inv_tick {s s' : St n} (htick : Tick n Byz Δ GST s s')
+    (hinv : Inv n Byz Δ f L s) : Inv n Byz Δ f L s' := by
+  rcases hinv with ⟨hvsp, hpv, hpl, hpc, hvc, hvpr, hvsp2, hvl, hpsp, hpe, hpu, hvv, hsm⟩
+  obtain ⟨hnow, hinf, hseen, hcv, hcp, _⟩ := htick
+  have hseenmono : ∀ m, m ∈ s.seen → m ∈ s'.seen := by intro m hm; rw [hseen]; exact hm
+  have hcvmono : s.castVotes ⊆ s'.castVotes := by intro p hp; rw [hcv]; exact hp
+  have hcpmono : s.castProps ⊆ s'.castProps := by intro p hp; rw [hcp]; exact hp
+  have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by
+    rw [hnow]
+    exact curEpoch_mono Δ (Nat.le_succ s.now)
+  constructor <;> first
+  | grind
+  | exact sentMem_tick n hinf hseen hcv hcp hsm
+
+/-- `Propose` preserves `Inv`: the honest leader adds its own proposal to
+`castProps`. -/
+theorem step_inv_propose {s s' : St n} {e : ℕ} {b : Blk}
+    (hp : Propose n Byz Δ f L e b s s') (hinv : Inv n Byz Δ f L s) :
+    Inv n Byz Δ f L s' := by
+  rcases hinv with ⟨hvsp, hpv, hpl, hpc, hvc, hvpr, hvsp2, hvl, hpsp, hpe, hpu, hvv, hsm⟩
+  obtain ⟨hprior, _, hval, hbep, hcur, hlong, hsend⟩ := hp
+  obtain ⟨hlnSeen, hlnBy, hlnLong⟩ : ChainNotarizedSeen n f s b.tail ∧
+      ChainNotarizedBy n Byz f s b.tail (e - 1) ∧
+        ∀ C : Blk, NotarizedBy n Byz f s C (e - 1) → C.length ≤ b.tail.length := hlong
+  have hsm' : SentMem n s' := sentMem_send n hsend hsm
+  obtain ⟨_, _, _, hnow, hinf, hseen, hcv, hcp⟩ := hsend
+  have hseenmono : ∀ m, m ∈ s.seen → m ∈ s'.seen := by intro m hm; rw [hseen]; exact hm
+  have hcvmono : s.castVotes ⊆ s'.castVotes := by intro p hp; rw [hcv]; exact hp
+  have hcpmono : s.castProps ⊆ s'.castProps := by intro p hp; rw [hcp]; exact Finset.mem_insert_of_mem hp
+  have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by rw [hnow]
+  constructor <;> grind
+
+/-- `VoteH` preserves `Inv`: the honest node adds its own vote to
+`castVotes`; the interesting fields are `propLongest` and `votedLongest`,
+which survive by `notarizedBy_stable_cast_vote`. -/
+theorem step_inv_voteh {s s' : St n} {i : Fin n} {b : Blk}
+    (hv : VoteH n Byz Δ f L i b s s') (hinv : Inv n Byz Δ f L s) :
+    Inv n Byz Δ f L s' := by
+  rcases hinv with ⟨hvsp, hpv, hpl, hpc, hvc, hvpr, hvsp2, hvl, hpsp, hpe, hpu, hvv, hsm⟩
+  obtain ⟨_, hval, hbpos, hbcur, _, hprop, hlong, hsend⟩ := hv
+  obtain ⟨hlnSeen, hlnBy, hlnLong⟩ : ChainNotarizedSeen n f s b.tail ∧
+      ChainNotarizedBy n Byz f s b.tail (bep b - 1) ∧
+        ∀ C : Blk, NotarizedBy n Byz f s C (bep b - 1) → C.length ≤ b.tail.length := hlong
+  have hsm' : SentMem n s' := sentMem_send n hsend hsm
+  obtain ⟨_, _, _, hnow, hinf, hseen, hcv, hcp⟩ := hsend
+  -- The vote body leaves `castProps` alone and extends `castVotes` by
+  -- `(i, b)`; expose that so the `rw [hcv, Finset.mem_insert]` and
+  -- `simpa [hcp]` below match.
+  simp [castVotesAdd, castPropsAdd] at hcv hcp
+  have hseenmono : ∀ m, m ∈ s.seen → m ∈ s'.seen := by intro m hm; rw [hseen]; exact hm
+  have hcvmono : s.castVotes ⊆ s'.castVotes := by intro p hp; rw [hcv]; exact Finset.mem_insert_of_mem hp
+  have hcpmono : s.castProps ⊆ s'.castProps := by intro p hp; rw [hcp]; exact hp
+  have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by rw [hnow]
+  constructor <;> first
+  | grind
+  | intro e' b' hpb hL C hC
+    have hgt : e' - 1 < bep b := by
+      have hle : e' ≤ curEpoch Δ s.now := hpc e' b' (by simpa [hcp] using hpb) hL
+      omega
+    exact hpl e' b' (by simpa [hcp] using hpb) hL C
+      ((notarizedBy_stable_cast_vote n Byz f hcv hgt).2 hC)
+  | intro j b' hj hvb C hC
+    rw [hcv, Finset.mem_insert] at hvb
+    rcases hvb with h | h
+    · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h
+      exact hlnLong C ((notarizedBy_stable_cast_vote n Byz f hcv (by omega)).2 hC)
+    · have hgt : bep b' - 1 < bep b := by
+        have hle : bep b' ≤ curEpoch Δ s.now := hvc j b' hj h
+        omega
+      exact hvl j b' hj h C ((notarizedBy_stable_cast_vote n Byz f hcv hgt).2 hC)
+
+/-- `SendB` preserves `Inv`: a Byzantine node adds only Byzantine casts,
+which every honest premise (`i ∉ Byz` / `L e ∉ Byz`) filters out. -/
+theorem step_inv_sendb {s s' : St n} {m : Msg n}
+    (hsendB : SendB n Byz m s s') (hinv : Inv n Byz Δ f L s) :
+    Inv n Byz Δ f L s' := by
+  rcases hinv with ⟨hvsp, hpv, hpl, hpc, hvc, hvpr, hvsp2, hvl, hpsp, hpe, hpu, hvv, hsm⟩
+  obtain ⟨hbyzm, hval, hsend⟩ := hsendB
+  have hsm' : SentMem n s' := sentMem_send n hsend hsm
+  have hnow : s'.now = s.now := by grind
+  have hseen : s'.seen = s.seen := by grind
+  have hcv : s'.castVotes = castVotesAdd n m.body m.src s.castVotes := by grind
+  have hcp : s'.castProps = castPropsAdd n m.body m.src s.castProps := by grind
+  have hseenmono : ∀ m, m ∈ s.seen → m ∈ s'.seen := by intro m hm; rw [hseen]; exact hm
+  have hhist := send_hist n m.body m.src s.castVotes s.castProps
+  have hcvmono : s.castVotes ⊆ s'.castVotes := by
+    intro p hp; rw [hcv]; exact hhist.1 hp
+  have hcpmono : s.castProps ⊆ s'.castProps := by
+    intro p hp; rw [hcp]; exact hhist.2.1 hp
+  have hcvnew : ∀ p : Fin n × Blk, p ∈ s'.castVotes → p ∈ s.castVotes ∨ p.1 = m.src := by
+    intro p hp; rw [hcv] at hp; exact hhist.2.2.1 p hp
+  have hcpnew : ∀ p : Fin n × ℕ × Blk, p ∈ s'.castProps → p ∈ s.castProps ∨ p.1 = m.src := by
+    intro p hp; rw [hcp] at hp; exact hhist.2.2.2 p hp
+  have hcvback : ∀ C : Blk, ∀ e : ℕ, NotarizedBy n Byz f s' C e → NotarizedBy n Byz f s C e := by
+    intro C e ⟨hq, hbep⟩
+    refine ⟨?_, hbep⟩
+    unfold NotarizedCast at hq ⊢
+    have hv : votersCast n Byz s' C ⊆ votersCast n Byz s C := by
+      intro i hi
+      rw [mem_votersCast n Byz] at hi ⊢
+      rcases hcvnew (i, C) hi.1 with h | h
+      · exact ⟨h, hi.2⟩
+      · exfalso
+        have hiEq : i = m.src := by simpa using h
+        exact hi.2 (by rw [hiEq]; exact hbyzm)
+    exact le_trans hq (Finset.card_le_card hv)
+  have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by rw [hnow]
+  constructor <;> grind
+
+/-- `Deliver` preserves `Inv`: `seen` grows, cast histories and clock are
+unchanged. -/
+theorem step_inv_deliver {s s' : St n} {m : Msg n}
+    (hd : Deliver n Byz Δ GST m s s') (hinv : Inv n Byz Δ f L s) :
+    Inv n Byz Δ f L s' := by
+  rcases hinv with ⟨hvsp, hpv, hpl, hpc, hvc, hvpr, hvsp2, hvl, hpsp, hpe, hpu, hvv, hsm⟩
+  have hd' := hd
+  obtain ⟨hmem, _, hnow, hinf, hseen, hcv, hcp⟩ := hd
+  have hseenmono : ∀ m, m ∈ s.seen → m ∈ s'.seen := by
+    intro m hm
+    rw [hseen]
+    exact Finset.mem_insert_of_mem hm
+  have hcvmono : s.castVotes ⊆ s'.castVotes := by intro p hp; rw [hcv]; exact hp
+  have hcpmono : s.castProps ⊆ s'.castProps := by intro p hp; rw [hcp]; exact hp
+  have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by rw [hnow]
+  constructor <;> first
+  | grind
+  | exact sentMem_deliver n Byz Δ GST hd' hsm
+
+/-- The invariant is preserved by every protocol step. -/
 theorem step_inv : ∀ s s', StutAction (PNext n Byz Δ GST f L) (vars n) s s' →
     s ∈ InvState n Byz Δ f L → s' ∈ InvState n Byz Δ f L := by
   intro s s' hstep hinv
@@ -524,104 +660,13 @@ theorem step_inv : ∀ s s', StutAction (PNext n Byz Δ GST f L) (vars n) s s' �
   swap
   · have hss' : s' = s := hstut
     rwa [hss']
-  rcases hinv with ⟨hvsp, hpv, hpl, hpc, hvc, hvpr, hvsp2, hvl, hpsp, hpe, hpu, hvv, hsm⟩
-  rcases hnext with htick | ⟨e, b, hp⟩ | ⟨i, b, hv⟩ | ⟨m, hbyz⟩ | ⟨m, hd⟩
-  · -- Tick: clock advances, cast/seen unchanged
-    obtain ⟨hnow, hinf, hseen, hcv, hcp, _⟩ := htick
-    have hseenmono : ∀ m, m ∈ s.seen → m ∈ s'.seen := by intro m hm; rw [hseen]; exact hm
-    have hcvmono : s.castVotes ⊆ s'.castVotes := by intro p hp; rw [hcv]; exact hp
-    have hcpmono : s.castProps ⊆ s'.castProps := by intro p hp; rw [hcp]; exact hp
-    have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by rw [hnow]; exact curEpoch_mono Δ (Nat.le_succ s.now)
-    constructor <;> first
-    | grind
-    | exact sentMem_tick n hinf hseen hcv hcp hsm
-  · -- Propose: the honest leader adds its own proposal to castProps
-    obtain ⟨hprior, _, hval, hbep, hcur, hlong, hsend⟩ := hp
-    obtain ⟨hlnSeen, hlnBy, hlnLong⟩ : ChainNotarizedSeen n f s b.tail ∧
-        ChainNotarizedBy n Byz f s b.tail (e - 1) ∧
-          ∀ C : Blk, NotarizedBy n Byz f s C (e - 1) → C.length ≤ b.tail.length := hlong
-    have hsm' : SentMem n s' := sentMem_send n hsend hsm
-    obtain ⟨_, _, _, hnow, hinf, hseen, hcv, hcp⟩ := hsend
-    have hseenmono : ∀ m, m ∈ s.seen → m ∈ s'.seen := by intro m hm; rw [hseen]; exact hm
-    have hcvmono : s.castVotes ⊆ s'.castVotes := by intro p hp; rw [hcv]; exact hp
-    have hcpmono : s.castProps ⊆ s'.castProps := by intro p hp; rw [hcp]; exact Finset.mem_insert_of_mem hp
-    have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by rw [hnow]
-    constructor <;> grind
-  · -- VoteH: the honest node adds its own vote to castVotes
-    obtain ⟨_, hval, hbpos, hbcur, _, hprop, hlong, hsend⟩ := hv
-    obtain ⟨hlnSeen, hlnBy, hlnLong⟩ : ChainNotarizedSeen n f s b.tail ∧
-        ChainNotarizedBy n Byz f s b.tail (bep b - 1) ∧
-          ∀ C : Blk, NotarizedBy n Byz f s C (bep b - 1) → C.length ≤ b.tail.length := hlong
-    have hsm' : SentMem n s' := sentMem_send n hsend hsm
-    obtain ⟨_, _, _, hnow, hinf, hseen, hcv, hcp⟩ := hsend
-    -- The vote body leaves `castProps` alone and extends `castVotes` by
-    -- `(i, b)`; expose that so the `rw [hcv, Finset.mem_insert]` and
-    -- `simpa [hcp]` below match.
-    simp [castVotesAdd, castPropsAdd] at hcv hcp
-    have hseenmono : ∀ m, m ∈ s.seen → m ∈ s'.seen := by intro m hm; rw [hseen]; exact hm
-    have hcvmono : s.castVotes ⊆ s'.castVotes := by intro p hp; rw [hcv]; exact Finset.mem_insert_of_mem hp
-    have hcpmono : s.castProps ⊆ s'.castProps := by intro p hp; rw [hcp]; exact hp
-    have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by rw [hnow]
-    constructor <;> first
-    | grind
-    | intro e' b' hpb hL C hC
-      have hgt : e' - 1 < bep b := by
-        have hle : e' ≤ curEpoch Δ s.now := hpc e' b' (by simpa [hcp] using hpb) hL
-        omega
-      exact hpl e' b' (by simpa [hcp] using hpb) hL C
-        ((notarizedBy_stable_cast_vote n Byz f hcv hgt).2 hC)
-    | intro j b' hj hvb C hC
-      rw [hcv, Finset.mem_insert] at hvb
-      rcases hvb with h | h
-      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h
-        exact hlnLong C ((notarizedBy_stable_cast_vote n Byz f hcv (by omega)).2 hC)
-      · have hgt : bep b' - 1 < bep b := by
-          have hle : bep b' ≤ curEpoch Δ s.now := hvc j b' hj h
-          omega
-        exact hvl j b' hj h C ((notarizedBy_stable_cast_vote n Byz f hcv hgt).2 hC)
-  · -- SendB: a Byzantine node adds only Byzantine casts; every honest
-    -- premise (`i ∉ Byz` / `L e ∉ Byz`) filters them out
-    obtain ⟨hbyzm, hval, hsend⟩ := hbyz
-    have hsm' : SentMem n s' := sentMem_send n hsend hsm
-    have hnow : s'.now = s.now := by grind
-    have hseen : s'.seen = s.seen := by grind
-    have hcv : s'.castVotes = castVotesAdd n m.body m.src s.castVotes := by grind
-    have hcp : s'.castProps = castPropsAdd n m.body m.src s.castProps := by grind
-    have hseenmono : ∀ m, m ∈ s.seen → m ∈ s'.seen := by intro m hm; rw [hseen]; exact hm
-    have hhist := send_hist n m.body m.src s.castVotes s.castProps
-    have hcvmono : s.castVotes ⊆ s'.castVotes := by
-      intro p hp; rw [hcv]; exact hhist.1 hp
-    have hcpmono : s.castProps ⊆ s'.castProps := by
-      intro p hp; rw [hcp]; exact hhist.2.1 hp
-    have hcvnew : ∀ p : Fin n × Blk, p ∈ s'.castVotes → p ∈ s.castVotes ∨ p.1 = m.src := by
-      intro p hp; rw [hcv] at hp; exact hhist.2.2.1 p hp
-    have hcpnew : ∀ p : Fin n × ℕ × Blk, p ∈ s'.castProps → p ∈ s.castProps ∨ p.1 = m.src := by
-      intro p hp; rw [hcp] at hp; exact hhist.2.2.2 p hp
-    have hcvback : ∀ C : Blk, ∀ e : ℕ, NotarizedBy n Byz f s' C e → NotarizedBy n Byz f s C e := by
-      intro C e ⟨hq, hbep⟩
-      refine ⟨?_, hbep⟩
-      unfold NotarizedCast at hq ⊢
-      have hv : votersCast n Byz s' C ⊆ votersCast n Byz s C := by
-        intro i hi
-        rw [mem_votersCast n Byz] at hi ⊢
-        rcases hcvnew (i, C) hi.1 with h | h
-        · exact ⟨h, hi.2⟩
-        · exfalso
-          have hiEq : i = m.src := by simpa using h
-          exact hi.2 (by rw [hiEq]; exact hbyzm)
-      exact le_trans hq (Finset.card_le_card hv)
-    have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by rw [hnow]
-    constructor <;> grind
-  · -- Deliver: seen grows, cast/clock unchanged
-    have hd' := hd
-    obtain ⟨hmem, _, hnow, hinf, hseen, hcv, hcp⟩ := hd
-    have hseenmono : ∀ m, m ∈ s.seen → m ∈ s'.seen := by intro m hm; rw [hseen]; exact Finset.mem_insert_of_mem hm
-    have hcvmono : s.castVotes ⊆ s'.castVotes := by intro p hp; rw [hcv]; exact hp
-    have hcpmono : s.castProps ⊆ s'.castProps := by intro p hp; rw [hcp]; exact hp
-    have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by rw [hnow]
-    constructor <;> first
-    | grind
-    | exact sentMem_deliver n Byz Δ GST hd' hsm
+  have hinvI : Inv n Byz Δ f L s := by simpa [InvState] using hinv
+  rcases hnext with htick | ⟨e, b, hp⟩ | ⟨i, b, hv⟩ | ⟨m, hsendB⟩ | ⟨m, hd⟩
+  · exact step_inv_tick n Byz Δ GST f L htick hinvI
+  · exact step_inv_propose n Byz Δ f L hp hinvI
+  · exact step_inv_voteh n Byz Δ f L hv hinvI
+  · exact step_inv_sendb n Byz Δ f L hsendB hinvI
+  · exact step_inv_deliver n Byz Δ GST f L hd hinvI
 
 theorem spec_entails_inv :
     Entails (PSpec n Byz Δ GST f L) (always (statePred (InvState n Byz Δ f L))) :=

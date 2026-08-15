@@ -102,7 +102,8 @@ def castVotesAdd (bd : Body) (src : Fin n) (CV : Finset (Fin n × Blk)) : Finset
 
 /-- The proposal-history update of a send: a `.prop` body records the
 proposal (`(src, e, b)`), any other body leaves the history unchanged. -/
-def castPropsAdd (bd : Body) (src : Fin n) (CP : Finset (Fin n × ℕ × Blk)) : Finset (Fin n × ℕ × Blk) :=
+def castPropsAdd (bd : Body) (src : Fin n)
+    (CP : Finset (Fin n × ℕ × Blk)) : Finset (Fin n × ℕ × Blk) :=
   match bd with | Body.prop e b => insert (src, e, b) CP | _ => CP
 
 /-! ## Actions -/
@@ -141,7 +142,9 @@ attribute [grind unfold] Tick Send Deliver castVotesAdd castPropsAdd
 def vars (n : ℕ) : St n → St n := id
 
 /-- Initially: round 0, nothing in flight, nothing seen. -/
-def Init : StatePred (St n) := { s | s.now = 0 ∧ s.inflight = ∅ ∧ s.seen = ∅ ∧ s.castVotes = ∅ ∧ s.castProps = ∅ }
+def Init : StatePred (St n) := { s |
+  s.now = 0 ∧ s.inflight = ∅ ∧ s.seen = ∅ ∧
+  s.castVotes = ∅ ∧ s.castProps = ∅ }
 
 /-- The specification, bundled (for `Spec.init_invariant`). -/
 def NetSpec (n : ℕ) (Byz : Finset (Fin n)) (Δ GST : ℕ) : Spec (St n) (St n) :=
@@ -250,7 +253,12 @@ theorem pending_enable (m : Msg n) : ∀ s,
       s ∈ Enabled (AngleAction (Deliver n Byz Δ GST m) (vars n)) ∨ s ∈ seenOf n m := by
   intro s hsp
   left
-  let s' : St n := { now := s.now, inflight := s.inflight.erase m, seen := insert m s.seen, castVotes := s.castVotes, castProps := s.castProps }
+  let s' : St n := {
+    now := s.now,
+    inflight := s.inflight.erase m,
+    seen := insert m s.seen,
+    castVotes := s.castVotes,
+    castProps := s.castProps }
   refine ⟨s', ?_⟩
   constructor
   · grind
