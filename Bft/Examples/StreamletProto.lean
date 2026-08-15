@@ -60,7 +60,7 @@ import Bft.Examples.StreamletNet
 namespace Bft.Examples.StreamletProto
 
 open Bft
-open Bft.Examples.StreamletNet (Body Msg St Send Deliver Tick Next Hspec NoOverdue vars)
+open Bft.Examples.StreamletNet (Body Msg St Send Deliver Tick Next Hspec NoOverdue vars castVotesAdd castPropsAdd)
 open Bft.Examples.Streamlet (Blk ValidChain bep quorum)
 
 variable (n : ℕ) (Byz : Finset (Fin n)) (Δ GST f : ℕ) (L : ℕ → Fin n)
@@ -368,27 +368,25 @@ context: after `Send`'s history update, the old histories are covered and
 the new message is recorded, whatever the body. -/
 theorem send_hist (n : ℕ) (bd : Body) (src : Fin n)
     (CV : Finset (Fin n × Blk)) (CP : Finset (Fin n × ℕ × Blk)) :
-    CV ⊆ (match bd with | Body.vote b => insert (src, b) CV | _ => CV) ∧
-    CP ⊆ (match bd with | Body.prop e b => insert (src, e, b) CP | _ => CP) ∧
-    (∀ p : Fin n × Blk, p ∈ (match bd with | Body.vote b => insert (src, b) CV | _ => CV) →
-        p ∈ CV ∨ p.1 = src) ∧
-    (∀ p : Fin n × ℕ × Blk, p ∈ (match bd with | Body.prop e b => insert (src, e, b) CP | _ => CP) →
-        p ∈ CP ∨ p.1 = src) := by
-  cases bd <;> grind
+    CV ⊆ castVotesAdd n bd src CV ∧
+    CP ⊆ castPropsAdd n bd src CP ∧
+    (∀ p : Fin n × Blk, p ∈ castVotesAdd n bd src CV → p ∈ CV ∨ p.1 = src) ∧
+    (∀ p : Fin n × ℕ × Blk, p ∈ castPropsAdd n bd src CP → p ∈ CP ∨ p.1 = src) :=
+  by cases bd <;> unfold castVotesAdd castPropsAdd <;> grind
 
 /-- A `Send` only grows the vote history. -/
 theorem send_castVotes_mono {s s' : St n} {m : Msg n} (hs : Send n m s s') :
     s.castVotes ⊆ s'.castVotes := by
-  obtain ⟨_h1, _h2, _h3, _h4, _h5, _h6, hcv, _h8⟩ := hs
   intro p hp
+  have hcv : s'.castVotes = castVotesAdd n m.body m.src s.castVotes := by grind
   rw [hcv]
   exact (send_hist n m.body m.src s.castVotes s.castProps).1 hp
 
 /-- A `Send` only grows the proposal history. -/
 theorem send_castProps_mono {s s' : St n} {m : Msg n} (hs : Send n m s s') :
     s.castProps ⊆ s'.castProps := by
-  obtain ⟨_h1, _h2, _h3, _h4, _h5, _h6, _h7, hcp⟩ := hs
   intro p hp
+  have hcp : s'.castProps = castPropsAdd n m.body m.src s.castProps := by grind
   rw [hcp]
   exact (send_hist n m.body m.src s.castVotes s.castProps).2.1 hp
 
@@ -397,7 +395,10 @@ recorded (whatever its body), and old messages' records survive since the
 histories only grow. -/
 theorem sentMem_send {s s' : St n} {m : Msg n} (hs : Send n m s s')
     (h : SentMem n s) : SentMem n s' := by
-  obtain ⟨_h1, _h2, _h3, _h4, hinf, hseen, hcv, hcp⟩ := hs
+  have hinf : s'.inflight = insert m s.inflight := by grind
+  have hseen : s'.seen = s.seen := by grind
+  have hcv : s'.castVotes = castVotesAdd n m.body m.src s.castVotes := by grind
+  have hcp : s'.castProps = castPropsAdd n m.body m.src s.castProps := by grind
   have hmono := send_hist n m.body m.src s.castVotes s.castProps
   obtain ⟨hv, hp⟩ := h
   refine ⟨?_, ?_⟩
@@ -430,7 +431,7 @@ theorem sentMem_send {s s' : St n} {m : Msg n} (hs : Send n m s s')
 change the sent set or the cast histories. -/
 theorem sentMem_deliver {s s' : St n} {m : Msg n}
     (hd : Deliver n Byz Δ GST m s s') (h : SentMem n s) : SentMem n s' := by
-  obtain ⟨hmem, _h2, _h3, hinf, hseen, hcv, hcp⟩ := hd
+  obtain ⟨hmem, _hguard, _hnow, hinf, hseen, hcv, hcp⟩ := hd
   refine ⟨?_, ?_⟩
   · intro m' hsent b hbody
     rw [hcv]
@@ -480,15 +481,13 @@ def castGrows (s s' : St n) : Prop :=
 /-- Every protocol step preserves (grows) the cast histories. -/
 theorem pnext_castGrows {s s' : St n} (hstep : PNext n Byz Δ GST f L s s') : castGrows n s s' := by
   rcases hstep with htick | ⟨e, b, hpr⟩ | ⟨i, b, hv⟩ | ⟨m, hbyzm, hval, hs⟩ | ⟨m, hd⟩
-  · obtain ⟨_hnow, hinf, _hseen, hcv, hcp, _hguard⟩ := htick
-    constructor <;> grind
+  · constructor <;> grind
   · obtain ⟨_hprior, _hL, _hval, _hbep, _hcur, _hlong, hsend⟩ := hpr
     exact ⟨send_castVotes_mono n hsend, send_castProps_mono n hsend⟩
   · obtain ⟨_hi, _hval, _hbpos, _hbcur, _hfirst, _hprop, _hlong, hsend⟩ := hv
     exact ⟨send_castVotes_mono n hsend, send_castProps_mono n hsend⟩
   · exact ⟨send_castVotes_mono n hs, send_castProps_mono n hs⟩
-  · obtain ⟨hmem, _hguard, _hnow, hinf, hseen, hcv, hcp⟩ := hd
-    constructor <;> grind
+  · constructor <;> grind
 
 /-- `propCast` is monotone in the cast history. -/
 theorem propCast_mono {s s' : St n} (h : castGrows n s s') {e : ℕ} {b : Blk} :
@@ -530,22 +529,24 @@ theorem step_inv : ∀ s s', StutAction (PNext n Byz Δ GST f L) (vars n) s s' �
     obtain ⟨hlnSeen, hlnBy, hlnLong⟩ : ChainNotarizedSeen n f s b.tail ∧
         ChainNotarizedBy n Byz f s b.tail (e - 1) ∧
           ∀ C : Blk, NotarizedBy n Byz f s C (e - 1) → C.length ≤ b.tail.length := hlong
-    have hsend' := hsend
+    have hsm' : SentMem n s' := sentMem_send n hsend hsm
     obtain ⟨_, _, _, hnow, hinf, hseen, hcv, hcp⟩ := hsend
     have hseenmono : ∀ m, m ∈ s.seen → m ∈ s'.seen := by intro m hm; rw [hseen]; exact hm
     have hcvmono : s.castVotes ⊆ s'.castVotes := by intro p hp; rw [hcv]; exact hp
     have hcpmono : s.castProps ⊆ s'.castProps := by intro p hp; rw [hcp]; exact Finset.mem_insert_of_mem hp
     have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by rw [hnow]
-    constructor <;> first
-    | grind
-    | exact sentMem_send n hsend' hsm
+    constructor <;> grind
   · -- VoteH: the honest node adds its own vote to castVotes
     obtain ⟨_, hval, hbpos, hbcur, _, hprop, hlong, hsend⟩ := hv
     obtain ⟨hlnSeen, hlnBy, hlnLong⟩ : ChainNotarizedSeen n f s b.tail ∧
         ChainNotarizedBy n Byz f s b.tail (bep b - 1) ∧
           ∀ C : Blk, NotarizedBy n Byz f s C (bep b - 1) → C.length ≤ b.tail.length := hlong
-    have hsend' := hsend
+    have hsm' : SentMem n s' := sentMem_send n hsend hsm
     obtain ⟨_, _, _, hnow, hinf, hseen, hcv, hcp⟩ := hsend
+    -- The vote body leaves `castProps` alone and extends `castVotes` by
+    -- `(i, b)`; expose that so the `rw [hcv, Finset.mem_insert]` and
+    -- `simpa [hcp]` below match.
+    simp [castVotesAdd, castPropsAdd] at hcv hcp
     have hseenmono : ∀ m, m ∈ s.seen → m ∈ s'.seen := by intro m hm; rw [hseen]; exact hm
     have hcvmono : s.castVotes ⊆ s'.castVotes := by intro p hp; rw [hcv]; exact Finset.mem_insert_of_mem hp
     have hcpmono : s.castProps ⊆ s'.castProps := by intro p hp; rw [hcp]; exact hp
@@ -567,12 +568,14 @@ theorem step_inv : ∀ s s', StutAction (PNext n Byz Δ GST f L) (vars n) s s' �
           have hle : bep b' ≤ curEpoch Δ s.now := hvc j b' hj h
           omega
         exact hvl j b' hj h C ((notarizedBy_stable_cast_vote n Byz f hcv hgt).2 hC)
-    | exact sentMem_send n hsend' hsm
   · -- SendB: a Byzantine node adds only Byzantine casts; every honest
     -- premise (`i ∉ Byz` / `L e ∉ Byz`) filters them out
     obtain ⟨hbyzm, hval, hsend⟩ := hbyz
-    have hsend' := hsend
-    obtain ⟨_h1, _h2, _h3, hnow, hinf, hseen, hcv, hcp⟩ := hsend
+    have hsm' : SentMem n s' := sentMem_send n hsend hsm
+    have hnow : s'.now = s.now := by grind
+    have hseen : s'.seen = s.seen := by grind
+    have hcv : s'.castVotes = castVotesAdd n m.body m.src s.castVotes := by grind
+    have hcp : s'.castProps = castPropsAdd n m.body m.src s.castProps := by grind
     have hseenmono : ∀ m, m ∈ s.seen → m ∈ s'.seen := by intro m hm; rw [hseen]; exact hm
     have hhist := send_hist n m.body m.src s.castVotes s.castProps
     have hcvmono : s.castVotes ⊆ s'.castVotes := by
@@ -597,9 +600,7 @@ theorem step_inv : ∀ s s', StutAction (PNext n Byz Δ GST f L) (vars n) s s' �
           exact hi.2 (by rw [hiEq]; exact hbyzm)
       exact le_trans hq (Finset.card_le_card hv)
     have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by rw [hnow]
-    constructor <;> first
-    | grind
-    | exact sentMem_send n hsend' hsm
+    constructor <;> grind
   · -- Deliver: seen grows, cast/clock unchanged
     have hd' := hd
     obtain ⟨hmem, _, hnow, hinf, hseen, hcv, hcp⟩ := hd

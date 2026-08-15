@@ -95,6 +95,16 @@ deriving DecidableEq
 /-- The delivery deadline of `m`: round `max GST (m.round + Δ)`. -/
 def deadline (m : Msg n) : ℕ := max GST (m.round + Δ)
 
+/-- The vote-history update of a send: a `.vote` body records the vote
+(`(src, b)`), any other body leaves the history unchanged. -/
+def castVotesAdd (bd : Body) (src : Fin n) (CV : Finset (Fin n × Blk)) : Finset (Fin n × Blk) :=
+  match bd with | Body.vote b => insert (src, b) CV | _ => CV
+
+/-- The proposal-history update of a send: a `.prop` body records the
+proposal (`(src, e, b)`), any other body leaves the history unchanged. -/
+def castPropsAdd (bd : Body) (src : Fin n) (CP : Finset (Fin n × ℕ × Blk)) : Finset (Fin n × ℕ × Blk) :=
+  match bd with | Body.prop e b => insert (src, e, b) CP | _ => CP
+
 /-! ## Actions -/
 
 /-- Time passes — but never past the delivery deadline of an honest-sent
@@ -109,8 +119,8 @@ current round. A message is sent at most once. -/
 def Send (m : Msg n) : Action (St n) := fun s s' =>
   m.round = s.now ∧ m ∉ s.inflight ∧ m ∉ s.seen ∧
   s'.now = s.now ∧ s'.inflight = insert m s.inflight ∧ s'.seen = s.seen ∧
-  s'.castVotes = (match m.body with | Body.vote b => insert (m.src, b) s.castVotes | _ => s.castVotes) ∧
-  s'.castProps = (match m.body with | Body.prop e b => insert (m.src, e, b) s.castProps | _ => s.castProps)
+  s'.castVotes = castVotesAdd n m.body m.src s.castVotes ∧
+  s'.castProps = castPropsAdd n m.body m.src s.castProps
 
 /-- Delivery: an in-flight message becomes visible to all honest nodes.
 After GST, an honest-sent message is delivered within `Δ` of being sent —
@@ -124,6 +134,8 @@ def Deliver (m : Msg n) : Action (St n) := fun s s' =>
 def Next : Action (St n) := fun s s' =>
   Tick n Byz Δ GST s s' ∨ (∃ m, Send n m s s') ∨
     (∃ m, Deliver n Byz Δ GST m s s')
+
+attribute [grind unfold] Tick Send Deliver castVotesAdd castPropsAdd
 
 /-- Frame: the whole state. -/
 def vars (n : ℕ) : St n → St n := id
@@ -163,13 +175,7 @@ theorem step_inv : ∀ s s', StutAction (Next n Byz Δ GST) (vars n) s s' →
   swap
   · have hss' : s' = s := hstut
     rwa [hss']
-  rcases hnext with htick | ⟨m, hs⟩ | ⟨m, hd⟩
-  · obtain ⟨hnow, hinf, _hseen, _, _, hguard⟩ := htick
-    grind
-  · obtain ⟨hr, _hninf, _hnseen, hnow, hinf, _hseen, _, _⟩ := hs
-    grind
-  · obtain ⟨_hmem, _hguard, hnow, hinf, _hseen, _, _⟩ := hd
-    grind
+  rcases hnext with htick | ⟨m, hs⟩ | ⟨m, hd⟩ <;> grind
 
 /-- The safety half of the delivery guarantee is an invariant of the spec. -/
 theorem delivery_safety :
@@ -227,22 +233,14 @@ theorem pending_step (m : Msg n) : ∀ s s',
   · left
     have hss' : s' = s := hstut
     rwa [hss']
-  rcases hnext with htick | ⟨m', hs⟩ | ⟨m', hd⟩
-  · left
-    obtain ⟨hnow, hinf, _hseen, _, _, hguard⟩ := htick
-    grind
-  · left
-    obtain ⟨_hr, _hninf, _hnseen, hnow, hinf, _hseen, _, _⟩ := hs
-    grind
-  · obtain ⟨_hmem, _hguard, hnow, hinf, hseen, _, _⟩ := hd
-    grind
+  rcases hnext with htick | ⟨m', hs⟩ | ⟨m', hd⟩ <;> grind
 
 theorem pending_aq (m : Msg n) : ∀ s s',
     s ∈ pending n Byz Δ GST m → AngleAction (Deliver n Byz Δ GST m) (vars n) s s' →
     s' ∈ seenOf n m := by
   intro s s' _hsp hang
   obtain ⟨hdel, _⟩ := hang
-  obtain ⟨_hmem, _hguard, _hnow, _hinf, hseen, _, _⟩ := hdel
+  have hseen : s'.seen = insert m s.seen := by grind
   change m ∈ s'.seen
   rw [hseen]
   exact Finset.mem_insert_self m s.seen
@@ -255,7 +253,7 @@ theorem pending_enable (m : Msg n) : ∀ s,
   let s' : St n := { now := s.now, inflight := s.inflight.erase m, seen := insert m s.seen, castVotes := s.castVotes, castProps := s.castProps }
   refine ⟨s', ?_⟩
   constructor
-  · exact ⟨hsp.1, hsp.2, rfl, rfl, rfl, rfl, rfl⟩
+  · grind
   · change s' ≠ s
     intro hss
     have hinfle : s.inflight.erase m = s.inflight := by

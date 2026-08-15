@@ -100,6 +100,8 @@ def VoteB (i : Fin n) (b : Blk) : Action (St n) := fun s s' =>
 def Next : Action (St n) := fun s s' =>
   Tick n s s' ∨ (∃ i b, VoteH n f Byz i b s s') ∨ (∃ i b, VoteB n Byz i b s s')
 
+attribute [grind unfold] Tick VoteH VoteB
+
 /-- Frame: the whole state. -/
 def vars (n : ℕ) : St n → St n := id
 
@@ -186,16 +188,7 @@ theorem step_inv : ∀ s s', StutAction (Next n f Byz) (vars n) s s' → s ∈ I
   · change s' = s at hstut
     rwa [hstut]
   rcases hinv with ⟨hvalid, hbep, huniq, hparent, hlen⟩
-  rcases hnext with htick | ⟨i, b, hvote⟩ | ⟨i, b, hvote⟩
-  · -- Tick: clock advances, votes unchanged
-    obtain ⟨hep, hmsgs⟩ := htick
-    constructor <;> grind
-  · -- Honest vote: guarded, adds exactly its own vote
-    obtain ⟨hi, hval, hep, hfirst, hpar, hlong, hmsgs, hep2⟩ := hvote
-    constructor <;> grind
-  · -- Byzantine vote: any well-formed chain, honest-node facts untouched
-    obtain ⟨hi, hval, hmsgs, hep⟩ := hvote
-    constructor <;> grind
+  rcases hnext with htick | ⟨i, b, hvote⟩ | ⟨i, b, hvote⟩ <;> constructor <;> grind
 
 theorem safety : Entails (Hspec n f Byz) (always (statePred (InvState n f Byz))) :=
   (StreamletSpec n f Byz).init_invariant (InvState n f Byz) (init_inv n f Byz) (step_inv n f Byz)

@@ -45,6 +45,18 @@ Mathlib, `cslib`, and `aesop` are in `.lake/packages/`.
   "Dependent elimination failed". Do the body case analysis once in a *clean*
   context (`send_hist` takes `bd` as a plain variable) and consume the equations
   via `rw` + the `send_hist` components.
+- **Actions are grind-extractable by making their conjuncts match-free.** The
+  `match m.body` history updates are buried in named helpers
+  (`castVotesAdd`/`castPropsAdd`), so every `Send` conjunct is a plain equation
+  and `have hcv : s'.castVotes = castVotesAdd n m.body m.src s.castVotes := by
+  grind` extracts it by target type — no positional `obtain ⟨_h1, …, _h8⟩`.
+  Actions and helpers carry `attribute [grind unfold]`. Two grind limitations
+  to respect: it cannot *reduce* `castVotesAdd` with a concrete body (so
+  branches that need the `insert`-form, e.g. `rw [hcv, Finset.mem_insert]`,
+  normalize first: `simp [castVotesAdd, castPropsAdd] at hcv hcp`), and it
+  chokes when a raw `Send` hyp with a *variable* body stays in context (so
+  `step_inv` branches consume `hsend` via `obtain` before the `constructor
+  <;> grind` — never keep a `have hsend' := hsend` copy around).
 - **`first | t₁ | t₂` backtracks only on *failure*, not on "progress without closing".**
   A `simp`/`rw` alternative that rewrites the goal but leaves it open is treated as
   success and blocks later alternatives. So put `grind` first, and make every
