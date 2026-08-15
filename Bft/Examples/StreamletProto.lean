@@ -126,6 +126,8 @@ def SentMem (s : St n) : Prop :=
   (∀ m : Msg n, (m ∈ s.inflight ∨ m ∈ s.seen) → ∀ e : ℕ, ∀ b : Blk,
       m.body = Body.prop e b → (m.src, e, b) ∈ s.castProps)
 
+attribute [grind unfold] SentMem
+
 /-- `c` is a *longest notarized view* by epoch `e`: every nonempty suffix of
 `c` is notarized in `seen` and by epoch `e - 1` (cast), and no chain
 notarized by `e - 1` is longer. This is the shared guard of `Propose e`
@@ -363,21 +365,7 @@ theorem sent_eq_deliver {s s' : St n} {m0 : Msg n}
     (hm0 : m0 ∈ s.inflight)
     (hinf : s'.inflight = s.inflight.erase m0) (hseen : s'.seen = insert m0 s.seen) :
     ∀ m, (m ∈ s'.inflight ∨ m ∈ s'.seen) ↔ (m ∈ s.inflight ∨ m ∈ s.seen) := by
-  intro m
-  constructor
-  · intro hm
-    rcases hm with h | h
-    · rw [hinf] at h; left; exact Finset.mem_of_mem_erase h
-    · rw [hseen] at h
-      rcases Finset.mem_insert.mp h with h | h
-      · subst h; left; exact hm0
-      · right; exact h
-  · intro hm
-    rcases hm with h | h
-    · by_cases heq : m = m0
-      · right; rw [hseen]; exact Finset.mem_insert.mpr (Or.inl heq)
-      · left; rw [hinf]; exact Finset.mem_erase_of_ne_of_mem heq h
-    · right; rw [hseen]; exact Finset.mem_insert_of_mem h
+  grind
 
 /-- The one case analysis on a sent message's body, done once in a clean
 context: after `Send`'s history update, the old histories are covered and
@@ -393,82 +381,31 @@ theorem send_hist (n : ℕ) (bd : Body) (src : Fin n)
 /-- A `Send` only grows the vote history. -/
 theorem send_castVotes_mono {s s' : St n} {m : Msg n} (hs : Send n m s s') :
     s.castVotes ⊆ s'.castVotes := by
-  intro p hp
-  have hcv : s'.castVotes = castVotesAdd n m.body m.src s.castVotes := by grind
-  rw [hcv]
-  exact (send_hist n m.body m.src s.castVotes s.castProps).1 hp
+  grind
 
 /-- A `Send` only grows the proposal history. -/
 theorem send_castProps_mono {s s' : St n} {m : Msg n} (hs : Send n m s s') :
     s.castProps ⊆ s'.castProps := by
-  intro p hp
-  have hcp : s'.castProps = castPropsAdd n m.body m.src s.castProps := by grind
-  rw [hcp]
-  exact (send_hist n m.body m.src s.castVotes s.castProps).2.1 hp
+  grind
 
 /-- A `Send` preserves the message-to-history bridge: the new message is
 recorded (whatever its body), and old messages' records survive since the
 histories only grow. -/
 theorem sentMem_send {s s' : St n} {m : Msg n} (hs : Send n m s s')
     (h : SentMem n s) : SentMem n s' := by
-  have hinf : s'.inflight = insert m s.inflight := by grind
-  have hseen : s'.seen = s.seen := by grind
-  have hcv : s'.castVotes = castVotesAdd n m.body m.src s.castVotes := by grind
-  have hcp : s'.castProps = castPropsAdd n m.body m.src s.castProps := by grind
-  have hmono := send_hist n m.body m.src s.castVotes s.castProps
-  obtain ⟨hv, hp⟩ := h
-  refine ⟨?_, ?_⟩
-  · intro m' hsent b hbody
-    rcases hsent with hin | hsin
-    · rw [hinf] at hin
-      rcases Finset.mem_insert.mp hin with heq | hold
-      · subst heq
-        rw [hbody] at hcv
-        rw [hcv]
-        exact Finset.mem_insert_self _ _
-      · rw [hcv]; exact hmono.1 (hv m' (Or.inl hold) b hbody)
-    · rw [hseen] at hsin
-      rw [hcv]
-      exact hmono.1 (hv m' (Or.inr hsin) b hbody)
-  · intro m' hsent e b hbody
-    rcases hsent with hin | hsin
-    · rw [hinf] at hin
-      rcases Finset.mem_insert.mp hin with heq | hold
-      · subst heq
-        rw [hbody] at hcp
-        rw [hcp]
-        exact Finset.mem_insert_self _ _
-      · rw [hcp]; exact hmono.2.1 (hp m' (Or.inl hold) e b hbody)
-    · rw [hseen] at hsin
-      rw [hcp]
-      exact hmono.2.1 (hp m' (Or.inr hsin) e b hbody)
+  grind
 
 /-- A `Deliver` preserves the message-to-history bridge: delivery does not
 change the sent set or the cast histories. -/
 theorem sentMem_deliver {s s' : St n} {m : Msg n}
     (hd : Deliver n Byz Δ GST m s s') (h : SentMem n s) : SentMem n s' := by
-  obtain ⟨hmem, _hguard, _hnow, hinf, hseen, hcv, hcp⟩ := hd
-  refine ⟨?_, ?_⟩
-  · intro m' hsent b hbody
-    rw [hcv]
-    exact h.1 m' ((sent_eq_deliver n hmem hinf hseen m').mp hsent) b hbody
-  · intro m' hsent e b hbody
-    rw [hcp]
-    exact h.2 m' ((sent_eq_deliver n hmem hinf hseen m').mp hsent) e b hbody
+  grind
 
 /-- A `Tick` preserves the message-to-history bridge: nothing moves. -/
 theorem sentMem_tick {s s' : St n} (hinf : s'.inflight = s.inflight)
     (hseen : s'.seen = s.seen) (hcv : s'.castVotes = s.castVotes)
     (hcp : s'.castProps = s.castProps) (h : SentMem n s) : SentMem n s' := by
-  refine ⟨?_, ?_⟩
-  · intro m hsent b hbody
-    rw [hinf, hseen] at hsent
-    rw [hcv]
-    exact h.1 m hsent b hbody
-  · intro m hsent e b hbody
-    rw [hinf, hseen] at hsent
-    rw [hcp]
-    exact h.2 m hsent e b hbody
+  grind
 
 /-- Adding a vote for block `b` to the cast history leaves `NotarizedBy C e`
 unchanged whenever `e < bep b` (the new vote is for a block of too late an
@@ -534,9 +471,7 @@ theorem step_inv_tick {s s' : St n} (htick : Tick n Byz Δ GST s s')
   have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by
     rw [hnow]
     exact curEpoch_mono Δ (Nat.le_succ s.now)
-  constructor <;> first
-  | grind
-  | exact sentMem_tick n hinf hseen hcv hcp hsm
+  constructor <;> grind
 
 /-- `Propose` preserves `Inv`: the honest leader adds its own proposal to
 `castProps`. -/
@@ -648,9 +583,7 @@ theorem step_inv_deliver {s s' : St n} {m : Msg n}
   have hcvmono : s.castVotes ⊆ s'.castVotes := by intro p hp; rw [hcv]; exact hp
   have hcpmono : s.castProps ⊆ s'.castProps := by intro p hp; rw [hcp]; exact hp
   have hclockmono : curEpoch Δ s.now ≤ curEpoch Δ s'.now := by rw [hnow]
-  constructor <;> first
-  | grind
-  | exact sentMem_deliver n Byz Δ GST hd' hsm
+  constructor <;> grind
 
 /-- The invariant is preserved by every protocol step. -/
 theorem step_inv : ∀ s s', StutAction (PNext n Byz Δ GST f L) (vars n) s s' →
