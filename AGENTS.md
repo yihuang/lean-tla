@@ -6,13 +6,13 @@ Guidance for AI agents working in this repository.
 
 A Lean 4 (v4.33.0-rc2) lake project `lean_tla` formalizing TLA-style BFT specs.
 The reusable framework lives in `Bft/` (`Core`, `Rules`, `RelRank`, `Obligation`,
-`Tactic`); the case studies live in `Bft/Examples/` (`Streamlet*`, `Minimmit`, …).
+`Tactic`); the case studies live in `Bft/Examples/` (`Streamlet/`, `Minimmit`, …).
 Mathlib, `cslib`, and `aesop` are in `.lake/packages/`.
 
 ## Build & verify
 
 - `lake build` (whole project) or `lake build <Target>` from the repo root;
-  targets are dot-paths like `Bft.Examples.StreamletProto`.
+  targets are dot-paths like `Bft.Examples.Streamlet.Proto`.
 - Errors only: `lake build <Target> 2>&1 | grep -E 'error'`.
 - Typecheck a scratch snippet against the project without editing it in:
   `lake env lean /tmp/chk.lean`.
@@ -31,7 +31,7 @@ Mathlib, `cslib`, and `aesop` are in `.lake/packages/`.
   `notarizedBy_stable_cast_vote n Byz f hcv hgt`.
   When unsure of the true parameter order, use `#check @lemma_name`.
 - **`grind` closes the *monotone safety fields* of a structure invariant, but not the
-  `∃`/transport fields.** For `StreamletProto.Inv` (13 fields), after building the
+  `∃`/transport fields.** For `Streamlet.Proto.Inv` (13 fields), after building the
   `hseenmono` / `hcvmono` / `hcpmono` / `hclockmono` helpers, `constructor <;> first
   | grind | <hard> | <bridge>` closes the 12 safety fields with `grind` (with the
   `[grind =>]`-tagged `_mono` lemmas). Hand-write only `propLongest`/`votedLongest`

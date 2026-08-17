@@ -5,7 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 # Case study: Streamlet protocol over the partial-sync transport
 
 This file layers the **Streamlet protocol** on top of the transport model in
-`Bft.Examples.StreamletNet`: proposals, votes, notarization, the leader
+`Bft.Examples.Streamlet.Net`: proposals, votes, notarization, the leader
 schedule, and the paper's **Fact 2** and **Fact 3** (§3.6.2).
 
 Design, in service of the paper:
@@ -55,12 +55,12 @@ The invariant bundle `Inv` collects the honest-vote and honest-proposal
 conditions these facts rest on. Its inductiveness over the protocol actions
 is proved in the same file (below).
 -/
-import Bft.Examples.StreamletNet
+import Bft.Examples.Streamlet.Net
 
-namespace Bft.Examples.StreamletProto
+namespace Bft.Examples.Streamlet.Proto
 
 open Bft
-open Bft.Examples.StreamletNet (Body Msg St Send Deliver Tick Next Init vars castVotesAdd castPropsAdd)
+open Bft.Examples.Streamlet.Net (Body Msg St Send Deliver Tick castVotesAdd castPropsAdd NetSpec)
 open Bft.Examples.Streamlet (Blk ValidChain quorum)
 
 variable (n : ℕ) (Byz : Finset (Fin n)) (Δ GST f : ℕ) (L : ℕ → Fin n)
@@ -290,20 +290,27 @@ def SendB (m : Msg n) : Action (St n) := fun s s' =>
   m.src ∈ Byz ∧ ValidBody m.body ∧ Send n m s s'
 
 /-- The protocol step relation: clock ticks, honest proposals, honest votes,
-Byzantine broadcasts, and delivery. -/
-def PNext : Action (St n) := fun s s' =>
+Byzantine broadcasts, and delivery. Private: exported only through the
+`Spec` bundle `ProtoSpec` (access it as `(ProtoSpec n Byz Δ GST f L).Next`). -/
+private def PNext : Action (St n) := fun s s' =>
   Tick n Byz Δ GST s s' ∨ (∃ e b, Propose n Byz Δ f L e b s s') ∨
     (∃ i b, VoteH n Byz Δ f L i b s s') ∨ (∃ m, SendB n Byz m s s') ∨
     (∃ m, Deliver n Byz Δ GST m s s')
 
 /-- The protocol specification, bundled (for `Spec.init_invariant`). The
-initial state is the transport's `Init`: the protocol adds no extra
-history variables beyond the empty ones already there. -/
+initial state and state frame are the transport's (via `NetSpec`'s
+fields): the protocol adds no extra history variables beyond the empty
+ones already there. -/
 def ProtoSpec (n : ℕ) (Byz : Finset (Fin n)) (Δ GST f : ℕ) (L : ℕ → Fin n) : Spec (St n) (St n) :=
-  ⟨Init n, PNext n Byz Δ GST f L, vars n⟩
+  ⟨(NetSpec n Byz Δ GST).Init, PNext n Byz Δ GST f L, (NetSpec n Byz Δ GST).vars⟩
 
 /-- The protocol specification. -/
 def PSpec : Pred (St n) := (ProtoSpec n Byz Δ GST f L).pred
+
+/-- The global protocol spec at the section parameters, under one name
+(declared here, after `ProtoSpec`: a notation's quotation precheck needs
+the identifier to exist). -/
+local notation "S" => ProtoSpec n Byz Δ GST f L
 
 /-! ## Monotonicity and stability lemmas -/
 
@@ -432,7 +439,8 @@ def castGrows (s s' : St n) : Prop :=
   s.castVotes ⊆ s'.castVotes ∧ s.castProps ⊆ s'.castProps
 
 /-- Every protocol step preserves (grows) the cast histories. -/
-theorem pnext_castGrows {s s' : St n} (hstep : PNext n Byz Δ GST f L s s') : castGrows n s s' := by
+theorem pnext_castGrows {s s' : St n}
+    (hstep : (S).Next s s') : castGrows n s s' := by
   rcases hstep with htick | ⟨e, b, hpr⟩ | ⟨i, b, hv⟩ | ⟨m, hbyzm, hval, hs⟩ | ⟨m, hd⟩
   · constructor <;> grind
   · obtain ⟨_hprior, _hL, _hval, _hbep, _hcur, _hlong, hsend⟩ := hpr
@@ -446,7 +454,7 @@ theorem pnext_castGrows {s s' : St n} (hstep : PNext n Byz Δ GST f L s s') : ca
 theorem propCast_mono {s s' : St n} (h : castGrows n s s') {e : ℕ} {b : Blk} :
     propCast n L s e b → propCast n L s' e b := fun hp => h.2 hp
 
-theorem init_inv : ∀ s, s ∈ Init n → s ∈ InvState n Byz Δ f L := by
+theorem init_inv : ∀ s, s ∈ (NetSpec n Byz Δ GST).Init → s ∈ InvState n Byz Δ f L := by
   intro s hs
   obtain ⟨_hnow, hinf, hseen, hcv, hcp⟩ := hs
   constructor <;> simp [hinf, hseen, hcv, hcp, SentMem]
@@ -597,7 +605,8 @@ theorem step_inv_deliver {s s' : St n} {m : Msg n}
   constructor <;> grind
 
 /-- The invariant is preserved by every protocol step. -/
-theorem step_inv : ∀ s s', StutAction (PNext n Byz Δ GST f L) (vars n) s s' →
+theorem step_inv : ∀ s s',
+    StutAction (S).Next (S).vars s s' →
     s ∈ InvState n Byz Δ f L → s' ∈ InvState n Byz Δ f L := by
   intro s s' hstep hinv
   rcases hstep with hnext | hstut
@@ -615,6 +624,6 @@ theorem step_inv : ∀ s s', StutAction (PNext n Byz Δ GST f L) (vars n) s s' �
 theorem spec_entails_inv :
     Entails (PSpec n Byz Δ GST f L) (always (statePred (InvState n Byz Δ f L))) :=
   (ProtoSpec n Byz Δ GST f L).init_invariant (InvState n Byz Δ f L)
-    (init_inv n Byz Δ f L) (step_inv n Byz Δ GST f L)
+    (init_inv n Byz Δ GST f L) (step_inv n Byz Δ GST f L)
 
-end Bft.Examples.StreamletProto
+end Bft.Examples.Streamlet.Proto

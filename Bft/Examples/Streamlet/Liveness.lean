@@ -5,14 +5,14 @@ Released under Apache 2.0 license as described in the file LICENSE.
 # Case study: Streamlet liveness — Lemma 5 and Theorem 6
 
 The state-level liveness core of **Streamlet** (Chan & Shi, §3.6.2), on top of
-the partial-sync transport (`StreamletNet`) and the protocol invariants
-(`StreamletProto`). This file ports the paper's **Lemma 5**
+the partial-sync transport (`Streamlet.Net`) and the protocol invariants
+(`Streamlet.Proto`). This file ports the paper's **Lemma 5**
 (`main_liveness_lemma`) and **Theorem 6** (`liveness_finality`) from
 `TlaDsl/Examples/StreamletLiveness.lean` to the message-based model.
 
 The facts are pure state-level theorems from the invariant bundle `Inv`; the
 temporal wrapper (per-epoch leads-to progress, composed to Theorem 4) is
-`StreamletTemporal.lean`. The two key ingredients beyond the safety facts:
+`Temporal.lean`. The two key ingredients beyond the safety facts:
 
 * **`propUniq`** — each epoch has at most one proposal (enforced by the
   `Propose` "no prior proposal" guard), so the epoch case-analysis in
@@ -20,14 +20,14 @@ temporal wrapper (per-epoch leads-to progress, composed to Theorem 4) is
 * **`voteValid`** — honest votes are for valid chains, so a conflicting
   notarized block is a well-formed chain and the length arithmetic applies.
 -/
-import Bft.Examples.StreamletProto
+import Bft.Examples.Streamlet.Proto
 
-namespace Bft.Examples.StreamletLiveness
+namespace Bft.Examples.Streamlet.Liveness
 
 open Bft
-open Bft.Examples.StreamletNet (St)
+open Bft.Examples.Streamlet.Net (St)
 open Bft.Examples.Streamlet (Blk ValidChain Consecutive)
-open Bft.Examples.StreamletProto
+open Bft.Examples.Streamlet.Proto
 
 variable (n : ℕ) (Byz : Finset (Fin n)) (Δ f : ℕ) (L : ℕ → Fin n)
 
@@ -342,4 +342,4 @@ theorem liveness_finality (hB : Byz.card ≤ f) {s : St n} (hinv : Inv n Byz Δ 
   · intro d hd hdsuf
     exact (hC4 d hd hdsuf).1
 
-end Bft.Examples.StreamletLiveness
+end Bft.Examples.Streamlet.Liveness

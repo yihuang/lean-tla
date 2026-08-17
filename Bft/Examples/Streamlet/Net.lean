@@ -37,22 +37,22 @@ The transport model is the standard Global Stabilization Time (GST) regime
 
 The Streamlet *protocol* layer (proposals, votes, notarization, the
 leader schedule, and the paper's Fact 2 / Fact 3 / Lemma 5) is built on top
-of this transport layer in `StreamletProto.lean`.
+of this transport layer in `Proto.lean`.
 
 **Status of the two halves (explicit, not hidden).** The transport's Δ-bound
 is fully proved here: `NoOverdue` (no late honest delivery) is an invariant
 of `Hspec`, and `WF(Deliver m)` delivers any in-flight message. The liveness
-theorem of the protocol layer (`StreamletTemporal`) does **not** yet consume
+theorem of the protocol layer (`Streamlet.Temporal`) does **not** yet consume
 these: its per-epoch honest-timing assumptions (clock advances, honest
 leaders propose, honest votes chain-notarize in time) are a declared trust
 base, justified by — but not yet derived from — Fact 1 plus weak fairness of
 `Propose`/`VoteH`/`Tick`. Deriving them is the remaining refinement step;
 this file is the scaffolding for it.
 -/
-import Bft.Examples.Streamlet
+import Bft.Examples.Streamlet.Core
 import Bft.Tactic
 
-namespace Bft.Examples.StreamletNet
+namespace Bft.Examples.Streamlet.Net
 
 open Bft
 open Bft.Examples.Streamlet (Blk)
@@ -131,18 +131,21 @@ def Deliver (m : Msg n) : Action (St n) := fun s s' =>
   s'.now = s.now ∧ s'.inflight = s.inflight.erase m ∧ s'.seen = insert m s.seen ∧
   s'.castVotes = s.castVotes ∧ s'.castProps = s.castProps
 
-/-- The step relation. -/
-def Next : Action (St n) := fun s s' =>
+/-- The step relation. Private: the generic `Init`/`Next`/`vars` names are
+module-local here, exported only through the `Spec` bundle `NetSpec`
+(access its fields `(NetSpec n Byz Δ GST).Init/.Next/.vars`). -/
+private def Next : Action (St n) := fun s s' =>
   Tick n Byz Δ GST s s' ∨ (∃ m, Send n m s s') ∨
     (∃ m, Deliver n Byz Δ GST m s s')
 
 attribute [grind unfold] Tick Send Deliver castVotesAdd castPropsAdd
 
-/-- Frame: the whole state. -/
-def vars (n : ℕ) : St n → St n := id
+/-- Frame: the whole state. Private (see `Next`). -/
+private def vars (n : ℕ) : St n → St n := id
 
-/-- Initially: round 0, nothing in flight, nothing seen. -/
-def Init : StatePred (St n) := { s |
+/-- Initially: round 0, nothing in flight, nothing seen. Private (see
+`Next`). -/
+private def Init : StatePred (St n) := { s |
   s.now = 0 ∧ s.inflight = ∅ ∧ s.seen = ∅ ∧
   s.castVotes = ∅ ∧ s.castProps = ∅ }
 
@@ -293,4 +296,4 @@ theorem fact1_liveness (m : Msg n) :
       (pending_enable n Byz Δ GST m) e ⟨hnext, hwf⟩
   exact hleads k (by simpa using hpk)
 
-end Bft.Examples.StreamletNet
+end Bft.Examples.Streamlet.Net
