@@ -140,9 +140,6 @@ private def Next : Action (St n) := fun s s' =>
 
 attribute [grind unfold] Tick Send Deliver castVotesAdd castPropsAdd
 
-/-- Frame: the whole state. Private (see `Next`). -/
-private def vars (n : ℕ) : St n → St n := id
-
 /-- Initially: round 0, nothing in flight, nothing seen. Private (see
 `Next`). -/
 private def Init : StatePred (St n) := { s |
@@ -150,8 +147,8 @@ private def Init : StatePred (St n) := { s |
   s.castVotes = ∅ ∧ s.castProps = ∅ }
 
 /-- The specification, bundled (for `Spec.init_invariant`). -/
-def NetSpec (n : ℕ) (Byz : Finset (Fin n)) (Δ GST : ℕ) : Spec (St n) (St n) :=
-  ⟨Init n, Next n Byz Δ GST, vars n⟩
+def NetSpec (n : ℕ) (Byz : Finset (Fin n)) (Δ GST : ℕ) : Spec (St n) :=
+  ⟨Init n, Next n Byz Δ GST⟩
 
 /-- The specification. -/
 def Hspec : Pred (St n) := (NetSpec n Byz Δ GST).pred
@@ -174,7 +171,7 @@ theorem init_inv : ∀ s, s ∈ Init n → s ∈ NoOverdue n Byz Δ GST := by
   intro m hm _hsrc
   simp [hinf] at hm
 
-theorem step_inv : ∀ s s', StutAction (Next n Byz Δ GST) (vars n) s s' →
+theorem step_inv : ∀ s s', StutAction (Next n Byz Δ GST) id s s' →
     s ∈ NoOverdue n Byz Δ GST → s' ∈ NoOverdue n Byz Δ GST := by
   intro s s' hstep hinv
   rcases hstep with hnext | hstut
@@ -231,7 +228,7 @@ def Pending (m : Msg n) : StatePred (St n) := { s |
 attribute [grind unfold] Pending SeenOf
 
 theorem pending_step (m : Msg n) : ∀ s s',
-    s ∈ Pending n Byz Δ GST m → StutAction (Next n Byz Δ GST) (vars n) s s' →
+    s ∈ Pending n Byz Δ GST m → StutAction (Next n Byz Δ GST) id s s' →
     s' ∈ Pending n Byz Δ GST m ∨ s' ∈ SeenOf n m := by
   intro s s' hsp hstep
   rcases hstep with hnext | hstut
@@ -242,7 +239,7 @@ theorem pending_step (m : Msg n) : ∀ s s',
   rcases hnext with htick | ⟨m', hs⟩ | ⟨m', hd⟩ <;> grind
 
 theorem pending_aq (m : Msg n) : ∀ s s',
-    s ∈ Pending n Byz Δ GST m → AngleAction (Deliver n Byz Δ GST m) (vars n) s s' →
+    s ∈ Pending n Byz Δ GST m → AngleAction (Deliver n Byz Δ GST m) id s s' →
     s' ∈ SeenOf n m := by
   intro s s' _hsp hang
   obtain ⟨hdel, _⟩ := hang
@@ -253,7 +250,7 @@ theorem pending_aq (m : Msg n) : ∀ s s',
 
 theorem pending_enable (m : Msg n) : ∀ s,
     s ∈ Pending n Byz Δ GST m →
-      s ∈ Enabled (AngleAction (Deliver n Byz Δ GST m) (vars n)) ∨ s ∈ SeenOf n m := by
+      s ∈ Enabled (AngleAction (Deliver n Byz Δ GST m) id) ∨ s ∈ SeenOf n m := by
   intro s hsp
   left
   let s' : St n := {
@@ -263,26 +260,17 @@ theorem pending_enable (m : Msg n) : ∀ s,
     castVotes := s.castVotes,
     castProps := s.castProps }
   refine ⟨s', ?_⟩
-  constructor
-  · grind
-  · change s' ≠ s
-    intro hss
-    have hinfle : s.inflight.erase m = s.inflight := by
-      simpa [s'] using (congrArg St.inflight hss)
-    have hm' : m ∈ s.inflight.erase m := by
-      rw [hinfle]
-      exact hsp.1
-    exact (Finset.mem_erase.mp hm').1 rfl
+  constructor <;> grind
 
 /-- **Fact 1 (liveness)**: under weak fairness of `Deliver m`, an in-flight
 message is eventually delivered. -/
 theorem fact1_liveness (m : Msg n) :
-    Entails (tlaAnd (Hspec n Byz Δ GST) (WF_v (Deliver n Byz Δ GST m) (vars n)))
+    Entails (tlaAnd (Hspec n Byz Δ GST) (WF_v (Deliver n Byz Δ GST m) id))
       (leadsTo (statePred (InflightOf n m)) (statePred (SeenOf n m))) := by
   intro e hE k hk
   have hspec : Hspec n Byz Δ GST e := hE.1
-  have hwf : WF_v (Deliver n Byz Δ GST m) (vars n) e := hE.2
-  have hnext : stutAlways (Next n Byz Δ GST) (vars n) e := hspec.2
+  have hwf : WF_v (Deliver n Byz Δ GST m) id e := hE.2
+  have hnext : stutAlways (Next n Byz Δ GST) id e := hspec.2
   have hnoover : always (statePred (NoOverdue n Byz Δ GST)) e :=
     delivery_safety n Byz Δ GST e hspec
   have hk' : m ∈ (e k).inflight := by simpa [InflightOf] using hk
@@ -292,7 +280,7 @@ theorem fact1_liveness (m : Msg n) :
     exact (always_statePred_at hnoover) m hk' hsrc
   have hleads : leadsTo (statePred (Pending n Byz Δ GST m)) (statePred (SeenOf n m)) e :=
     wf1 (Pending n Byz Δ GST m) (SeenOf n m) (Next n Byz Δ GST) (Deliver n Byz Δ GST m)
-      (vars n) (pending_step n Byz Δ GST m) (pending_aq n Byz Δ GST m)
+      id (pending_step n Byz Δ GST m) (pending_aq n Byz Δ GST m)
       (pending_enable n Byz Δ GST m) e ⟨hnext, hwf⟩
   exact hleads k (by simpa using hpk)
 

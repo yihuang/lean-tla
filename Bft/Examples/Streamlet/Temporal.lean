@@ -48,8 +48,7 @@ theorem inv_all_of_pspec {e : Behavior (St n)} (h : PSpec n Byz Δ GST f L e) :
 /-- `propCast` persists along a behavior. -/
 theorem propCast_persist_along {e : Behavior (St n)}
 
-      (hS : ∀ m, StutAction (S).Next
-        (S).vars (e m) (e (m + 1)))
+      (hS : ∀ m, StutAction (S).Next id (e m) (e (m + 1)))
     {e' : ℕ} {b : Blk} {k j : ℕ} (hp : propCast n L (e k) e' b) :
     propCast n L (e (k + j)) e' b := by
   induction j with
@@ -69,8 +68,7 @@ theorem propCast_persist_along {e : Behavior (St n)}
 /-- `ChainNotarizedBy` persists along a behavior. -/
 theorem chainNotarizedBy_persist_along {e : Behavior (St n)}
 
-      (hS : ∀ m, StutAction (S).Next
-        (S).vars (e m) (e (m + 1)))
+      (hS : ∀ m, StutAction (S).Next id (e m) (e (m + 1)))
     {b : Blk} {e' : ℕ} {k j : ℕ} (hc : ChainNotarizedBy n Byz f (e k) b e') :
     ChainNotarizedBy n Byz f (e (k + j)) b e' := by
   induction j with
@@ -181,8 +179,7 @@ theorem epoch_step {e' : ℕ} {e : Behavior (St n)} (hH : H n Byz Δ GST f L e) 
   have hClock : ∀ e'', ClockAssumption n Δ e'' e := hH.2.1
   have hPropose : ∀ e'', ProposeAssumption n Δ L e'' e := hH.2.2.1
   have hVote : ∀ e'', VoteAssumption n Byz Δ f L e'' e := hH.2.2.2
-  have hS : ∀ m, StutAction (S).Next
-    (S).vars (e m) (e (m + 1)) :=
+  have hS : ∀ m, StutAction (S).Next id (e m) (e (m + 1)) :=
     fun m => stutAlways_step hspec.2
   have hInvAll : ∀ m, Inv n Byz Δ f L (e m) := inv_all_of_pspec n Byz Δ GST f L hspec
   intro k hp
@@ -234,9 +231,7 @@ theorem window_rank_sub (e0 k : ℕ) (hk : k ≤ 5) (hkpos : 0 < k) :
 completed before `e'` persist (`propCast`/`ChainNotarizedBy` persistence)
 and the just-completed epoch `e'` is now done. -/
 theorem windowDone_advance {e : Behavior (St n)}
-
-      (hS : ∀ m, StutAction (S).Next
-        (S).vars (e m) (e (m + 1)))
+      (hS : ∀ m, StutAction (S).Next id (e m) (e (m + 1)))
     {e0 e' : ℕ} {n' j : ℕ}
     (hW : WindowDone n Byz Δ f L e0 (e n'))
     (hcur' : curEpoch Δ (e n').now = e')
@@ -265,8 +260,7 @@ theorem window_progress (e0 : ℕ) (k : ℕ) (hk : k ≤ 5) {e : Behavior (St n)
     leadsTo (statePred {s | WindowDone n Byz Δ f L e0 s ∧ curEpoch Δ s.now = e0 + 5 - k})
       (statePred {s | WindowDone n Byz Δ f L e0 s ∧ curEpoch Δ s.now = e0 + 5}) e := by
   have hspec : PSpec n Byz Δ GST f L e := hH.1
-  have hS : ∀ m, StutAction (S).Next
-    (S).vars (e m) (e (m + 1)) :=
+  have hS : ∀ m, StutAction (S).Next id (e m) (e (m + 1)) :=
     fun m => stutAlways_step hspec.2
   induction k using Nat.strong_induction_on with
   | h k ih =>

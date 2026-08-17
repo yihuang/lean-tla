@@ -301,8 +301,8 @@ private def PNext : Action (St n) := fun s s' =>
 initial state and state frame are the transport's (via `NetSpec`'s
 fields): the protocol adds no extra history variables beyond the empty
 ones already there. -/
-def ProtoSpec (n : ℕ) (Byz : Finset (Fin n)) (Δ GST f : ℕ) (L : ℕ → Fin n) : Spec (St n) (St n) :=
-  ⟨(NetSpec n Byz Δ GST).Init, PNext n Byz Δ GST f L, (NetSpec n Byz Δ GST).vars⟩
+def ProtoSpec (n : ℕ) (Byz : Finset (Fin n)) (Δ GST f : ℕ) (L : ℕ → Fin n) : Spec (St n) :=
+  ⟨(NetSpec n Byz Δ GST).Init, PNext n Byz Δ GST f L⟩
 
 /-- The protocol specification. -/
 def PSpec : Pred (St n) := (ProtoSpec n Byz Δ GST f L).pred
@@ -606,7 +606,7 @@ theorem step_inv_deliver {s s' : St n} {m : Msg n}
 
 /-- The invariant is preserved by every protocol step. -/
 theorem step_inv : ∀ s s',
-    StutAction (S).Next (S).vars s s' →
+    StutAction (S).Next id s s' →
     s ∈ InvState n Byz Δ f L → s' ∈ InvState n Byz Δ f L := by
   intro s s' hstep hinv
   rcases hstep with hnext | hstut

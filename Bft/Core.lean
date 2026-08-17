@@ -98,14 +98,13 @@ def globalJustice {σ : Type u} (r : Action σ) : Pred σ :=
 
 /-- A specification bundle: the initial condition, the next-state relation,
 and the state frame (`v` in `[A]_v`). -/
-structure Spec (σ : Type u) (α : Type v) where
+structure Spec (σ : Type u) where
   Init : StatePred σ
   Next : Action σ
-  vars : σ → α
 
 /-- The temporal formula of a `Spec`: `Init ∧ □[Next]_vars`. -/
-def Spec.pred (S : Spec σ α) : Pred σ :=
-  tlaAnd (statePred S.Init) (stutAlways S.Next S.vars)
+def Spec.pred (S : Spec σ) : Pred σ :=
+  tlaAnd (statePred S.Init) (stutAlways S.Next id)
 
 /-! ## Pointwise normal forms
 

@@ -61,12 +61,12 @@ theorem init_invariant_stut {σ : Type u} {α : Type v} (init : StatePred σ)
         hstep (e n) (e (n + 1)) hstepn (by simpa [statePred] using ih)
 
 /-- Inductive invariance for a bundled `Spec`. -/
-theorem Spec.init_invariant {σ : Type u} {α : Type v} (S : Spec σ α)
+theorem Spec.init_invariant {σ : Type u} (S : Spec σ)
     (inv : StatePred σ)
     (hinit : ∀ s, s ∈ S.Init → s ∈ inv)
-    (hstep : ∀ s s', StutAction S.Next S.vars s s' → s ∈ inv → s' ∈ inv) :
+    (hstep : ∀ s s', StutAction S.Next id s s' → s ∈ inv → s' ∈ inv) :
     Entails S.pred (always (statePred inv)) :=
-  init_invariant_stut S.Init S.Next S.vars inv hinit hstep
+  init_invariant_stut S.Init S.Next id inv hinit hstep
 
 /-- Transitivity of leads-to. -/
 theorem leadsTo_trans {σ : Type u} (P Q R : Pred σ) :

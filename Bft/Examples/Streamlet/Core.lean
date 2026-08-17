@@ -85,37 +85,43 @@ def EpochTick : Action (VoteLog n) := fun s s' =>
 epoch, on a block whose parent chain is notarized and is (one of) the
 longest notarized chain(s) seen. -/
 def VoteH (i : Fin n) (b : Blk) : Action (VoteLog n) := fun s s' =>
-  i ∉ Byz ∧
-  ValidChain b ∧ b.epoch = s.epoch ∧
-  (∀ b', (i, b') ∈ s.msgs → b'.epoch ≠ s.epoch) ∧
-  NotarizedChain n f s b.tail ∧
-  (∀ c : Blk, NotarizedChain n f s c → c.length ≤ b.tail.length) ∧
-  s'.msgs = insert (i, b) s.msgs ∧ s'.epoch = s.epoch
+    i ∉ Byz
+  ∧ ValidChain b
+  ∧ b.epoch = s.epoch
+  ∧ (∀ b', (i, b') ∈ s.msgs → b'.epoch ≠ s.epoch)
+  ∧ NotarizedChain n f s b.tail
+  ∧ (∀ c : Blk, NotarizedChain n f s c → c.length ≤ b.tail.length)
+  ∧ s'.msgs = insert (i, b) s.msgs ∧ s'.epoch = s.epoch
 
 /-- A Byzantine vote: any well-formed chain, any time. -/
 def VoteB (i : Fin n) (b : Blk) : Action (VoteLog n) := fun s s' =>
-  i ∈ Byz ∧ ValidChain b ∧ s'.msgs = insert (i, b) s.msgs ∧ s'.epoch = s.epoch
+    i ∈ Byz
+  ∧ ValidChain b
+  ∧ s'.msgs = insert (i, b) s.msgs
+  ∧ s'.epoch = s.epoch
 
 /-- The step relation. Private: the generic `Init`/`Next`/`vars` names are
 module-local here, exported only through the `Spec` bundle `StreamletSpec`
 (access its fields `(StreamletSpec n f Byz).Init/.Next/.vars`). -/
 private def Next : Action (VoteLog n) := fun s s' =>
-  EpochTick n s s' ∨ (∃ i b, VoteH n f Byz i b s s') ∨ (∃ i b, VoteB n Byz i b s s')
+    EpochTick n s s'
+  ∨ (∃ i b, VoteH n f Byz i b s s')
+  ∨ (∃ i b, VoteB n Byz i b s s')
 
 attribute [grind unfold] EpochTick VoteH VoteB
 
-/-- Frame: the whole state. Private (see `Next`). -/
-private def vars (n : ℕ) : VoteLog n → VoteLog n := id
-
 /-- Initially: epoch 0, no votes. Private (see `Next`). -/
-private def Init (n : ℕ) : StatePred (VoteLog n) := { s | s.epoch = 0 ∧ s.msgs = ∅ }
+private def Init (n : ℕ) : StatePred (VoteLog n) := { s |
+    s.epoch = 0
+  ∧ s.msgs = ∅
+}
 
 /-- The specification, bundled (for `Spec.init_invariant`). -/
-def StreamletSpec (n f : ℕ) (Byz : Finset (Fin n)) : Spec (VoteLog n) (VoteLog n) :=
-  ⟨Init n, Next n f Byz, vars n⟩
+def CoreSpec (n f : ℕ) (Byz : Finset (Fin n)) : Spec (VoteLog n) :=
+  ⟨Init n, Next n f Byz⟩
 
 /-- The specification. -/
-def Hspec : Pred (VoteLog n) := (StreamletSpec n f Byz).pred
+def Hspec : Pred (VoteLog n) := (CoreSpec n f Byz).pred
 
 /-! ## Monotonicity of notarization -/
 
@@ -183,7 +189,7 @@ theorem init_inv : ∀ s, s ∈ Init n → s ∈ SafetyInvState n f Byz := by
   obtain ⟨h0, h1⟩ := hs
   constructor <;> simp [h1]
 
-theorem step_inv : ∀ s s', StutAction (Next n f Byz) (vars n) s s' →
+theorem step_inv : ∀ s s', StutAction (Next n f Byz) id s s' →
     s ∈ SafetyInvState n f Byz → s' ∈ SafetyInvState n f Byz := by
   intro s s' hstep hinv
   rcases hstep with hnext | hstut
@@ -194,7 +200,7 @@ theorem step_inv : ∀ s s', StutAction (Next n f Byz) (vars n) s s' →
   rcases hnext with htick | ⟨i, b, hvote⟩ | ⟨i, b, hvote⟩ <;> constructor <;> grind
 
 theorem safety : Entails (Hspec n f Byz) (always (statePred (SafetyInvState n f Byz))) :=
-  (StreamletSpec n f Byz).init_invariant (SafetyInvState n f Byz) (init_inv n f Byz) (step_inv n f Byz)
+  (CoreSpec n f Byz).init_invariant (SafetyInvState n f Byz) (init_inv n f Byz) (step_inv n f Byz)
 
 
 /-! ## Lemma 1: at most one notarized block per epoch -/
